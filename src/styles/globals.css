@@ -1,0 +1,1221 @@
+@import "tailwindcss";
+
+/* ============================================================
+   APPLE-LEVEL DESIGN SYSTEM
+   Refined typography, spacing, shadows, and interactions
+   ============================================================ */
+
+/* Typography - Apple SF Pro System Font */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.011em;
+}
+
+/* Better letter spacing for headers */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: -0.022em;
+  font-weight: 600;
+}
+
+/* Design Tokens - Apple-inspired */
+:root {
+  /* Shadows - Layered depth */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+
+  /* Green theme shadows */
+  --shadow-green: 0 4px 14px 0 rgba(149, 227, 108, 0.25);
+  --shadow-green-lg: 0 8px 24px 0 rgba(149, 227, 108, 0.3);
+
+  /* Dark green theme shadows */
+  --shadow-dark-green: 0 4px 14px 0 rgba(0, 54, 48, 0.2);
+
+  /* Blur effects */
+  --blur-sm: blur(4px);
+  --blur-md: blur(8px);
+  --blur-lg: blur(16px);
+  --blur-xl: blur(24px);
+
+  /* Border radius system */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+
+  /* Spacing system (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Transitions - Apple's signature easing curves */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Apple-specific easing curves */
+  --ease-in-out-apple: cubic-bezier(0.42, 0, 0.58, 1);
+  --ease-out-apple: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-in-apple: cubic-bezier(0.42, 0, 1, 1);
+  --spring-bouncy: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --spring-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ============================================================
+   MINIMAL RESPONSIVE FIXES - NO VISUAL CHANGES
+   Only fixes iOS zoom and adds responsive breakpoints
+   ============================================================ */
+
+/* Prevent iOS zoom on input focus - CRITICAL FIX */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}
+
+/* Better scrollbar for dropdowns */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #a7aaa7;
+  border-radius: 2px;
+}
+
+/* Smooth scrolling with iOS momentum */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Prevent horizontal overflow */
+body {
+  overflow-x: hidden;
+  /* iOS safe area insets for notched devices */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Native iOS momentum scrolling */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Respect user's motion preferences (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   APPLE-LEVEL BUTTON STYLES
+   Refined buttons with perfect press states and shadows
+   ============================================================ */
+
+/* Primary button - Green theme */
+.btn-primary {
+  position: relative;
+  background: linear-gradient(180deg, #95e36c 0%, #7bc858 100%);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.05),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    var(--shadow-green);
+  transition: all var(--transition-base);
+  transform: translateY(0);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #7bc858 0%, #6ab848 100%);
+  box-shadow:
+    0 4px 8px 0 rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset,
+    var(--shadow-green-lg);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: linear-gradient(180deg, #6ab848 0%, #5aa738 100%);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.1) inset,
+    0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  transform: translateY(1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: linear-gradient(180deg, #95e36c 0%, #7bc858 100%);
+}
+
+/* Dark button - Dark green theme */
+.btn-dark {
+  position: relative;
+  background: linear-gradient(180deg, #003630 0%, #002820 100%);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    var(--shadow-dark-green);
+  transition: all var(--transition-base);
+  transform: translateY(0);
+}
+
+.btn-dark:hover:not(:disabled) {
+  background: linear-gradient(180deg, #004a40 0%, #003630 100%);
+  box-shadow:
+    0 4px 8px 0 rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 8px 24px 0 rgba(0, 54, 48, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-dark:active:not(:disabled) {
+  background: linear-gradient(180deg, #002820 0%, #001810 100%);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.2) inset,
+    0 1px 3px 0 rgba(0, 0, 0, 0.15);
+  transform: translateY(1px);
+}
+
+.btn-dark:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Ghost button - Transparent with border */
+.btn-ghost {
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(149, 227, 108, 0.2);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.05),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  transition: all var(--transition-base);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(149, 227, 108, 0.1);
+  border-color: rgba(149, 227, 108, 0.4);
+  box-shadow:
+    0 2px 4px 0 rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+.btn-ghost:active:not(:disabled) {
+  background: rgba(149, 227, 108, 0.15);
+  border-color: rgba(149, 227, 108, 0.5);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.1) inset;
+}
+
+/* ============================================================
+   TACTILE BUTTON EFFECTS
+   3D "sink" effect to complement haptic feedback
+   ============================================================ */
+
+.btn-tactile {
+  transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 0.12s ease;
+}
+
+.btn-tactile:active:not(:disabled) {
+  transform: translateY(4px) scale(0.96);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    inset 0 3px 6px rgba(0, 0, 0, 0.25) !important;
+  filter: brightness(0.82) contrast(1.15) saturate(1.2);
+}
+
+/* Glass specific tactility */
+.glass.btn-tactile:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+
+.glass-dark.btn-tactile:active:not(:disabled) {
+  background: rgba(0, 40, 35, 0.8);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+
+/* ============================================================
+   GLASSMORPHISM EFFECTS
+   Translucent layers with blur - Apple Card style
+   ============================================================ */
+
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 8px 32px 0 rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.glass-dark {
+  background: rgba(0, 54, 48, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 8px 32px 0 rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.glass-green {
+  background: rgba(149, 227, 108, 0.15);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(149, 227, 108, 0.3);
+  box-shadow:
+    0 8px 32px 0 rgba(149, 227, 108, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+
+/* ============================================================
+   CARD STYLES
+   Elevated cards with subtle shadows
+   ============================================================ */
+
+.card {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition: all 0.25s var(--ease-out-apple);
+  transform-origin: center center;
+}
+
+/* Only apply hover effects on devices with hover capability */
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    box-shadow: var(--shadow-lg);
+    border-color: rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+  }
+}
+
+.card-interactive {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card-interactive:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.1s var(--ease-out-apple);
+}
+
+/* Enhanced card with subtle gradient border */
+.card-premium {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.08),
+    0 2px 4px -1px rgba(0, 0, 0, 0.04),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+  transition: all 0.25s var(--ease-out-apple);
+}
+
+.card-premium::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--radius-lg);
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(149, 227, 108, 0.3), rgba(0, 54, 48, 0.1));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-premium:hover {
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    transform: translateY(-3px);
+  }
+}
+
+/* ============================================================
+   SMOOTH ANIMATIONS
+   Spring-based natural motion
+   ============================================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes bounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-base) ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight var(--transition-base) ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft var(--transition-base) ease-out;
+}
+
+/* ============================================================
+   DIVIDERS - iOS-STYLE INSET SEPARATORS
+   Subtle separators with gradients
+   ============================================================ */
+
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.08) 50%,
+      rgba(0, 0, 0, 0) 100%);
+}
+
+.divider-vertical {
+  width: 1px;
+  background: linear-gradient(180deg,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.08) 50%,
+      rgba(0, 0, 0, 0) 100%);
+}
+
+/* iOS-style inset separator (like in Settings app) */
+.separator-inset {
+  height: 0.5px;
+  background: rgba(60, 60, 67, 0.29);
+  margin-left: 16px;
+  /* Inset from left */
+}
+
+/* Light mode separator */
+.separator-light {
+  height: 0.5px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Breakpoints for xs (extra small) */
+@media (min-width: 320px) {
+  .xs\:gap-\[18px\] {
+    gap: 18px;
+  }
+
+  .xs\:gap-\[19px\] {
+    gap: 19px;
+  }
+
+  .xs\:p-\[14px\] {
+    padding: 14px;
+  }
+
+  .xs\:px-\[15px\] {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+
+  .xs\:py-\[15px\] {
+    padding-top: 15px;
+    padding-bottom: 15px;
+  }
+
+  .xs\:size-\[19px\] {
+    width: 19px;
+    height: 19px;
+  }
+}
+
+/* ============================================================
+   FORM VALIDATION STYLES
+   Silent, subtle feedback for form states
+   ============================================================ */
+
+/* Input states */
+.input-base {
+  transition: all var(--transition-base);
+  border: 1px solid rgba(0, 48, 73, 0.2);
+  background: white;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.input-base:focus {
+  border-color: #003630;
+  box-shadow: 0 0 0 3px rgba(149, 227, 108, 0.1);
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.02);
+}
+
+.input-error:focus {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+.input-success {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.02);
+}
+
+.input-success:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+/* Error message text */
+.error-message {
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 4px;
+  animation: fadeIn 200ms ease-out;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Button disabled state improvements */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(20%);
+  pointer-events: none;
+}
+
+/* Shimmer effect for disabled buttons (subtle hint) */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Water Flow Border Animation - Premium Payment Card Effect */
+@keyframes borderFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+button:disabled::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Validation icons */
+.validation-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  animation: scaleIn 200ms ease-out;
+}
+
+.validation-icon-error {
+  background: #ef4444;
+  color: white;
+}
+
+.validation-icon-success {
+  background: #10b981;
+  color: white;
+}
+
+/* Pulse animation for real-time validation */
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.validating {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Selection states (for checkboxes, radio buttons, cards) */
+.selectable {
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+}
+
+.selectable:hover:not(.selected):not(:disabled) {
+  background: rgba(149, 227, 108, 0.05);
+  border-color: rgba(149, 227, 108, 0.3);
+}
+
+.selectable.selected {
+  background: rgba(149, 227, 108, 0.1);
+  border-color: #95e36c;
+  box-shadow: 0 0 0 1px #95e36c inset;
+}
+
+.selectable.selected::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: #95e36c;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: scaleIn 200ms ease-out;
+}
+
+/* Touch feedback */
+@media (hover: none) and (pointer: coarse) {
+  .selectable:active:not(:disabled) {
+    transform: scale(0.98);
+    background: rgba(149, 227, 108, 0.15);
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/* ============================================================
+   TOAST NOTIFICATIONS - APPLE-LEVEL DESIGN
+   Glassmorphism, smooth animations, layered shadows
+   ============================================================ */
+
+/* Custom glassmorphism toast container */
+.glass-toast {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  border: 1px solid rgba(0, 54, 48, 0.08) !important;
+  box-shadow:
+    0 10px 40px -10px rgba(0, 54, 48, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 2px 8px 0 rgba(0, 0, 0, 0.08) !important;
+  border-radius: 14px !important;
+  padding: 16px 20px !important;
+  min-width: 320px !important;
+  max-width: 420px !important;
+  animation: toastSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* Success toast - Green accent */
+.toast-success {
+  border-left: 3px solid #95e36c !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow:
+    0 10px 40px -10px rgba(149, 227, 108, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 2px 8px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Error toast - Red accent */
+.toast-error {
+  border-left: 3px solid #ef4444 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow:
+    0 10px 40px -10px rgba(239, 68, 68, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 2px 8px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Warning toast - Orange accent */
+.toast-warning {
+  border-left: 3px solid #f59e0b !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow:
+    0 10px 40px -10px rgba(245, 158, 11, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 2px 8px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Info toast - Green accent (brand color) */
+.toast-info {
+  border-left: 3px solid #003630 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow:
+    0 10px 40px -10px rgba(0, 54, 48, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 2px 8px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Toast slide-in animation */
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Toast slide-out animation */
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+}
+
+/* Toast hover effect */
+.toast-custom:hover {
+  box-shadow:
+    0 12px 48px -12px rgba(0, 54, 48, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 4px 12px 0 rgba(0, 0, 0, 0.1) !important;
+  transform: translateY(-2px) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Success icon styling */
+.toast-success [data-icon] {
+  color: #95e36c !important;
+  background: rgba(149, 227, 108, 0.15);
+  border-radius: 50%;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Error icon styling */
+.toast-error [data-icon] {
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.15);
+  border-radius: 50%;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Warning icon styling */
+.toast-warning [data-icon] {
+  color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: 50%;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Info icon styling */
+.toast-info [data-icon] {
+  color: #003630 !important;
+  background: rgba(0, 54, 48, 0.15);
+  border-radius: 50%;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   IOS SLIDER CONTROLS
+   Native iOS-style range sliders with custom styling
+   ============================================================ */
+
+.ios-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ios-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s;
+}
+
+.ios-slider::-webkit-slider-thumb:active {
+  transform: scale(1.1);
+}
+
+.ios-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s;
+}
+
+.ios-slider::-moz-range-thumb:active {
+  transform: scale(1.1);
+}
+
+/* Toast progress bar */
+[data-sonner-toast] [data-content] {
+  gap: 12px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+}
+
+/* Mobile responsive toast */
+@media (max-width: 480px) {
+  .glass-toast {
+    min-width: calc(100vw - 32px) !important;
+    max-width: calc(100vw - 32px) !important;
+    margin: 0 16px !important;
+  }
+}
+
+/* ============================================================
+   SKELETON LOADING STATES - APPLE STYLE
+   Shimmer effect for content loading
+   ============================================================ */
+
+.skeleton {
+  background: linear-gradient(90deg,
+      rgba(0, 0, 0, 0.04) 0%,
+      rgba(0, 0, 0, 0.08) 50%,
+      rgba(0, 0, 0, 0.04) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-text {
+  height: 16px;
+  margin: 4px 0;
+}
+
+.skeleton-heading {
+  height: 24px;
+  margin: 8px 0;
+  width: 60%;
+}
+
+.skeleton-avatar {
+  border-radius: 50%;
+}
+
+.skeleton-button {
+  height: 44px;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-card {
+  height: 120px;
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================
+   PULL-TO-REFRESH INDICATOR (iOS PATTERN)
+   ============================================================ */
+
+.pull-to-refresh {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+}
+
+.pull-indicator {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(0, 54, 48, 0.2);
+  border-top-color: #003630;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   SWIPE ACTIONS (iOS LIST SWIPE)
+   ============================================================ */
+
+.swipe-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  transform: translateX(100%);
+  transition: transform 0.3s var(--ease-out-apple);
+}
+
+.swipe-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out-apple);
+}
+
+.swipe-action-button:active {
+  filter: brightness(0.9);
+}
+
+.swipe-action-delete {
+  background: #ff3b30;
+}
+
+.swipe-action-archive {
+  background: #ff9500;
+}
+
+.swipe-action-more {
+  background: #c7c7cc;
+}
+
+/* ============================================================
+   BOTTOM SHEET MODAL (iOS PATTERN)
+   ============================================================ */
+
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 16px 16px 0 0;
+  box-shadow:
+    0 -10px 40px rgba(0, 0, 0, 0.1),
+    0 -1px 3px rgba(0, 0, 0, 0.05);
+  transform: translateY(100%);
+  transition: transform 0.4s var(--spring-smooth);
+  max-height: 90vh;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.bottom-sheet.open {
+  transform: translateY(0);
+}
+
+.bottom-sheet-handle {
+  width: 36px;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  margin: 8px auto 16px;
+}
+
+.bottom-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.bottom-sheet-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ============================================================
+   TOUCH TARGETS (iOS HIG: Minimum 44pt)
+   ============================================================ */
+
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   HAPTIC-LIKE FEEDBACK (Visual simulation)
+   ============================================================ */
+
+.haptic-light:active {
+  transform: scale(0.97);
+  transition: transform 0.1s var(--ease-out-apple);
+}
+
+.haptic-medium:active {
+  transform: scale(0.95);
+  transition: transform 0.1s var(--ease-out-apple);
+}
+
+.haptic-heavy:active {
+  transform: scale(0.93);
+  transition: transform 0.1s var(--ease-out-apple);
+}
+
+/* ============================================================
+   BETTER FOCUS STATES (Accessibility & Keyboard Nav)
+   ============================================================ */
+
+*:focus-visible {
+  outline: 2px solid #95e36c;
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #95e36c;
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   PAGE TRANSITIONS (iOS-LIKE SLIDE)
+   ============================================================ */
+
+.page-enter {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: all 0.35s var(--ease-out-apple);
+}
+
+.page-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.page-exit-active {
+  opacity: 0;
+  transform: translateX(-30%);
+  transition: all 0.35s var(--ease-out-apple);
+}
+
+/* ============================================================
+   IMPROVED SHADOWS (More Apple-like depth)
+   ============================================================ */
+
+.shadow-apple-sm {
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.06),
+    0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.shadow-apple-md {
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-apple-lg {
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-apple-xl {
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* ============================================================
+   CONTEXTUAL BADGES (iOS-STYLE NOTIFICATION BADGES)
+   ============================================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #ff3b30;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 2px solid white;
+}
+
+.badge-green {
+  background: #95e36c;
+  color: #003630;
+}
+
+.badge-gray {
+  background: #8e8e93;
+  color: white;
+}

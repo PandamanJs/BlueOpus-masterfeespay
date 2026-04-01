@@ -1,0 +1,11 @@
+node_modules
+.netlify
+.vercel
+build
+dist
+*.zip
+.env
+.env.local
+.DS_Store
+package-lock.json
+.env*.local
