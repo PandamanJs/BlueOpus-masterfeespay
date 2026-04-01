@@ -38,11 +38,12 @@ Master-Fees is a comprehensive school fee payment platform designed to simplify 
 **Key Highlights**
 
 - **Mobile-First Design** - Fully responsive from 320px to 1024px+
+- **Billing 2.0 Engine** - Normalized ledger with item-level balance tracking
+- **Global Waterfall** - Automatic payment allocation across all student debts
 - **Smooth Animations** - Motion-powered transitions and feedback
 - **Secure Payments** - Integration with payment gateway API
 - **Real-Time Updates** - Transaction status tracking
-- **PDF Receipts** - Professional receipt generation
-- **Tutorial System** - First-time user onboarding
+
 - **Browser History** - Seamless navigation with back/forward support
 
 ---
