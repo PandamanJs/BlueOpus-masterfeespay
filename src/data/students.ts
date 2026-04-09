@@ -78,12 +78,15 @@ async function convertToLegacyStudent(student: StudentWithSchool, balanceMap?: R
  */
 export async function getStudentsByPhone(phone: string): Promise<Student[]> {
   try {
+    console.log('[getStudentsByPhone] Searching for phone:', phone);
     const students = await getStudentsByParentPhone(phone);
 
     if (!students || students.length === 0) {
+      console.warn('[getStudentsByPhone] No students found for phone:', phone);
       return [];
     }
 
+    console.log(`[getStudentsByPhone] Found ${students.length} students, fetching balances...`);
     // Fetch outstanding balances and counts from pending transactions and payment history
     const studentIds = students.map(s => s.student_id);
     const [balanceMap, countMap, actualDebtMap] = await Promise.all([
@@ -97,6 +100,7 @@ export async function getStudentsByPhone(phone: string): Promise<Student[]> {
       students.map(student => convertToLegacyStudent(student, balanceMap, countMap, actualDebtMap))
     );
 
+    console.log('[getStudentsByPhone] Successfully converted students:', convertedStudents.map(s => s.name));
     return convertedStudents;
   } catch (error) {
     console.error('[getStudentsByPhone] Error:', error);

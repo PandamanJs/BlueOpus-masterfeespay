@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { GraduationCap, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import { type StudentData } from '../../lib/supabase/api/registration';
-import { getStudentsOutstandingBalances } from '../../lib/supabase/api/transactions';
+import { motion, AnimatePresence } from 'motion/react';
+import { Info, Loader2 } from 'lucide-react';
+import { type StudentData, getStudentFinancialSummary } from '../../lib/supabase/api/registration';
 import { haptics } from '../../utils/haptics';
 import LogoHeader from '../common/LogoHeader';
+import OnboardingProgressBar from './OnboardingProgressBar';
+import type { ParentData } from './ParentInformationPage';
 
 interface ReviewPageProps {
   students: StudentData[];
@@ -14,143 +15,263 @@ interface ReviewPageProps {
 }
 
 export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }: ReviewPageProps) {
-  const [balances, setBalances] = useState<Record<string, number>>({});
-  const [isLoadingBalances, setIsLoadingBalances] = useState(true);
+  useEffect(() => {
+    console.log('[Registration] ReviewPage mounted with students:', students.length);
+  }, []);
+  const [activeStudentId, setActiveStudentId] = useState<string>(students[0]?.id || '');
+  const [financialData, setFinancialData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
+  const [disputedIds, setDisputedIds] = useState<Set<string>>(new Set());
+  const [disputeNotes, setDisputeNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    async function fetchBalances() {
-      setIsLoadingBalances(true);
+    async function fetchData() {
+      if (!activeStudentId) return;
+      setIsLoading(true);
       try {
-        const studentIds = students.map(s => s.id);
-        const data = await getStudentsOutstandingBalances(studentIds);
-        setBalances(data);
+        const data = await getStudentFinancialSummary(activeStudentId);
+        setFinancialData(data);
       } catch (error) {
-        console.error('Failed to fetch balances:', error);
+        console.error('Failed to fetch financial data:', error);
       } finally {
-        setIsLoadingBalances(false);
+        setIsLoading(false);
       }
     }
-    fetchBalances();
-  }, [students]);
+    fetchData();
+  }, [activeStudentId]);
+
+  const activeStudent = students.find(s => s.id === activeStudentId);
+
+  const handleToggleConfirm = () => {
+    if (!activeStudentId) return;
+    haptics.selection();
+    setConfirmedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(activeStudentId)) next.delete(activeStudentId);
+      else next.add(activeStudentId);
+      return next;
+    });
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZM', {
       style: 'currency',
       currency: 'ZMW',
-      minimumFractionDigits: 2
-    }).format(amount).replace('ZMW', 'K');
+      minimumFractionDigits: 1
+    }).format(Math.abs(amount)).replace('ZMW', 'K');
   };
 
+  // A student is considered "processed" if they are in confirmedIds
+  const allConfirmed = students.length > 0 && students.every(s => confirmedIds.has(s.id));
+
   return (
-    <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
+    <div className="bg-white min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
       <LogoHeader showBackButton onBack={onBack} />
+      <div className="w-full flex justify-center border-b border-gray-100">
+         <OnboardingProgressBar currentStep={3} totalSteps={3} />
+      </div>
 
-      <div className="flex-1 px-6 pt-10 pb-40 max-w-lg mx-auto w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="inline-flex items-center gap-[10px] mb-[12px]">
-            <div className="w-[4px] h-[28px] bg-gradient-to-b from-[#95e36c] to-[#003630] rounded-full shadow-[0_2px_8px_rgba(149,227,108,0.3)]" />
-            <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.8px]">
-              Final Review
-            </h1>
-          </div>
-          <p className="text-[14px] text-gray-500 tracking-[-0.2px] leading-relaxed pl-[14px]">
-            Please confirm your records and institutional financial standing below.
+      <div className="flex-1 px-6 pt-8 pb-32 max-w-lg mx-auto w-full">
+        {/* Page Header */}
+        <div className="mb-8">
+          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#000000] leading-tight mb-4">
+            Please Review your<br />Child’s School Account
+          </h1>
+          <p className="text-[14px] text-gray-500 leading-relaxed">
+            Please review the information carefully and confirm whether the records are correct or need to be corrected.
           </p>
-        </motion.div>
+        </div>
 
-        {/* Accuracy Disclaimer - High Trust Header */}
-        <motion.div
-           initial={{ opacity: 0 }}
-           animate={{ opacity: 1 }}
-           transition={{ delay: 0.1 }}
-           className="mb-8 px-4"
-        >
-          <p className="text-[12px] text-center text-gray-400 font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-relaxed">
-            Please ensure the balances below are accurate. If you notice a discrepancy, contact the school administrator before proceeding.
-          </p>
-        </motion.div>
+        {/* Dynamic Student Tabs */}
+        <div className="flex items-center gap-3 mb-8 overflow-x-auto pb-2 -mx-1 px-1 custom-scrollbar">
+          {students.map((student) => (
+            <button
+              key={student.id}
+              onClick={() => { haptics.light(); setActiveStudentId(student.id); }}
+              className={`
+                h-[48px] px-6 rounded-[12px] whitespace-nowrap transition-all flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px]
+                ${activeStudentId === student.id 
+                  ? 'bg-transparent border-[1.5px] border-[#95e36c] text-[#003630] font-bold' 
+                  : confirmedIds.has(student.id) || disputedIds.has(student.id)
+                    ? 'bg-transparent border-[1.5px] border-green-100 text-green-700'
+                    : 'bg-white border-[1px] border-gray-200 text-gray-400'
+                }
+              `}
+            >
+              <span>{student.name}</span>
+              {confirmedIds.has(student.id) && (
+                <div className={`ml-2 size-1.5 rounded-full ${activeStudentId === student.id ? 'bg-[#95e36c]' : 'bg-green-500'}`} />
+              )}
+            </button>
+          ))}
+        </div>
 
-        {/* Students List - Luxe Style */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-[8px] pl-2 mb-2">
-            <div className="w-[3px] h-[16px] bg-[#95e36c] rounded-full" />
-            <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px]">
-              Verifying Records ({students.length})
-            </label>
-          </div>
-
-          {students.map((student, index) => {
-            const balance = balances[student.id] || 0;
-            const hasOverdue = balance > 0;
-
-            return (
-              <motion.div
-                key={student.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 + (index * 0.05) }}
-                className="bg-white rounded-[24px] p-5 border-[1.5px] border-[#e5e7eb] shadow-sm relative overflow-hidden group"
+        {/* Balance Card Container */}
+        <div className="bg-white rounded-[24px] border-[1px] border-[#e5e7eb] p-5 shadow-[0px_8px_24px_rgba(0,0,0,0.04)] min-h-[480px] relative">
+          <AnimatePresence mode="wait">            {isLoading ? (
+              <motion.div 
+                key="loading"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="absolute inset-0 flex items-center justify-center p-12"
               >
-                <div className={`absolute left-0 top-0 bottom-0 w-[5px] ${hasOverdue ? 'bg-amber-400' : 'bg-[#95e36c]'}`} />
-                
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630] tracking-[-0.4px] leading-tight mb-1">
-                      {student.name}
-                    </h3>
-                    <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-0.5">
-                       <span className="text-[12px] font-medium text-gray-400">{student.grade} — {student.class}</span>
-                       {student.parentName && (
-                        <span className="text-[12px] text-[#95e36c] font-bold border-l border-gray-200 pl-3">
-                          Guardian: {student.parentName}
-                        </span>
-                       )}
-                    </div>
-                  </div>
-                  <div className="size-10 rounded-[14px] bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-300">
-                    <GraduationCap size={20} />
-                  </div>
-                </div>
-
-                {/* Financial State - High Trust Section */}
-                <div className={`
-                  rounded-[16px] p-4 flex items-center justify-between
-                  ${hasOverdue 
-                    ? 'bg-amber-50 border-[1.2px] border-amber-100' 
-                    : 'bg-[#95e36c]/5 border-[1.2px] border-[#95e36c]/20'
-                  }
-                `}>
-                  <div className="flex items-center gap-3">
-                    {hasOverdue ? (
-                      <div className="size-8 rounded-full bg-amber-400/20 flex items-center justify-center">
-                        <AlertCircle size={16} className="text-amber-600" />
-                      </div>
-                    ) : (
-                      <div className="size-8 rounded-full bg-[#95e36c]/20 flex items-center justify-center">
-                        <CheckCircle2 size={16} className="text-[#008000]" />
-                      </div>
-                    )}
-                    <div>
-                      <p className={`text-[10px] font-black uppercase tracking-widest leading-none mb-1 ${hasOverdue ? 'text-amber-600' : 'text-[#008000]'}`}>
-                        {hasOverdue ? 'Outstanding Balance' : 'Account Status'}
-                      </p>
-                      <p className={`text-[14px] font-bold ${hasOverdue ? 'text-amber-900' : 'text-[#003630]'}`}>
-                        {isLoadingBalances ? 'Fetching...' : hasOverdue ? formatCurrency(balance) : 'CLEAN ACCOUNT'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {!isLoadingBalances && !hasOverdue && (
-                     <div className="size-2.5 rounded-full bg-[#95e36c] shadow-[0_0_8px_rgba(149,227,108,0.5)]" />
-                  )}
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="animate-spin text-[#95e36c]" size={32} />
+                  <p className="text-[13px] text-gray-400 font-medium">Fetching child records...</p>
                 </div>
               </motion.div>
-            );
-          })}
+            ) : (
+              <motion.div
+                key={activeStudentId}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                {/* Header Section */}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#000000] mb-1">
+                      {financialData?.student?.name || activeStudent?.name} - School Fees
+                    </h2>
+                    <p className="text-[11px] text-gray-400 font-medium">
+                      Grade {(financialData?.student?.grade || activeStudent?.grade || '...')?.toString().replace(/^(grade\s+)/i, '')}
+                    </p>
+                  </div>
+                  <div className={`px-4 py-1.5 rounded-full ${(financialData?.totalBalance || 0) > 0 ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'} text-[11px] font-bold whitespace-nowrap border ${(financialData?.totalBalance || 0) > 0 ? 'border-red-100' : 'border-green-100'}`}>
+                    {(financialData?.totalBalance || 0) > 0 ? `${formatCurrency(financialData.totalBalance)} Balance` : 'CLEAN ACCOUNT'}
+                  </div>
+                </div>
+
+                {!financialData && !isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="size-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+                      <Info size={24} className="text-gray-300" />
+                    </div>
+                    <p className="text-[14px] text-gray-500 max-w-[200px]">
+                      No financial records found for this student. Please confirm to proceed.
+                    </p>
+                    <button 
+                      onClick={handleToggleConfirm}
+                      className="mt-6 h-11 px-8 rounded-xl bg-[#003630] text-white text-[14px] font-bold"
+                    >
+                      Confirm Record
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Explanation Box */}
+                    <div className="bg-[#f9fafb] rounded-[12px] p-4 border border-[#f0f0f0] flex gap-4">
+                      <div className="size-8 rounded-full border border-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Info size={18} className="text-gray-400" />
+                      </div>
+                      <p className="text-[12px] text-gray-500 leading-relaxed">
+                        You currently have a <span className="font-bold text-black">{formatCurrency(financialData.totalBalance)} balance</span> on your child's school fees. 
+                        We charged <span className="font-bold text-black">{formatCurrency(financialData.items[0]?.expected || 0)}</span>, 
+                        and recorded payments totaling <span className="font-bold text-black">{formatCurrency(financialData.items[0]?.collected || 0)}</span>.
+                        If our records are incorrect, please select "Reject" and share your payment history so we can correct the records.
+                      </p>
+                    </div>
+
+                    {/* Dynamic Content: Table or Dispute Form */}
+                    {disputedIds.has(activeStudentId) ? (
+                      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="relative">
+                          <textarea
+                            value={disputeNotes[activeStudentId] || ''}
+                            onChange={(e) => setDisputeNotes(prev => ({ ...prev, [activeStudentId]: e.target.value }))}
+                            placeholder="Please type in your actual total payment..."
+                            className="w-full min-h-[220px] p-5 rounded-[16px] border border-gray-200 bg-white text-[15px] outline-none focus:border-[#006e33] transition-all resize-none shadow-inner text-gray-700 placeholder:text-gray-300"
+                          />
+                        </div>
+                        
+                        <div className="flex gap-4">
+                          <button 
+                            onClick={() => {
+                              haptics.light();
+                              setDisputedIds(prev => {
+                                const next = new Set(prev);
+                                next.delete(activeStudentId);
+                                return next;
+                              });
+                            }}
+                            className="flex-1 h-[48px] rounded-[10px] bg-transparent text-[#000000] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] active:scale-95 transition-all"
+                          >
+                            Back
+                          </button>
+                          <button 
+                            onClick={() => {
+                              haptics.heavy();
+                              // In a real app we'd submit to DB. For now mark as processed
+                              setConfirmedIds(prev => {
+                                const next = new Set(prev);
+                                next.add(activeStudentId);
+                                return next;
+                              });
+                            }}
+                            className="flex-1 h-[48px] rounded-[12px] border-[1px] border-gray-200 shadow-sm flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#000000] bg-white active:scale-95 transition-all"
+                          >
+                            Submit
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Account Details Table */}
+                        <div className="space-y-4 pt-2">
+                          <div className="flex items-center justify-between text-[14px]">
+                            <span className="text-gray-600">Term 1 School Fees Service Charge</span>
+                            <span className="font-medium text-black">{formatCurrency(financialData.items[0]?.expected || 0)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[14px]">
+                            <span className="text-gray-600">Total Cash Paid So Far</span>
+                            <span className="font-medium text-black">-{formatCurrency(financialData.items[0]?.collected || 0)}</span>
+                          </div>
+                          
+                          <div className="h-[1px] bg-gray-100 mt-2" />
+                          
+                          <div className="flex items-center justify-between pt-2">
+                            <span className="font-bold text-red-500 text-[14px]">Balance Owing</span>
+                            <span className="font-bold text-red-500 text-[16px]">{formatCurrency(financialData.totalBalance)}</span>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-4 pt-6">
+                          <button 
+                            onClick={() => { 
+                              haptics.medium(); 
+                              setDisputedIds(prev => {
+                                const next = new Set(prev);
+                                next.add(activeStudentId);
+                                return next;
+                              });
+                            }}
+                            className="flex-1 h-[48px] rounded-[10px] bg-transparent text-[#000000] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] active:scale-95 transition-all"
+                          >
+                            Reject
+                          </button>
+                          <button 
+                            onClick={handleToggleConfirm}
+                            className={`
+                              flex-1 h-[48px] rounded-[10px] border-[1.5px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] transition-all
+                              ${confirmedIds.has(activeStudentId)
+                                ? 'bg-green-50 border-green-500 text-green-600'
+                                : 'bg-white border-[#e5e7eb] text-[#000000] active:scale-95 shadow-sm'
+                              }
+                            `}
+                          >
+                            {confirmedIds.has(activeStudentId) ? 'Confirmed' : 'Confirm'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </motion.div>
+            )}
+
+          </AnimatePresence>
         </div>
       </div>
 
@@ -159,22 +280,23 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
         <div className="max-w-lg mx-auto">
           <button
             onClick={() => { haptics.heavy(); onConfirm(); }}
-            disabled={isSubmitting || isLoadingBalances}
+            disabled={!allConfirmed || isSubmitting}
             className={`
               w-full h-14 rounded-[18px] bg-[#003630] border border-[#003630] 
-              shadow-[0_8px_20px_rgba(0,54,48,0.2)] hover:shadow-[0px_12px_32px_rgba(0,54,48,0.3)] 
-              active:scale-[0.98] transition-all flex items-center justify-center gap-3 group/btn 
-              ${(isSubmitting || isLoadingBalances) ? 'opacity-70 pointer-events-none' : ''}
+              transition-all flex items-center justify-center gap-3 group/btn 
+              ${(!allConfirmed || isSubmitting) 
+                ? 'opacity-30 shadow-none grayscale pointer-events-none' 
+                : 'shadow-[0_8px_20px_rgba(0,54,48,0.2)] hover:shadow-[0px_12px_32px_rgba(0,54,48,0.3)] active:scale-[0.98]'
+              }
             `}
           >
-            {(isSubmitting || isLoadingBalances) && (
-              <div className="size-7 rounded-full bg-[#95e36c]/20 flex items-center justify-center">
-                <Loader2 size={16} className="text-[#95e36c] animate-spin" />
-              </div>
+            {isSubmitting ? (
+              <Loader2 className="animate-spin text-white" size={20} />
+            ) : (
+              <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] font-bold text-white">
+                Next
+              </span>
             )}
-            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] font-bold text-white">
-              {isSubmitting ? 'Finalizing...' : isLoadingBalances ? 'Verifying Records...' : 'Confirm & Register'}
-            </span>
           </button>
         </div>
       </div>

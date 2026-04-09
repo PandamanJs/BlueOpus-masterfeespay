@@ -8,6 +8,7 @@ import { phoneOrFilter } from '../../../utils/reconciliation';
 export async function getParentByPhone(phone: string): Promise<ParentWithStudents | null> {
     try {
         const orQuery = phoneOrFilter('phone_number', phone);
+        console.log('[getParentByPhone] Querying with:', orQuery);
 
         const { data: parentRaw, error: parentError } = await supabase
             .from('parents')
@@ -17,7 +18,11 @@ export async function getParentByPhone(phone: string): Promise<ParentWithStudent
             .maybeSingle();
 
         if (parentError) handleSupabaseError(parentError, 'getParentByPhone');
-        if (!parentRaw) return null;
+        if (!parentRaw) {
+            console.warn('[getParentByPhone] No parent found for phone:', phone);
+            return null;
+        }
+        console.log('[getParentByPhone] Found parent:', parentRaw.parent_id);
 
         const parent: Parent = {
             id: parentRaw.parent_id,

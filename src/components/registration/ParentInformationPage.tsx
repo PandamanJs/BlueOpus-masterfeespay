@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
-import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown } from 'lucide-react';
+import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { getSchools } from '../../lib/supabase/api/schools';
 import { verifySchoolCode } from '../../lib/supabase/api/security';
 import { haptics } from '../../utils/haptics';
 import { toast } from 'sonner';
 import type { School } from '../../types';
 import LogoHeader from '../common/LogoHeader';
+import OnboardingProgressBar from './OnboardingProgressBar';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAppStore } from '../../stores/useAppStore';
 
 interface ParentInformationPageProps {
   onNext: (data: ParentData) => void;
+  onBack?: () => void;
+  initialData?: ParentData;
 }
 
 export interface ParentData {
@@ -20,12 +24,16 @@ export interface ParentData {
   accessCode: string;
 }
 
-export default function ParentInformationPage({ onNext }: ParentInformationPageProps) {
+export default function ParentInformationPage({ onNext, onBack, initialData }: ParentInformationPageProps) {
   const [schools, setSchools] = useState<School[]>([]);
   const [isVerifying, setIsVerifying] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-  
-  const [formData, setFormData] = useState<ParentData>({
+  const [prefilledSchoolName, setPrefilledSchoolName] = useState<string | null>(null);
+
+  // Read the school name the user already picked on the home screen
+  const storeSelectedSchool = useAppStore((state) => state.selectedSchool);
+
+  const [formData, setFormData] = useState<ParentData>(initialData || {
     fullName: '',
     email: '',
     phone: '',
@@ -46,15 +54,33 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
       try {
         const data = await getSchools();
         setSchools(data || []);
+
+        // Only auto-fill if the user hasn't already picked one (for persistence)
+        if (formData.schoolId) return;
+
+        // Priority 1: match the school the user already selected on the home screen
+        if (storeSelectedSchool && data && data.length > 0) {
+          const match = data.find(
+            (s) => s.name.toLowerCase() === storeSelectedSchool.toLowerCase()
+          );
+          if (match) {
+            setFormData(prev => ({ ...prev, schoolId: match.id.toString() }));
+            setPrefilledSchoolName(match.name);
+            return; // done — no need to check single-school fallback
+          }
+        }
+
+        // Priority 2: auto-select when there's only one school
         if (data && data.length === 1 && data[0]?.id) {
           setFormData(prev => ({ ...prev, schoolId: data[0].id.toString() }));
+          setPrefilledSchoolName(data[0].name);
         }
       } catch (error) {
         console.error('Failed to fetch schools:', error);
       }
     }
     fetchSchools();
-  }, []);
+  }, [storeSelectedSchool]);
 
   const validateForm = (): boolean => {
     const newErrors = {
@@ -66,7 +92,7 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
       newErrors.fullName = 'Full name is required';
       isValid = false;
     }
-    
+
     if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Valid email is required';
       isValid = false;
@@ -117,10 +143,10 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
   const inputClasses = (field: string) => `
     relative bg-white rounded-[16px] overflow-hidden
     transition-all duration-300 w-full h-[56px] px-12
-    ${errors[field as keyof typeof errors] 
-      ? 'ring-4 ring-red-500/10 border-[1.5px] border-red-500 bg-red-50/20' 
-      : focusedField === field 
-        ? 'ring-4 ring-[#95e36c]/20 border-[1.5px] border-[#95e36c] shadow-lg' 
+    ${errors[field as keyof typeof errors]
+      ? 'ring-4 ring-red-500/10 border-[1.5px] border-red-500 bg-red-50/20'
+      : focusedField === field
+        ? 'ring-4 ring-[#95e36c]/20 border-[1.5px] border-[#95e36c] shadow-lg'
         : 'border-[1.5px] border-[#e5e7eb] shadow-sm hover:border-[#d1d5db]'
     }
     text-[15px] font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#003630] placeholder:text-gray-300 focus:outline-none
@@ -128,11 +154,15 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
 
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader />
+      <LogoHeader showBackButton={!!onBack} onBack={onBack} />
 
-      <div className="flex-1 px-6 pt-8 pb-32 max-w-lg mx-auto w-full">
+      <div className="w-full flex justify-center">
+        <OnboardingProgressBar currentStep={1} totalSteps={3} />
+      </div>
+
+      <div className="flex-1 px-6 pt-6 pb-32 max-w-lg mx-auto w-full">
         {/* Header - Matching SearchPage style */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
@@ -141,11 +171,11 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
           <div className="inline-flex items-center gap-[8px] mb-[12px]">
             <div className="w-[3px] h-[32px] bg-gradient-to-b from-[#95e36c] to-[#003630] rounded-full" />
             <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.5px]">
-              Registration Info
+              Parent/Guardian Info
             </h1>
           </div>
           <p className="text-[14px] text-[#6b7280] tracking-[-0.2px] pl-[11px]">
-            Please enter your accurate contact details to link your school records securely.
+            Enter your contact details so we can securely link your child's school records.
           </p>
         </motion.div>
 
@@ -160,9 +190,9 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
             <div key={field.id} className="space-y-1.5">
               <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">{field.label}</label>
               <div className="relative group">
-                <field.icon 
-                  size={18} 
-                  className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === field.id ? 'text-[#95e36c]' : 'text-gray-400'}`} 
+                <field.icon
+                  size={18}
+                  className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === field.id ? 'text-[#95e36c]' : 'text-gray-400'}`}
                 />
                 <input
                   type={field.type}
@@ -189,10 +219,28 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
           {/* School Selector - Custom Styled */}
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Select Institution</label>
+
+            {/* Prefilled banner — shown when school was already chosen on home screen */}
+            <AnimatePresence>
+              {prefilledSchoolName && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-[10px] bg-[#95e36c]/10 border border-[#95e36c]/25 mb-1"
+                >
+                  <CheckCircle2 size={14} className="text-[#003630] flex-shrink-0" />
+                  <p className="text-[11px] font-bold text-[#003630] tracking-[-0.1px]">
+                    Auto-filled from your selection: <span className="text-[#007a5a]">{prefilledSchoolName}</span>
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="relative group">
-              <SchoolIcon 
-                size={18} 
-                className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'schoolId' ? 'text-[#95e36c]' : 'text-gray-400'}`} 
+              <SchoolIcon
+                size={18}
+                className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'schoolId' ? 'text-[#95e36c]' : 'text-gray-400'}`}
               />
               <select
                 value={formData.schoolId}
@@ -201,6 +249,9 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
                 onChange={(e) => {
                   setFormData({ ...formData, schoolId: e.target.value });
                   setErrors({ ...errors, schoolId: '' });
+                  // Update the banner to reflect the new manual selection
+                  const chosen = schools.find(s => s.id.toString() === e.target.value);
+                  setPrefilledSchoolName(chosen ? chosen.name : null);
                 }}
                 className={`${inputClasses('schoolId')} appearance-none pr-10 cursor-pointer`}
                 style={{ WebkitAppearance: 'none' }}
@@ -220,9 +271,9 @@ export default function ParentInformationPage({ onNext }: ParentInformationPageP
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">School Access Code</label>
             <div className="relative group">
-              <Lock 
-                size={18} 
-                className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'accessCode' ? 'text-[#95e36c]' : 'text-gray-400'}`} 
+              <Lock
+                size={18}
+                className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'accessCode' ? 'text-[#95e36c]' : 'text-gray-400'}`}
               />
               <input
                 type="text"

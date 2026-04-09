@@ -963,7 +963,7 @@ export default function App() {
     const state = useAppStore.getState();
 
     // Anyone can access these pages
-    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'account-profile', 'policies'];
+    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies'];
     if (publicPages.includes(page)) return true;
 
     // Payment flow pages require proper context
@@ -1758,8 +1758,8 @@ export default function App() {
               onInactivityRefresh={() => {
                 // Re-navigate to services to trigger fresh data load
                 console.log('[App] Services page inactivity refresh triggered');
-                navigateTo('search');
-                setTimeout(() => navigateTo('services'), 100);
+                navigateToPage('search');
+                setTimeout(() => navigateToPage('services'), 100);
               }}
               navigateToPage={navigateToPage}
             />
