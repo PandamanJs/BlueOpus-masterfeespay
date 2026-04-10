@@ -214,11 +214,11 @@ const SEMESTER_OPTIONS = ["Semester 1", "Semester 2"];
 
 import { getSchoolByName } from "../lib/supabase/api/schools";
 
-function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studentGrade }: { onDone: (grade: string, year: string, term: string, price: number) => void; onClose: () => void; schoolName: string; hasTuitionDebt: boolean; studentGrade?: string }) {
+function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studentGrade, termServiceMap, activeGradeId }: { onDone: (grade: string, year: string, term: string, price: number) => void; onClose: () => void; schoolName: string; hasTuitionDebt: boolean; studentGrade?: string; termServiceMap?: Record<number, string[]>; activeGradeId?: string }) {
   const institutionType = getInstitutionType(schoolName);
   const isUniversity = institutionType === 'university';
 
-  const [gradeOptions, setGradeOptions] = useState<Array<{ name?: string; label: string; value: string; price: number }>>([]);
+  const [gradeOptions, setGradeOptions] = useState<Array<{ name?: string; label: string; value: string; price: number; grade_id?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [selectedGrade, setSelectedGrade] = useState("");
   const [selectedYear, setSelectedYear] = useState("2026");
@@ -232,96 +232,36 @@ function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studen
       setLoading(true);
       const school = await getSchoolByName(schoolName);
       if (school?.grade_pricing && school.grade_pricing.length > 0) {
-        console.log('[Frontend] Received grade options:', school.grade_pricing);
-
         let processedOptions = school.grade_pricing;
-        if (school.uses_forms) {
-          const formMap: Record<string, string> = {
-            'Grade 7': 'Form 1',
-            'Grade 8': 'Form 2',
-            'Grade 9': 'Form 3',
-            'Grade 10': 'Form 4',
-            'Grade 11': 'Form 5',
-            'Grade 12': 'Form 6',
-          };
-          processedOptions = school.grade_pricing.map((opt: any) => {
-            const rawName = opt.name || opt.label.split(' - ')[0];
-            if (formMap[rawName]) {
-              return {
-                ...opt,
-                name: formMap[rawName],
-                label: opt.label.replace(rawName, formMap[rawName])
-              };
-            }
-            return opt;
-          });
-        }
-
         setGradeOptions(processedOptions);
 
-        let initialSelection = processedOptions[0]?.value || "";
-        let initialTab: 'primary' | 'secondary' = 'primary';
-
-        console.log('[GradeSelection] Attempting to auto-match grade:', studentGrade);
-
-        if (studentGrade) {
-          const gradeToForm: Record<string, string> = {
-            'grade 7': 'form 1',
-            'grade 8': 'form 2',
-            'grade 9': 'form 3',
-            'grade 10': 'form 4',
-            'grade 11': 'form 5',
-            'grade 12': 'form 6'
-          };
-
-          const normalize = (g: string) => {
-            if (!g) return '';
-            let v = g.toLowerCase().trim();
-            // Remove 'grade', 'form', 'year' and any leading zeros
-            v = v.replace(/^(grade|form|year)\s*0*/, '');
-            // Take only the first numeric or alphanumeric segment (e.g., "8 blue" -> "8")
-            const match = v.match(/^([a-z0-9]+)/);
-            return match ? match[1] : v;
-          };
-
-          const normalizedStudentGrade = normalize(studentGrade);
-          console.log('[GradeSelection] Normalized student grade:', normalizedStudentGrade);
-
-          const matchedOption = processedOptions.find((opt: any) => {
-            const optName = opt.name || opt.label.split(' - ')[0] || '';
-            const normalizedOptName = normalize(optName);
-
-            // 1. Direct match
-            if (optName.toLowerCase() === studentGrade.toLowerCase()) return true;
-
-            // 2. Form mapping match (e.g., Grade 8 -> Form 2)
-            if (school.uses_forms && gradeToForm[studentGrade.toLowerCase()] === optName.toLowerCase()) return true;
-
-            // 3. Normalized match (e.g., "08" -> "8")
-            if (normalizedOptName === normalizedStudentGrade && normalizedStudentGrade !== '') return true;
-
-            return false;
-          });
-
-          if (matchedOption) {
-            initialSelection = matchedOption.value;
-            const matchedName = matchedOption.name || matchedOption.label || '';
-            if (['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12', 'Form 1', 'Form 2', 'Form 3', 'Form 4', 'Form 5', 'Form 6'].includes(matchedName) || matchedName.includes('Secondary')) {
-              initialTab = 'secondary';
-            }
-          }
+        let preSelected = "";
+        if (activeGradeId) {
+            const exactMatch = processedOptions.find((opt: any) => opt.grade_id === activeGradeId || opt.value === activeGradeId);
+            if (exactMatch) preSelected = exactMatch.value;
         }
 
-        setSelectedGrade(initialSelection);
-        setGradeTab(initialTab);
-      } else {
-        // Fallback to empty or logic
-        setGradeOptions([]);
+        if (!preSelected && studentGrade) {
+            const normalize = (g: string) => g.toLowerCase().replace(/^(grade|form|year)\s*0*/, '').match(/^([a-z0-9]+)/)?.[1] || g.toLowerCase();
+            const normS = normalize(studentGrade);
+            const matched = processedOptions.find((opt: any) => normalize(opt.name || opt.label) === normS);
+            if (matched) preSelected = matched.value;
+        }
+
+        setSelectedGrade(preSelected || processedOptions[0]?.value || "");
       }
       setLoading(false);
     };
     fetchGrades();
-  }, [schoolName, studentGrade]);
+  }, [schoolName, studentGrade, activeGradeId]);
+
+  const isTermBlocked = (termName: string) => {
+    if (!termServiceMap) return false;
+    const termNum = parseInt(termName.replace(/\D/g, ''));
+    if (!termNum) return false;
+    const existing = termServiceMap[termNum] || [];
+    return existing.some(s => s.toLowerCase().includes('tuition') || s.toLowerCase().includes('school fees') || s.toLowerCase().includes('fees'));
+  };
 
   // Derive primary and secondary grades for the tabs
   const secondaryGrades = gradeOptions.filter(opt => {
@@ -553,32 +493,37 @@ function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studen
                   <div className="grid grid-cols-3 gap-[10px]">
                     {(isUniversity ? availableSemesters : availableTerms).map((term) => {
                       const isActive = paymentPeriod === 'term' && selectedTerm === term;
-                      const isBlockedByDebt = hasTuitionBalance;
+                      const isBlockedByInvoice = isTermBlocked(term);
+                      const isBlockedByDebt = hasTuitionBalance && !isBlockedByInvoice; // Only show generic debt if not specifically invoiced
 
                       return (
                         <button
-                          key={term}
-                          disabled={isBlockedByDebt}
-                          onClick={() => {
-                            haptics.selection();
-                            setPaymentPeriod("term");
-                            setSelectedTerm(term);
-                          }}
+                           key={term}
+                           disabled={isBlockedByInvoice || isBlockedByDebt}
+                           onClick={() => {
+                             haptics.selection();
+                             setPaymentPeriod("term");
+                             setSelectedTerm(term);
+                           }}
                           className={`h-[52px] rounded-[16px] flex flex-col items-center justify-center border-[1.5px] transition-all relative active:scale-95 ${isActive
                             ? 'bg-[#95e36c] border-transparent text-[#003630] shadow-[0px_4px_12px_rgba(149,227,108,0.25)]'
-                            : isBlockedByDebt
+                            : (isBlockedByInvoice || isBlockedByDebt)
                               ? 'bg-[#FFF1F0]/40 border-[#FFCCC7]/30 cursor-not-allowed opacity-80'
                               : 'bg-white border-[#f1f3f5] text-[#4b5563] hover:border-[#d1d5db]'
                             }`}
                         >
-                          <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] tracking-[-0.1px] ${isBlockedByDebt ? 'text-red-400' : ''}`}>
+                          <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] tracking-[-0.1px] ${(isBlockedByInvoice || isBlockedByDebt) ? 'text-red-400' : ''}`}>
                             {term.split(' ')[1] ? `Term ${term.split(' ')[1]}` : term}
                           </span>
-                          {isBlockedByDebt && (
+                          {isBlockedByInvoice ? (
                             <span className="text-[7.5px] text-red-500 font-black uppercase tracking-[0.5px] mt-[1px]">
-                              Clear Balance
+                                Already Invoiced
                             </span>
-                          )}
+                          ) : isBlockedByDebt ? (
+                            <span className="text-[7.5px] text-red-500 font-black uppercase tracking-[0.5px] mt-[1px]">
+                                Clear Balance
+                            </span>
+                          ) : null}
                         </button>
                       );
                     })}
@@ -741,18 +686,12 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
   const [showOtherServicesPopup, setShowOtherServicesPopup] = useState(false);
   const [studentServices, setStudentServices] = useState<Record<string, Service[]>>({});
 
-  // Balance Check State
-  const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
-  const [invoicesWithBalance, setInvoicesWithBalance] = useState<PaymentHistoryRecord[]>([]);
+  const [financialSummary, setFinancialSummary] = useState<any>(null);
 
   useEffect(() => {
     if (activeStudentId) {
-      Promise.all([
-        getPendingTransactionsForStudent(activeStudentId),
-        getInvoicesWithBalanceForStudent(activeStudentId)
-      ]).then(([txs, invoices]) => {
-        setPendingTransactions(txs);
-        setInvoicesWithBalance(invoices);
+      getStudentFinancialSummary(activeStudentId).then(summary => {
+          setFinancialSummary(summary);
       });
     }
   }, [activeStudentId]);
@@ -1257,11 +1196,28 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
           {/* Add School Fees Popup */}
           {showAddFeesForm && (
             <AddSchoolFeesForm
-              schoolName={schoolName}
-              hasTuitionDebt={hasTuitionDebt}
-              studentGrade={activeStudent?.grade}
-              onDone={handleDone}
               onClose={() => setShowAddFeesForm(false)}
+              onDone={(grade, year, term, price) => {
+                const newService: Service = {
+                  id: `fees-${Date.now()}`,
+                  description: `${grade} - ${term} (${year})`,
+                  amount: price,
+                  invoiceNo: `NEW-${Math.floor(1000 + Math.random() * 9000)}`,
+                  term: parseInt(term.replace(/\D/g, '')) || 1,
+                  academicYear: parseInt(year)
+                };
+                setStudentServices(prev => ({
+                  ...prev,
+                  [activeStudentId]: [...(prev[activeStudentId] || []), newService]
+                }));
+                setShowAddFeesForm(false);
+                toast.success("School fees added to account");
+              }}
+              schoolName={schoolName}
+              hasTuitionDebt={(financialSummary?.totalBalance || 0) > 0}
+              studentGrade={activeStudent?.grade}
+              activeGradeId={financialSummary?.student?.active_grade_id}
+              termServiceMap={financialSummary?.termServiceMap}
             />
           )}
 

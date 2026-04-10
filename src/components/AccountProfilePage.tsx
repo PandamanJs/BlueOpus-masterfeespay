@@ -10,12 +10,15 @@ import {
   School as SchoolIcon,
   CheckCircle2,
   Loader2,
-  MapPin
+  MapPin,
+  AlertCircle,
+  X,
+  Send
 } from 'lucide-react';
 import { useAppStore } from '../stores/useAppStore';
 import { hapticFeedback } from '../utils/haptics';
 import { toast } from 'sonner';
-import { updateParent } from '../lib/supabase/api/parents';
+import { updateParent, logDispute } from '../lib/supabase/api/parents';
 import { getStudentsByPhone } from '../data/students';
 import type { Student } from '../data/students';
 import type { PageType } from '../stores/useAppStore';
@@ -83,6 +86,7 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
   const [isSaving, setIsSaving] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+  const [selectedDisputeStudent, setSelectedDisputeStudent] = useState<{ id: string, name: string } | null>(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -241,6 +245,24 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
                           <span className="text-[9px] font-bold text-[#003630] uppercase tracking-wider">{student.grade}</span>
                         </div>
 
+                        {/* Action Buttons */}
+                        <div className="mt-4 pt-4 border-t border-[#f1f3f5] flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-[#003630]/40 group-hover:text-[#95e36c] transition-colors">
+                             <AlertCircle size={14} />
+                             <span className="text-[10px] font-black uppercase tracking-widest">Verified Account</span>
+                          </div>
+                          
+                          <button 
+                            onClick={() => {
+                              hapticFeedback('light');
+                              setSelectedDisputeStudent({ id: student.id, name: student.name });
+                            }}
+                            className="h-[32px] px-4 rounded-full border border-red-100 bg-red-50/50 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-600 hover:text-white transition-all active:scale-95"
+                          >
+                            Dispute Balance
+                          </button>
+                        </div>
+
                         {/* Background Decoration */}
                         <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-gradient-to-br from-[#95e36c]/5 to-transparent rounded-full blur-2xl group-hover:bg-[#95e36c]/10 transition-colors" />
                       </motion.div>
@@ -286,6 +308,96 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
           </motion.div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedDisputeStudent && (
+          <DisputeDrawer 
+            student={selectedDisputeStudent}
+            parentId={userId}
+            onClose={() => setSelectedDisputeStudent(null)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function DisputeDrawer({ student, parentId, onClose }: { student: { id: string, name: string }, parentId: string, onClose: () => void }) {
+  const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!notes.trim()) {
+      toast.error('Please provide a reason for the dispute');
+      return;
+    }
+
+    setIsSubmitting(true);
+    hapticFeedback('medium');
+
+    try {
+      await logDispute(student.id, parentId, notes);
+      toast.success('Dispute logged successfully. School admin has been notified.');
+      hapticFeedback('success');
+      onClose();
+    } catch (e) {
+      toast.error('Could not log dispute. Contact support.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/60 backdrop-blur-sm px-4">
+      <motion.div 
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        className="w-full max-w-lg bg-white rounded-t-[40px] shadow-2xl overflow-hidden p-8 pb-12"
+      >
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <span className="text-[10px] font-black text-[#95e36c] uppercase tracking-[3px]">Financial Integrity</span>
+            <h3 className="text-2xl font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] mt-1">Raise Dispute</h3>
+          </div>
+          <button onClick={onClose} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 active:scale-90 transition-all">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="bg-[#FFF1F0] border border-[#FFCCC7] rounded-2xl p-4 flex gap-4 mb-8">
+          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-red-500 shrink-0 shadow-sm">
+            <AlertCircle size={24} />
+          </div>
+          <div className="space-y-1">
+            <p className="text-[13px] font-bold text-red-700 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">Disputing record for {student.name}</p>
+            <p className="text-[11px] text-red-600/70 font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-normal">
+              Flagging this record will notify the school board to audit your payments and invoiced balances for reconciliation.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
+            Reason for dispute
+          </label>
+          <textarea 
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="e.g. 'Paid Term 1 fees at the school office on March 15th' or 'Incorrect tuition amount listed'..."
+            className="w-full h-32 p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#95e36c] focus:bg-white focus:ring-4 focus:ring-[#95e36c]/5 transition-all text-[14px] font-medium resize-none"
+          />
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className="w-full h-14 mt-8 bg-[#003630] rounded-2xl text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg relative overflow-hidden"
+        >
+          {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Send size={18} />}
+          <span>Submit Formal Dispute</span>
+        </button>
+      </motion.div>
     </div>
   );
 }

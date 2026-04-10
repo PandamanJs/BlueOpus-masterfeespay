@@ -927,32 +927,36 @@ export default function App() {
     }
   }, [currentPage, setSelectedSchool]);
 
-  // Fetch students when userPhone changes
-  useEffect(() => {
-    if (!userPhone) {
+  // Shared student fetching logic
+  const fetchStudents = async (phone: string) => {
+    if (!phone) {
       setStudents([]);
       return;
     }
+    console.log('[App] Fetching students for phone:', phone);
+    setStudentsLoading(true);
+    setStudentsError(null);
+    try {
+      const studentData = await getStudentsByPhone(phone);
+      console.log('[App] Successfully fetched students:', studentData.length);
+      setStudents(studentData);
+      return studentData;
+    } catch (error) {
+      console.error('[App] Error fetching students:', error);
+      setStudentsError('Failed to load student data. Please try again.');
+      toast.error('Failed to load student data');
+      return [];
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
 
-    const fetchStudents = async () => {
-      console.log('[App] Fetching students for phone:', userPhone);
-      setStudentsLoading(true);
-      setStudentsError(null);
-      try {
-        const studentData = await getStudentsByPhone(userPhone);
-        console.log('[App] Successfully fetched students:', studentData.length);
-        setStudents(studentData);
-      } catch (error) {
-        console.error('[App] Error fetching students:', error);
-        setStudentsError('Failed to load student data. Please try again.');
-        toast.error('Failed to load student data');
-      } finally {
-        setStudentsLoading(false);
-      }
-    };
-
-    fetchStudents();
-  }, [userPhone]);
+  // Fetch students when userPhone changes or on initial hydrate
+  useEffect(() => {
+    if (hasHydrated && userPhone) {
+      fetchStudents(userPhone);
+    }
+  }, [userPhone, hasHydrated]);
 
   const handleTutorialComplete = () => {
     completeTutorial();
@@ -1383,8 +1387,10 @@ export default function App() {
     }
   };
 
-  const handleProceedToServices = (name: string, phone: string) => {
+  const handleProceedToServices = async (name: string, phone: string) => {
     setUserInfo(name, phone);
+    // Explicitly fetch students to ensure they are loaded when entering services
+    await fetchStudents(phone);
     navigateToPage("services");
   };
 

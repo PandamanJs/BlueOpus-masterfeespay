@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown, CheckCircle2, AlertTriangle, X } from 'lucide-react';
+import { validatePhoneNumber, validateEmail, validateName } from '../../utils/validation';
 import { getSchools } from '../../lib/supabase/api/schools';
 import { verifySchoolCode } from '../../lib/supabase/api/security';
+import { getParentByPhone } from '../../lib/supabase/api/parents';
 import { haptics } from '../../utils/haptics';
 import { toast } from 'sonner';
 import type { School } from '../../types';
@@ -27,8 +29,8 @@ export interface ParentData {
 export default function ParentInformationPage({ onNext, onBack, initialData }: ParentInformationPageProps) {
   const [schools, setSchools] = useState<School[]>([]);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
   const [prefilledSchoolName, setPrefilledSchoolName] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Read the school name the user already picked on the home screen
   const storeSelectedSchool = useAppStore((state) => state.selectedSchool);
@@ -48,6 +50,8 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
     schoolId: '',
     accessCode: '',
   });
+
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSchools() {
@@ -84,40 +88,15 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
 
   const validateForm = (): boolean => {
     const newErrors = {
-      fullName: '', email: '', phone: '', schoolId: '', accessCode: '',
+      fullName: validateName(formData.fullName),
+      email: formData.email ? validateEmail(formData.email) : '',
+      phone: validatePhoneNumber(formData.phone),
+      schoolId: formData.schoolId ? '' : 'Select your school',
+      accessCode: formData.accessCode.trim() ? '' : 'Code required',
     };
-    let isValid = true;
-
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-      isValid = false;
-    }
-
-    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Valid email is required';
-      isValid = false;
-    }
-
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-      isValid = false;
-    } else if (!/^0[79][0-9]{8}$/.test(formData.phone)) {
-      newErrors.phone = 'Use format 097xxxxxxx';
-      isValid = false;
-    }
-
-    if (!formData.schoolId) {
-      newErrors.schoolId = 'Select your school';
-      isValid = false;
-    }
-
-    if (!formData.accessCode.trim()) {
-      newErrors.accessCode = 'Code required';
-      isValid = false;
-    }
 
     setErrors(newErrors);
-    return isValid;
+    return !Object.values(newErrors).some(error => error !== '');
   };
 
   const handleSubmit = async () => {
@@ -125,19 +104,39 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
     if (validateForm()) {
       setIsVerifying(true);
       try {
+        // Step 1: Check if phone number is already registered
+        const existingParent = await getParentByPhone(formData.phone);
+        if (existingParent) {
+          toast.error('This phone number is already registered.', {
+            description: 'Please go to the login page or use a different number.',
+            duration: 5000,
+          });
+          setErrors(prev => ({ ...prev, phone: 'Already registered' }));
+          setIsVerifying(false);
+          return;
+        }
+
+        // Step 2: Verify school access code
         const isValid = await verifySchoolCode(formData.schoolId, formData.accessCode);
         if (isValid) {
-          onNext(formData);
+          setShowConfirmModal(true);
         } else {
           toast.error('Invalid School Access Code');
           setErrors(prev => ({ ...prev, accessCode: 'Invalid code' }));
         }
       } catch (error) {
         toast.error('Verification failed. Try again.');
+        console.error('Registration verification error:', error);
       } finally {
         setIsVerifying(false);
       }
     }
+  };
+
+  const handleConfirm = () => {
+    haptics.buttonPress();
+    setShowConfirmModal(false);
+    onNext(formData);
   };
 
   const inputClasses = (field: string) => `
@@ -160,7 +159,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
         <OnboardingProgressBar currentStep={1} totalSteps={3} />
       </div>
 
-      <div className="flex-1 px-6 pt-6 pb-32 max-w-lg mx-auto w-full">
+      <div className="flex-1 px-6 pt-6 pb-32 max-w-lg mx-auto w-full relative z-0">
         {/* Header - Matching SearchPage style */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -211,12 +210,11 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 />
               </div>
               {errors[field.id as keyof typeof errors] && (
-                <p className="text-[10px] text-red-500 pl-1 font-semibold">{errors[field.id as keyof typeof errors]}</p>
+                <p className="text-[10px] text-red-500 pl-1 mt-1.5 font-semibold">{errors[field.id as keyof typeof errors]}</p>
               )}
             </div>
           ))}
 
-          {/* School Selector - Custom Styled */}
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Select Institution</label>
 
@@ -265,6 +263,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 <ChevronDown size={18} />
               </div>
             </div>
+            {errors.schoolId && <p className="text-[10px] text-red-500 pl-1 mt-1 font-semibold">{errors.schoolId}</p>}
           </div>
 
           {/* Access Code */}
@@ -288,7 +287,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 className={`${inputClasses('accessCode')} tracking-[2px] font-bold text-center pl-4`}
               />
             </div>
-            {errors.accessCode && <p className="text-[10px] text-red-500 pl-1 font-semibold">{errors.accessCode}</p>}
+            {errors.accessCode && <p className="text-[10px] text-red-500 pl-1 mt-1 font-semibold">{errors.accessCode}</p>}
           </div>
         </div>
       </div>
@@ -328,6 +327,80 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           </button>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirmModal && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowConfirmModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-sm bg-white rounded-[24px] shadow-2xl overflow-hidden p-6"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-10 h-10 rounded-full bg-[#95e36c]/20 flex items-center justify-center text-[#003630]">
+                  <CheckCircle2 size={24} />
+                </div>
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <h3 className="text-xl font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] mb-2">
+                Confirm Details
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Please verify that your details are correct before proceeding. This information cannot be easily changed later.
+              </p>
+
+              <div className="space-y-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-100 mb-6 text-sm">
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-gray-400 mb-0.5">Full Name</span>
+                  <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-gray-800">{formData.fullName}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-gray-400 mb-0.5">Email</span>
+                  <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-gray-800">{formData.email}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-gray-400 mb-0.5">Phone</span>
+                  <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-gray-800">{formData.phone}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-gray-400 mb-0.5">School Code</span>
+                  <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-gray-800 tracking-wider">{formData.accessCode}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-3.5 rounded-[16px] font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-gray-600 bg-gray-100/80 hover:bg-gray-200 transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="flex-1 py-3.5 rounded-[16px] font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[#003630] bg-[#95e36c] hover:bg-[#85cc5f] transition-colors shadow-sm"
+                >
+                  Confirm & Next
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

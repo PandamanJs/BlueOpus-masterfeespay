@@ -348,7 +348,17 @@ export default function ViewPaymentPlansPage({ onBack, schoolName }: ViewPayment
         {/* Decorative glass overlay */}
         <div className="absolute inset-0 bg-black/5 backdrop-blur-[1px]" />
 
-        {/* Floating back button removed for cleaner aesthetic as per user request */}
+        {/* Floating Back Button */}
+        <motion.button
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          onClick={onBack}
+          className="absolute top-12 left-6 z-50 w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white active:scale-90 transition-all"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </motion.button>
 
         {/* Main Content with Spacing matching History Page */}
         <div 
@@ -361,12 +371,12 @@ export default function ViewPaymentPlansPage({ onBack, schoolName }: ViewPayment
             transition={{ delay: 0.1 }}
           >
             <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#95e36c] text-[13px] uppercase tracking-[0.2em] mb-3 opacity-90">
-              Available Facilities
+              Institution Policies
             </p>
             <h2 className="font-['Agrandir:Grand_Heavy',sans-serif] text-[36px] text-white tracking-[-1px] leading-[1.1]">
-              {isUniversity ? "Flexible Credit" : "Payment"}<br />
+              Policies &<br />
               <span className="text-[#95e36c]">
-                {isUniversity ? "Facilities" : "Plans"}
+                Refunds
               </span>
             </h2>
           </motion.div>
@@ -388,7 +398,7 @@ export default function ViewPaymentPlansPage({ onBack, schoolName }: ViewPayment
             fontWeight: 600, fontSize: 13, color: "#8e8e93",
             textTransform: "uppercase", letterSpacing: "0.06em",
           }}>
-            Available Plans
+            Terms & Policies
           </p>
           <div style={{ flex: 1, height: "0.5px", background: "rgba(0,0,0,0.1)" }} />
           {!loading && (
@@ -444,11 +454,11 @@ export default function ViewPaymentPlansPage({ onBack, schoolName }: ViewPayment
             <p style={{
               margin: 0, fontFamily: '-apple-system,"SF Pro Text","Inter",sans-serif',
               fontWeight: 600, fontSize: 15, color: "#111",
-            }}>No Plans Available</p>
+            }}>No Policies Found</p>
             <p style={{
               margin: "6px 0 0", fontFamily: '-apple-system,"SF Pro Text","Inter",sans-serif',
               fontWeight: 400, fontSize: 13, color: "#8e8e93",
-            }}>No active {isUniversity ? "credit facilities" : "payment plans"} found.</p>
+            }}>No active policies or refund terms found for this institution.</p>
           </motion.div>
         )}
 

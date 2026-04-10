@@ -15,47 +15,7 @@ interface StudentsPageProps {
   initialStudents?: StudentData[];
 }
 
-// Borrowed from Checkout SummaryCard styling (the one with chevrons)
-function ParentSummaryCard({ parentData }: { parentData: ParentData }) {
-  return (
-    <div className="bg-white rounded-[24px] w-full relative overflow-hidden ring-1 ring-[#e5e7eb] shadow-[0px_12px_24px_-8px_rgba(0,0,0,0.06)] mb-10 mt-2">
-      {/* Decorative Chevrons (Signature from CheckoutPage) */}
-      <div className="absolute -top-4 -right-2 w-32 h-32 opacity-80 pointer-events-none">
-        <svg viewBox="0 0 100 100" fill="none" className="w-full h-full rotate-[-15deg]">
-          <path d="M40 20L65 45L40 70" stroke="#e0f7d4" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M55 20L80 45L55 70" stroke="#95e36c" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" />
-          <path d="M70 20L95 45L70 70" stroke="#003630" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
 
-      <div className="p-6 flex flex-col gap-4 relative z-10">
-        <div className="flex items-center justify-between">
-          <div className="size-11 rounded-[16px] bg-gradient-to-br from-[#003630]/15 to-[#003630]/5 border-[1.5px] border-[#003630]/20 flex items-center justify-center">
-            <User size={22} className="text-[#003630]" strokeWidth={2.5} />
-          </div>
-          <div className="px-3 py-1 rounded-full bg-[#95e36c]/10 border border-[#95e36c]/20">
-            <span className="text-[10px] font-black text-[#003630] uppercase tracking-widest">Registrant</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1 mt-1">
-          <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[22px] text-[#003630] tracking-[-0.5px] leading-tight">
-            {parentData.fullName}
-          </h2>
-          <div className="flex items-center gap-2">
-            <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-gray-500">{parentData.phone}</p>
-            {parentData.email && (
-              <>
-                <div className="size-1 rounded-full bg-gray-300" />
-                <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[13px] text-gray-500 truncate max-w-[150px]">{parentData.email}</p>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // REDESIGNED EMPTY STATE
 function EmptyStudentState({ onAddManual }: { onAddManual: () => void }) {
@@ -444,8 +404,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           </p>
         </motion.div>
 
-        {/* Parent Summary Card */}
-        {!showAddForm && <ParentSummaryCard parentData={parentData} />}
+
 
         {/* Actions Section */}
         {!showAddForm ? (
@@ -525,15 +484,22 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                 )}
               </AnimatePresence>
 
-              {/* Add Student Button */}
-              <button
-                onClick={() => { haptics.light(); setShowAddForm(true); window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form'); }}
-                className="w-full h-[56px] rounded-[12px] bg-[#f3f4f6] border border-[#6b7280] flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors"
-              >
-                <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[16px] text-[#374151]">
-                  + Add Student Record
-                </span>
-              </button>
+              <AnimatePresence>
+                {searchQuery.length >= 3 && (
+                  <motion.button
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    onClick={() => { haptics.light(); setShowAddForm(true); window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form'); }}
+                    className="w-full h-[56px] rounded-[12px] bg-[#f3f4f6] border border-[#6b7280] flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors overflow-hidden"
+                  >
+                    <Plus size={18} className="text-[#374151]" />
+                    <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[16px] text-[#374151]">
+                      Add Student Manually
+                    </span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Students List Box */}
