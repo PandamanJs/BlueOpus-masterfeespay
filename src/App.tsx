@@ -1740,6 +1740,9 @@ export default function App() {
               schoolLogo={selectedSchoolLogo}
               onBack={handleBackToServices}
               onViewAllReceipts={handleViewAllReceipts}
+              userName={userName}
+              onClearBalances={handleClearBalances}
+              onIndividualPay={(service: CheckoutService) => handleCheckout([service])}
             />
           </motion.div>
         )}

@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
+import { generateReceiptPDF } from "../utils/pdfGenerator";
 import {
   CheckCircle2,
   AlertCircle,
@@ -8,7 +9,9 @@ import {
   Settings,
   ChevronLeft,
   CreditCard,
-  Loader2
+  Loader2,
+  BadgeCheck,
+  BadgeX
 } from "lucide-react";
 import LogoHeader from "./common/LogoHeader";
 import { getStudentFinancialSummary } from "../lib/supabase/api/registration";
@@ -23,6 +26,9 @@ interface HistoryPageProps {
   onBack: () => void;
   schoolName?: string;
   schoolLogo?: string;
+  userName?: string;
+  onClearBalances?: (studentIds: string[]) => void;
+  onIndividualPay?: (service: any) => void;
   onViewAllReceipts?: (
     studentName: string,
     studentId: string,
@@ -32,11 +38,14 @@ interface HistoryPageProps {
   ) => void;
 }
 
-export default function HistoryPage({ 
-  userPhone, 
-  onBack, 
+export default function HistoryPage({
+  userPhone,
+  onBack,
   schoolName,
-  schoolLogo
+  schoolLogo,
+  userName,
+  onClearBalances,
+  onIndividualPay
 }: HistoryPageProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
@@ -83,190 +92,288 @@ export default function HistoryPage({
   return (
     <div className="bg-[#f8fafc] min-h-screen w-full overflow-hidden flex flex-col">
       <div className="relative w-full max-w-lg h-screen mx-auto flex flex-col bg-[#f9fafb]">
-        
+
         {/* Header */}
         <LogoHeader onBack={onBack} showBackButton={true} />
 
         {/* Dash Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
-          <div className="px-5 pt-4 space-y-6">
-            
-            {/* Balance Hero */}
-            <BalanceHero 
-              summary={financialSummary} 
-              studentName={currentStudent?.name || "Student"} 
-              isLoading={isLoading}
-              onSettleAll={() => {
-                haptics.heavy();
-                toast.info('Going to checkout...');
-              }}
-              hasOutstandingBalance={hasOutstandingBalance}
-            />
+        <div className="flex-1 overflow-y-auto no-scrollbar pb-32 pt-2">
 
-            {/* Student Select Tabs */}
-            <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-2 -mx-2 px-2">
-              {students.map(student => (
-                <StudentTab 
-                  key={student.id}
-                  name={student.name}
-                  isActive={selectedStudentId === student.id}
-                  onClick={() => {
-                    haptics.selection();
-                    setSelectedStudentId(student.id);
-                  }}
-                />
-              ))}
+          {/* Emerald Card — with Settle All Balances button */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              background: 'linear-gradient(135deg, rgba(12,81,63,0.95) 0%, rgba(4,51,41,0.98) 100%)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '20px',
+              padding: '28px 24px',
+              minHeight: '150px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: '0 12px 32px -8px rgba(0,0,0,0.4)',
+              margin: '0 16px 32px 16px',
+            }}
+          >
+            {/* 3 Master Fees Arrows (Adapted for Dark Bg) */}
+            <div className="absolute -top-4 -right-2 w-32 h-32 opacity-30 pointer-events-none">
+              <svg viewBox="0 0 100 100" fill="none" className="w-full h-full rotate-[-15deg]">
+                <path d="M40 20L65 45L40 70" stroke="#95e36c" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M55 20L80 45L55 70" stroke="#95e36c" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" />
+                <path d="M70 20L95 45L70 70" stroke="#ffffff" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" className="opacity-60" />
+              </svg>
             </div>
 
-            {/* Content Logic based on User Prompt (State 1 vs State 2) */}
-            <div className="space-y-4">
-              {isLoading ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-4">
-                  <Loader2 className="animate-spin text-[#95e36c]" size={32} />
-                  <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">Reconciling Ledger...</p>
-                </div>
-              ) : !hasOutstandingBalance ? (
-                // State 1: No Balance
-                <div className="space-y-4">
-                  <EmptySummaryState />
-                  
-                  {/* Keep the history intact as requested (rest of list) */}
-                  <div className="pt-2">
-                    <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-2 mb-3">Service History</p>
-                    {financialSummary?.items && financialSummary.items.length > 0 && (
-                      financialSummary.items.map((item, idx) => (
-                        <ServiceCategoryCard 
-                          key={item.id || idx}
-                          item={item}
-                          grade={currentStudent?.grade || "N/A"}
-                          transactions={financialSummary.transactions || []}
-                          hasOutstandingBalance={hasOutstandingBalance}
-                          onPay={() => {}}
-                        />
-                      ))
-                    )}
+            <div className="flex flex-col gap-1.5 -translate-y-1 relative z-10">
+              <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#95e36c] tracking-[-0.2px] m-0">
+                {currentStudent?.name?.split(' ')[0] || 'Student'}'s Balance
+              </p>
+              <p className="font-['IBM_Plex_Sans_Devanagari:ExtraBold',sans-serif] font-[900] text-[36px] text-white tracking-[-0.8px] leading-[1.1] m-0">
+                {isLoading ? "---" : `K${(financialSummary?.totalBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </p>
+            </div>
+
+            {/* Settle All Balances Button */}
+            {hasOutstandingBalance && !isLoading && (
+              <button
+                onClick={() => {
+                  haptics.heavy();
+                  if (onClearBalances) {
+                    const studentIds = students.map(s => s.id);
+                    onClearBalances(studentIds);
+                  } else {
+                    toast.info('Going to checkout...');
+                  }
+                }}
+                className="bg-[#95e36c] relative z-10 rounded-[14px] px-5 py-3 flex items-center justify-center shadow-[0px_8px_16px_rgba(0,0,0,0.2)] active:scale-95 transition-transform"
+              >
+                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] text-[14px] tracking-[-0.2px] whitespace-nowrap">
+                  Settle All Balances
+                </span>
+              </button>
+            )}
+          </motion.div>
+
+          {/* Child Selector Tabs */}
+          <div className="flex items-center gap-3 px-4 mt-4 mb-4 overflow-x-auto no-scrollbar">
+            {students.map(student => {
+              const isActive = selectedStudentId === student.id;
+
+              if (isActive) {
+                return (
+                  /* Active Tab */
+                  <div key={student.id} onClick={() => { haptics.selection(); setSelectedStudentId(student.id); }} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    paddingTop: '10px',
+                    paddingBottom: '10px',
+                    paddingLeft: '16px',
+                    paddingRight: '20px',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                    cursor: 'pointer'
+                  }}>
+                    <span style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: '#4ade80',
+                      display: 'inline-block',
+                      flexShrink: 0,
+                    }} />
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
+                      {student.name}
+                    </span>
                   </div>
-                </div>
-              ) : (
-                // State 2: Has Balance
-                <div className="space-y-4 pt-2">
-                  <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-2">Action Required</p>
-                  {financialSummary?.items && financialSummary.items.length > 0 ? (
+                );
+              } else {
+                return (
+                  /* Inactive Tab */
+                  <span key={student.id} onClick={() => { haptics.selection(); setSelectedStudentId(student.id); }} style={{
+                    fontSize: '15px',
+                    fontWeight: 400,
+                    color: '#6b7280',
+                    paddingLeft: '4px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {student.name}
+                  </span>
+                );
+              }
+            })}
+          </div>
+
+          {/* Content Area */}
+          <div className="space-y-4">
+            {isLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-4">
+                <Loader2 className="animate-spin text-[#95e36c]" size={32} />
+                <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest">Reconciling Ledger...</p>
+              </div>
+            ) : !hasOutstandingBalance ? (
+              <div className="space-y-4">
+                <EmptySummaryState />
+                <div className="pt-2">
+                  <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-4 mb-3">Service History</p>
+                  {financialSummary?.items && financialSummary.items.length > 0 && (
                     financialSummary.items.map((item, idx) => (
-                      <ServiceCategoryCard 
+                      <ServiceCategoryCard
                         key={item.id || idx}
                         item={item}
+                        studentName={currentStudent?.name || "Student"}
+                        userName={userName || "Parent"}
                         grade={currentStudent?.grade || "N/A"}
                         transactions={financialSummary.transactions || []}
                         hasOutstandingBalance={hasOutstandingBalance}
-                        onPay={() => {
-                          toast.info('Pay action clicked!');
-                        }}
+                        onPay={() => { }}
                       />
                     ))
-                  ) : (
-                    <EmptySummaryState />
                   )}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-4 pt-2">
+                <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-4 mb-3">Action Required</p>
+                {financialSummary?.items?.map((item, idx) => (
+                  <ServiceCategoryCard
+                    key={item.id || idx}
+                    item={item}
+                    studentName={currentStudent?.name || "Student"}
+                    userName={userName || "Parent"}
+                    grade={currentStudent?.grade || "N/A"}
+                    transactions={financialSummary.transactions || []}
+                    hasOutstandingBalance={hasOutstandingBalance}
+                    onPay={() => {
+                      if (onIndividualPay) {
+                        onIndividualPay({
+                          id: item.invoice_id || item.id || crypto.randomUUID(),
+                          description: item.name,
+                          amount: item.balance || 0,
+                          invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
+                          invoice_id: item.invoice_id,
+                          studentName: currentStudent?.name || "Student",
+                          studentId: selectedStudentId,
+                          term: item.term,
+                          academicYear: item.academic_year,
+                          grade: currentStudent?.grade || "N/A"
+                        });
+                      } else {
+                        toast.info('Pay action clicked!');
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
+
         </div>
       </div>
     </div>
   );
 }
 
-function StudentTab({ name, isActive, onClick }: { name: string, isActive: boolean, onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`relative h-[42px] px-5 rounded-[12px] flex items-center gap-2.5 transition-all shrink-0 active:scale-95 ${
-        isActive 
-          ? "bg-white shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#f1f3f5] z-10" 
-          : "bg-transparent border border-gray-200 text-[#9ca3af]"
-      }`}
-    >
-      {isActive && (
-        <div className="relative">
-          <div className="size-[6px] rounded-full bg-[#95e36c] shadow-[0_0_8px_#95e36c]" />
-          <motion.div 
-            initial={{ scale: 0.8, opacity: 0.5 }}
-            animate={{ scale: 1.5, opacity: 0 }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
-            className="absolute inset-0 size-[6px] rounded-full bg-[#95e36c]"
-          />
-        </div>
-      )}
-      <span className={`text-[13px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] ${isActive ? "text-[#003630]" : ""}`}>
-        {name.split(' ')[0]} {name.split(' ').slice(-1)}
-      </span>
-    </button>
-  );
-}
-
-function BalanceHero({ summary, studentName, isLoading, onSettleAll, hasOutstandingBalance }: { summary: FinancialSummary | null, studentName: string, isLoading: boolean, onSettleAll: () => void, hasOutstandingBalance: boolean }) {
-  const balance = summary?.totalBalance ?? 0;
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="relative h-[120px] rounded-[16px] bg-gradient-to-br from-[#0c513f] to-[#043329] p-5 flex flex-col justify-center overflow-hidden shadow-md"
-    >
-      {/* Background Glow */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-[#95e36c]/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
-      
-      <div className="flex justify-between items-center w-full relative z-10">
-        <div className="flex flex-col gap-1">
-          <p className="text-[11px] font-bold text-[#95e36c] uppercase tracking-wider font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
-            {studentName.split(' ')[0]}'s Current Balance
-          </p>
-          <span className="text-white text-[32px] font-black tracking-tight font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] leading-tight">
-            {isLoading ? "---" : `K${balance.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`}
-          </span>
-        </div>
-
-        {hasOutstandingBalance && !isLoading && (
-          <button 
-            onClick={onSettleAll}
-            className="bg-[#95e36c] text-[#003630] h-10 px-4 rounded-[8px] text-[12px] font-black tracking-wide active:scale-95 transition-all font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]"
-          >
-            Settle All Balances
-          </button>
-        )}
-      </div>
-
-    </motion.div>
-  );
-}
-
-function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance, onPay }: { item: any, grade: string, transactions: any[], hasOutstandingBalance: boolean, onPay: () => void }) {
+function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance, onPay, studentName, userName }: { item: any, grade: string, transactions: any[], hasOutstandingBalance: boolean, onPay: () => void, studentName: string, userName: string }) {
+  // Use user's design styles exactly
   const [isExpanded, setIsExpanded] = useState(false);
   const isCleared = (item.balance || 0) <= 0;
-  
-  const relatedTxs = transactions.filter(tx => 
+
+  const extractDate = (obj: any) => {
+    if (!obj) return 'N/A';
+    
+    // Try to find any date-like string property
+    const keys = ['initiated_at', 'created_at', 'invoice_date', 'payment_date', 'date', 'issue_date', 'timestamp'];
+    let val = null;
+    for (let k of keys) {
+      if (obj[k]) { val = obj[k]; break; }
+    }
+    
+    if (!val) {
+      // Fallback: look for any key ending in _at, _date, or containing date
+      for (let k of Object.keys(obj)) {
+        if ((k.endsWith('_at') || k.includes('date')) && typeof obj[k] === 'string' && /[0-9]/.test(obj[k])) {
+          val = obj[k]; break;
+        }
+      }
+    }
+    
+    if (!val) return 'N/A';
+
+    // If it's already in DD/MM/YYYY format, keep it as is
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(val)) return val;
+    const parsed = new Date(val);
+    return isNaN(parsed.getTime()) ? val : parsed.toLocaleDateString('en-GB');
+  };
+
+  const relatedTxs = transactions.filter(tx =>
     tx.invoice_id === item.invoice_id
   );
 
+  const handleDownload = () => {
+    try {
+      const amountPaid = item.expected - (item.balance || 0);
+      generateReceiptPDF({
+        schoolName: "School Fees Payment",
+        totalAmount: amountPaid,
+        refNumber: item.invoice_id?.substring(0, 12).toUpperCase() || 'REF-HIST',
+        dateTime: new Date().toLocaleString(),
+        scheduleId: `#${(item.invoice_id || '0').substring(0, 5)}`,
+        services: [{
+          id: item.id,
+          description: item.name,
+          amount: amountPaid,
+          invoiceNo: item.invoice_number || 'N/A',
+          studentName: studentName
+        }],
+        parentName: userName
+      });
+      toast.success("Receipt downloaded!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Download failed");
+    }
+  };
+
   return (
-    <div className="bg-white rounded-[16px] border border-[#e5e7eb] p-5 shadow-sm mb-4 transition-all duration-300">
-      <div className="flex items-start justify-between mb-2">
-        <div className="space-y-1">
-          <h3 className="text-[15px] font-black text-[#003630] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] leading-none">{item.name} - Term {item.term || '1'}</h3>
-          <p className="text-[10px] text-gray-500 font-medium font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">Grade {grade}</p>
+    <div className="bg-white rounded-[24px] mx-4 mb-4 ring-1 ring-[#e5e7eb] shadow-[0px_8px_24px_-8px_rgba(0,0,0,0.06)] p-5 flex flex-col relative overflow-hidden">
+      {/* Decorative Accent */}
+      {isCleared && <div className="absolute top-0 right-0 w-24 h-24 bg-[#95e36c]/10 rounded-full blur-xl -mr-8 -mt-8 pointer-events-none" />}
+
+      {/* Card Header */}
+      <div className="flex items-start justify-between mb-6 relative z-10">
+        <div className="flex flex-col gap-1 pr-2">
+          <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630] tracking-[-0.3px] leading-tight">
+            {item.name} {item.term && `- Term ${item.term}`}
+          </h3>
+          <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[13px] text-[#6b7280]">
+            {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
+          </p>
         </div>
-        
-        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${
-          isCleared 
-          ? "bg-[#f0fdf4] border-emerald-100 text-emerald-600" 
-          : "bg-red-50 border-red-100 text-red-500"
-        }`}>
-          {isCleared ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
-          <span className="text-[9px] font-bold uppercase tracking-wide leading-none">
-            {isCleared ? "Cleared" : "Not Cleared"}
-          </span>
-        </div>
+
+        {/* Badge */}
+        {isCleared ? (
+          <div className="flex items-center gap-2 bg-[#95e36c]/10 border-[1.5px] border-[#95e36c]/30 rounded-full px-3 py-1.5 shrink-0">
+            <BadgeCheck size={15} className="text-[#95e36c]" strokeWidth={2.5} />
+            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[11px] text-[#003630] uppercase tracking-wider pr-0.5">Cleared</span>
+          </div>
+        ) : (
+          <div 
+            style={{ backgroundColor: '#FFF0F0', borderColor: 'rgba(255, 107, 107, 0.3)' }}
+            className="flex items-center gap-2 border-[1.5px] rounded-full px-3 py-1.5 shrink-0"
+          >
+            <BadgeX size={15} style={{ color: '#FF6B6B' }} strokeWidth={2.5} />
+            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[11px] text-[#003630] uppercase tracking-wider pr-0.5">Not Cleared</span>
+          </div>
+        )}
       </div>
 
       <AnimatePresence>
@@ -275,81 +382,130 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
+            className="overflow-hidden relative z-10"
           >
-            <div className="space-y-4 pt-4 pb-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-[11px] text-gray-500 opacity-80 font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif]">
-                  <span className="shrink-0 w-20 text-gray-400">{new Date(item.initiated_at).toLocaleDateString('en-GB')}</span>
-                  <span className="flex-1 truncate pr-2">{item.name} Service Charge</span>
-                  <span className="font-semibold text-gray-600">K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 1 }) || '0.0'}</span>
+            <div className="mt-5 flex flex-col gap-3">
+              {/* Transaction Row */}
+              <div className="flex justify-between items-center bg-[#f9fafb] p-3 rounded-[14px]">
+                <div className="flex flex-col gap-1 min-w-0 pr-2">
+                  <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#003630] truncate">{item.name} Charge</span>
+                  <span className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] text-[#6b7280]">
+                    {extractDate(item)}
+                  </span>
                 </div>
-                
-                {relatedTxs.map((tx, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-[11px] text-gray-500 opacity-80 font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif]">
-                    <span className="shrink-0 w-20 text-gray-400">{new Date(tx.created_at).toLocaleDateString('en-GB')}</span>
-                    <span className="flex-1 truncate pr-2">Paid through {tx.payment_method?.replace('_', ' ') || 'Office'}</span>
-                    <span className="font-semibold text-gray-600">-K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span>
-                  </div>
-                ))}
+                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] shrink-0">
+                  K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
 
-                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-[12px] font-bold text-red-500 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">Balance</span>
-                  <span className="text-[13px] font-black text-red-500 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">{isCleared ? "-" : `K${(item.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</span>
+              {relatedTxs.map((tx, idx) => (
+                <div key={idx} className="flex justify-between items-center p-2 pl-3">
+                  <div className="flex flex-col gap-0.5 min-w-0 pr-2">
+                    <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[13px] text-[#6b7280] truncate">Paid via {tx.payment_method?.replace('_', ' ') || 'Office'}</span>
+                    <span className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] text-gray-400">
+                      {extractDate(tx)}
+                    </span>
+                  </div>
+                  <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] shrink-0">
+                    -K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
+              ))}
+
+              <div className="h-px w-full bg-gray-100 my-1" />
+
+              <div className="flex justify-between items-center pb-1 px-1 mt-1">
+                <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] uppercase tracking-widest">Balance</span>
+                <span className={`font-['IBM_Plex_Sans_Devanagari:ExtraBold',sans-serif] font-[900] text-[24px] tracking-[-0.5px] ${isCleared ? 'text-[#d1d5db]' : 'text-[#ff6b6b]'}`}>
+                  {isCleared ? "K0.00" : `K${(item.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                </span>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className={`flex flex-col gap-3 ${isExpanded ? "pt-2" : "pt-4"}`}>
-        {/* DO NOT SHOW PAY NOW IF hasOutstandingBalance IS FALSE */}
-        {hasOutstandingBalance && !isCleared && (
+      {/* Action Buttons */}
+      {hasOutstandingBalance && !isCleared && (
+        <div className="relative mt-5 w-full z-10">
+          <div className="absolute -top-1 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white z-20"></div>
           <button
             onClick={onPay}
-            className="w-full h-11 rounded-[8px] bg-[#e0f7d4] text-[#003630] font-bold text-[14px] active:scale-[0.98] transition-all flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] hover:bg-[#d0edc2]"
-          >
-            Pay Now
-          </button>
-        )}
-
-        <div className="flex items-center justify-between w-full relative gap-2">
-          <button
-            onClick={() => {
-              haptics.light();
-              setIsExpanded(!isExpanded);
+            style={{ 
+              backgroundColor: '#E0F7D4', 
+              borderColor: '#003630', 
+              borderWidth: '1.5px', 
+              borderStyle: 'solid' 
             }}
-            className="flex-1 h-10 bg-[#f9fafb] border border-[#e5e7eb] rounded-[8px] text-[#003630] text-[12px] font-bold active:scale-95 transition-all flex items-center justify-center hover:bg-gray-100 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif]"
+            className="w-full h-[46px] rounded-[8px] flex items-center justify-center gap-2 shadow-[0px_2px_8px_rgba(0,0,0,0.05)] active:scale-95 transition-all group relative z-10"
           >
-            {isExpanded ? "Hide Details" : "Show Details"}
-          </button>
-
-          <button className="flex-1 h-10 flex items-center justify-center text-[12px] font-bold text-[#003630] active:scale-95 transition-all font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif]">
-            Download
+            <span style={{ color: '#003630' }} className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] tracking-[-0.2px]">Pay Now</span>
           </button>
         </div>
+      )}
+
+      <div className={`flex items-center gap-3 relative z-10 ${isExpanded || (!isCleared && hasOutstandingBalance) ? 'mt-4' : 'mt-5'}`}>
+        <button
+          onClick={() => {
+            haptics.light();
+            setIsExpanded(!isExpanded);
+          }}
+          className="flex-1 h-12 bg-[#F5F7F9] border-[1.5px] border-[#e5e7eb] rounded-[8px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] text-[14px] active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+        >
+          {isExpanded ? "Hide Details" : "Show Details"}
+        </button>
+        <button
+          onClick={handleDownload}
+          className="flex-1 h-12 bg-transparent font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] flex text-[14px] items-center justify-center gap-2 text-[#003630]/70 active:scale-[0.98] transition-all hover:bg-gray-50 rounded-[16px]"
+        >
+          <Download size={16} />
+          <span>Receipt</span>
+        </button>
       </div>
     </div>
   );
 }
 
 function EmptySummaryState() {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+    }, 4500); // Disappear after 4.5 seconds
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="py-12 bg-white border border-[#e5e7eb] rounded-[16px] flex flex-col items-center justify-center text-center gap-4 px-6 shadow-sm mb-4"
-    >
-      <div className="size-16 rounded-full bg-[#f0fdf4] flex items-center justify-center text-[#95e36c] shadow-inner border border-emerald-50">
-        <CheckCircle2 size={32} />
-      </div>
-      <div className="space-y-1">
-        <h3 className="text-[18px] font-black text-[#003630] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">You're all caught up 🎉</h3>
-        <p className="text-[12px] text-gray-400 font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-          You have no outstanding balance.
-        </p>
-      </div>
-    </motion.div>
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, height: 0, scale: 0.9, marginTop: 0, marginBottom: 0, padding: 0 }}
+          transition={{ duration: 0.5 }}
+          style={{ paddingTop: '10px' }}
+          className="mx-4 mt-2 mb-4 pb-12 px-12 bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] flex flex-col items-center text-center gap-6 shadow-[0px_12px_32px_-8px_rgba(0,0,0,0.08)] relative overflow-hidden origin-top"
+        >
+          <div className="absolute top-0 right-0 w-48 h-48 bg-[#95e36c]/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+
+          <motion.div
+            initial={{ rotate: -180, scale: 0 }}
+            animate={{ rotate: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
+            className="w-12 h-12 rounded-full bg-[#f0fdf4] flex items-center justify-center text-[#95e36c] border-[1.5px] border-[#95e36c]/40 shadow-sm"
+          >
+            <CheckCircle2 size={24} />
+          </motion.div>
+
+          <div className="flex flex-col gap-2">
+            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[26px] text-[#003630] tracking-[-0.5px]">Congratulations!</h3>
+            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[16px] text-[#6b7280]">
+              You have no outstanding balance.
+            </p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
