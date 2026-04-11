@@ -257,7 +257,7 @@ function TextInput({ onSchoolSelect }: { onSchoolSelect: (school: School | null)
 
   return (
     <div ref={containerRef} className={`basis-0 bg-white grow h-full min-h-[50px] min-w-px relative rounded-[14px] shrink-0 transition-all duration-200 ${isFocused ? 'ring-4 ring-[#95e36c]/20' : ''}`} data-name="Text Input">
-      <div aria-hidden="true" className={`absolute border-[1px] border-solid inset-0 pointer-events-none rounded-[14px] transition-all duration-200 ${isFocused ? 'border-[#95e36c]' : 'border-[rgba(0,0,0,0.08)]'}`} />
+      <div aria-hidden="true" className="absolute border-[1px] border-solid border-[rgba(0,0,0,0.08)] inset-0 pointer-events-none rounded-[14px] transition-all duration-200" />
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex gap-[20px] items-center p-[18px] relative size-full">
           <div className="relative shrink-0 size-[20px] opacity-60" data-name="search-normal">
@@ -274,8 +274,8 @@ function TextInput({ onSchoolSelect }: { onSchoolSelect: (school: School | null)
             }}
             onBlur={() => setIsFocused(false)}
             placeholder="e.g. Twalumbu, ACU"
-            className="flex-1 bg-transparent border-none outline-none font-['IBM_Plex_Sans:Regular',sans-serif] text-black placeholder:text-[rgba(45,54,72,0.4)] tracking-[-0.01em] touch-manipulation"
-            style={{ fontSize: '16px' }}
+            className="flex-1 bg-transparent border-none outline-none focus:!ring-0 focus:!outline-none font-['IBM_Plex_Sans:Regular',sans-serif] text-black placeholder:text-[rgba(45,54,72,0.4)] tracking-[-0.01em] touch-manipulation"
+            style={{ fontSize: '16px', border: 'none', outline: 'none', boxShadow: 'none' }}
           />
         </div>
       </div>

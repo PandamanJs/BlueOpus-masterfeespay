@@ -51,7 +51,9 @@ export async function serveHttp(req: Request) {
           school_name,
           qbo_refresh_token,
           qbo_realm_id,
-          qbo_access_token
+          qbo_access_token,
+          qbo_client_id,
+          qbo_client_secret
         ),
         parents:parent_id (
           first_name,
@@ -71,6 +73,8 @@ export async function serveHttp(req: Request) {
         if (txError || !transaction) {
             throw new Error(`Transaction not found: ${txError?.message}`);
         }
+
+        const school = transaction.schools;
 
         // --- 1a. Improved Sync Lock Guard with Retry Logic ---
         const SYNC_TIMEOUT_MINUTES = 5;
@@ -115,8 +119,6 @@ export async function serveHttp(req: Request) {
             })
             .eq('id', transaction_id);
 
-        const school = transaction.schools;
-
         // 2. Check if School is connected to QBO
         if (!school?.qbo_refresh_token || !school?.qbo_realm_id) {
             const errorMsg = `School "${school?.school_name}" is not connected to QuickBooks. Missing ${!school?.qbo_refresh_token ? 'refresh_token' : ''} ${!school?.qbo_realm_id ? 'realm_id' : ''}`.trim();
@@ -143,22 +145,23 @@ export async function serveHttp(req: Request) {
         }
 
         // 3. Refresh Access Token (Always refresh to be safe or check expiry if we stored it)
-        // For simplicity, we'll try to use the refresh token to get a fresh access token every time
-        // In production, you might optimize this to reuse valid access tokens.
-
-        const clientId = Deno.env.get("QBO_CLIENT_ID");
-        const clientSecret = Deno.env.get("QBO_CLIENT_SECRET");
-        const isSandbox = false; // PRODUCTION
-        const qboBaseUrl = isSandbox
-            ? "https://sandbox-quickbooks.api.intuit.com"
-            : "https://quickbooks.api.intuit.com";
+        const clientId = school.qbo_client_id || Deno.env.get("QBO_CLIENT_ID");
+        const clientSecret = school.qbo_client_secret || Deno.env.get("QBO_CLIENT_SECRET");
+        
+        // PRODUCTION ONLY - No Sandbox Logic
+        const environment = 'production';
+        const isSandbox = false;
+        
+        const qboBaseUrl = "https://quickbooks.api.intuit.com";
 
         if (!clientId || !clientSecret) {
-            throw new Error("Missing QBO_CLIENT_ID or QBO_CLIENT_SECRET env vars");
+            throw new Error("Missing QuickBooks credentials (Client ID/Secret) in school config or environment");
         }
 
         // Encode Basic Auth
         const basicAuth = btoa(`${clientId}:${clientSecret}`);
+
+        console.log(`Refreshing QBO token for school ${school.school_name} using ${school.qbo_client_id ? 'school' : 'default'} credentials...`);
 
         const tokenResponse = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
             method: "POST",

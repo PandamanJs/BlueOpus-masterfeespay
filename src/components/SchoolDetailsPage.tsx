@@ -664,7 +664,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
           transition={{ duration: 0.3, ease: "easeOut" }}
           className="w-full flex-1 flex flex-col items-center min-h-0"
         >
-          <LogoHeader showBackButton onBack={() => {
+          <LogoHeader onBack={() => {
             hapticFeedback('light');
             // Navigates back to search via App.tsx prop logic
             // Since this component uses onBack prop
