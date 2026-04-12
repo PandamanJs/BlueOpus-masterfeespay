@@ -20,6 +20,7 @@ import type { Student } from "../data/students";
 import type { FinancialSummary } from "../lib/supabase/api/registration";
 import { haptics } from "../utils/haptics";
 import { toast } from "sonner";
+import cardBg from "../assets/background images/Frame 1707478741.png";
 
 interface HistoryPageProps {
   userPhone: string;
@@ -94,7 +95,7 @@ export default function HistoryPage({
       <div className="relative w-full max-w-lg h-screen mx-auto flex flex-col bg-[#f9fafb]">
 
         {/* Header */}
-        <LogoHeader onBack={onBack} showBackButton={true} />
+        <LogoHeader onBack={onBack} showBackButton={false} />
 
         {/* Dash Content */}
         <div className="flex-1 overflow-y-auto no-scrollbar pb-32 pt-2">
@@ -104,36 +105,28 @@ export default function HistoryPage({
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             style={{
-              background: 'linear-gradient(135deg, rgba(12,81,63,0.95) 0%, rgba(4,51,41,0.98) 100%)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '20px',
-              padding: '28px 24px',
-              minHeight: '150px',
+              backgroundImage: `url(${cardBg})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              borderRadius: '24px',
+              padding: '32px 28px',
+              minHeight: '160px',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               position: 'relative',
               overflow: 'hidden',
-              boxShadow: '0 12px 32px -8px rgba(0,0,0,0.4)',
-              margin: '0 16px 32px 16px',
+              boxShadow: '0 20px 40px -12px rgba(0,54,48,0.35)',
+              margin: '0 16px 24px 16px',
             }}
           >
-            {/* 3 Master Fees Arrows (Adapted for Dark Bg) */}
-            <div className="absolute -top-4 -right-2 w-32 h-32 opacity-30 pointer-events-none">
-              <svg viewBox="0 0 100 100" fill="none" className="w-full h-full rotate-[-15deg]">
-                <path d="M40 20L65 45L40 70" stroke="#95e36c" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M55 20L80 45L55 70" stroke="#95e36c" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" />
-                <path d="M70 20L95 45L70 70" stroke="#ffffff" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" className="opacity-60" />
-              </svg>
-            </div>
 
-            <div className="flex flex-col gap-1.5 -translate-y-1 relative z-10">
-              <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#95e36c] tracking-[-0.2px] m-0">
-                {currentStudent?.name?.split(' ')[0] || 'Student'}'s Balance
+
+            <div className="flex flex-col gap-4 -translate-y-1 relative z-10">
+              <p className="font-['Inter:Bold',sans-serif] text-[15px] text-[#95e36c] tracking-[-0.2px] m-0">
+                {currentStudent?.name?.split(' ')[0] || 'Student'}'s Current Balance
               </p>
-              <p className="font-['IBM_Plex_Sans_Devanagari:ExtraBold',sans-serif] font-[900] text-[36px] text-white tracking-[-0.8px] leading-[1.1] m-0">
+              <p className="font-['Inter:Black',sans-serif] text-[48px] text-white tracking-[-2px] leading-[1] m-0">
                 {isLoading ? "---" : `K${(financialSummary?.totalBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </p>
             </div>
@@ -289,14 +282,14 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
 
   const extractDate = (obj: any) => {
     if (!obj) return 'N/A';
-    
+
     // Try to find any date-like string property
     const keys = ['initiated_at', 'created_at', 'invoice_date', 'payment_date', 'date', 'issue_date', 'timestamp'];
     let val = null;
     for (let k of keys) {
       if (obj[k]) { val = obj[k]; break; }
     }
-    
+
     if (!val) {
       // Fallback: look for any key ending in _at, _date, or containing date
       for (let k of Object.keys(obj)) {
@@ -305,7 +298,7 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
         }
       }
     }
-    
+
     if (!val) return 'N/A';
 
     // If it's already in DD/MM/YYYY format, keep it as is
@@ -366,7 +359,7 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
             <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[11px] text-[#003630] uppercase tracking-wider pr-0.5">Cleared</span>
           </div>
         ) : (
-          <div 
+          <div
             style={{ backgroundColor: '#FFF0F0', borderColor: 'rgba(255, 107, 107, 0.3)' }}
             className="flex items-center gap-2 border-[1.5px] rounded-full px-3 py-1.5 shrink-0"
           >
@@ -431,11 +424,11 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
           <div className="absolute -top-1 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white z-20"></div>
           <button
             onClick={onPay}
-            style={{ 
-              backgroundColor: '#E0F7D4', 
-              borderColor: '#003630', 
-              borderWidth: '1.5px', 
-              borderStyle: 'solid' 
+            style={{
+              backgroundColor: '#E0F7D4',
+              borderColor: '#003630',
+              borderWidth: '1.5px',
+              borderStyle: 'solid'
             }}
             className="w-full h-[46px] rounded-[8px] flex items-center justify-center gap-2 shadow-[0px_2px_8px_rgba(0,0,0,0.05)] active:scale-95 transition-all group relative z-10"
           >
