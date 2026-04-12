@@ -240,7 +240,6 @@ export default function HistoryPage({
               </div>
             ) : !hasOutstandingBalance ? (
               <div className="space-y-4">
-                <EmptySummaryState />
                 <div className="pt-2">
                   <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-4 mb-3">Service History</p>
                   {financialSummary?.items && financialSummary.items.length > 0 && (
