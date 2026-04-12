@@ -219,9 +219,14 @@ export default function HistoryPage({
           {/* Content Area */}
           <div className="space-y-4">
             {isLoading ? (
-              <div className="py-12 flex flex-col items-center justify-center gap-4">
-                <Loader2 className="animate-spin text-[#95e36c]" size={32} />
-                <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest">Reconciling Ledger...</p>
+              <div className="py-24 flex flex-col items-center justify-center gap-6">
+                <div className="relative">
+                  <Loader2 className="animate-spin text-[#95e36c]" size={40} strokeWidth={1.5} />
+                  <div className="absolute inset-0 blur-md bg-[#95e36c]/20 rounded-full animate-pulse" />
+                </div>
+                <p className="font-['Space_Grotesk',sans-serif] text-[13px] text-gray-400 font-bold uppercase tracking-[0.2em] animate-pulse">
+                  Reconciling Ledger
+                </p>
               </div>
             ) : !hasOutstandingBalance ? (
               <div className="space-y-4">
