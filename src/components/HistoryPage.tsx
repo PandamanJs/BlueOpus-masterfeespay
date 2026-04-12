@@ -170,8 +170,8 @@ export default function HistoryPage({
             </div>
           </motion.div>
 
-          {/* Child Selector Tabs — from design (Frame14 style) */}
-          <div className="flex items-center gap-4 px-4 overflow-x-auto no-scrollbar">
+          {/* Child Selector Tabs — EXACTLY from design (Frame14 style) */}
+          <div className="flex items-center gap-[16px] h-[50px] px-4 overflow-x-auto no-scrollbar">
             {students.map(student => {
               const isActive = selectedStudentId === student.id;
 
@@ -182,24 +182,25 @@ export default function HistoryPage({
                     haptics.selection();
                     setSelectedStudentId(student.id);
                   }}
-                  className={`
-                    group flex items-center gap-3 shrink-0 h-[50px] relative rounded-[12px] transition-all
-                    ${isActive ? 'bg-[#f5f7f9] px-6' : 'bg-transparent px-3'}
-                  `}
+                  className={`h-full relative rounded-[12px] shrink-0 transition-all ${isActive ? 'bg-[#f5f7f9]' : 'bg-transparent'}`}
                 >
                   {isActive && (
-                    <div className="absolute inset-0 border border-[#bcbcbc] rounded-[12px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.15)] pointer-events-none" />
+                    <div aria-hidden="true" className="absolute border border-[#bcbcbc] border-solid inset-0 pointer-events-none rounded-[12px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.15)]" />
                   )}
-                  <div className={`
-                    w-[10px] h-[10px] rounded-full transition-all duration-300 bg-[#95e36c] shrink-0
-                    ${isActive ? "scale-100 opacity-100" : "scale-0 opacity-0"}
-                  `} />
-                  <span className={`
-                    font-['Space_Grotesk',sans-serif] text-[12px] whitespace-nowrap
-                    ${isActive ? "font-bold text-black" : "font-medium text-[#2d2d2d]"}
-                  `}>
-                    {student.name}
-                  </span>
+                  <div className="flex flex-row items-center justify-center h-full">
+                    <div className="flex gap-[10px] items-center justify-center px-[25px] py-[4px] relative h-full">
+                      {isActive && (
+                        <div className="relative shrink-0 w-[10px] h-[10px]">
+                          <svg className="absolute block inset-0 w-full h-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10 10">
+                            <circle cx="5" cy="5" fill="#95E36C" r="5" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[12px] text-black whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold" : "font-['Space_Grotesk',sans-serif] font-medium"}`}>
+                        <p className="m-0">{student.name}</p>
+                      </div>
+                    </div>
+                  </div>
                 </button>
               );
             })}
