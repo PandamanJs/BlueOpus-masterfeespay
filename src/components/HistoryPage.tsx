@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
+import { useSpring, useTransform } from "motion/react";
 import { generateReceiptPDF } from "../utils/pdfGenerator";
 import {
   CheckCircle2,
@@ -21,6 +22,27 @@ import type { FinancialSummary } from "../lib/supabase/api/registration";
 import { haptics } from "../utils/haptics";
 import { toast } from "sonner";
 import cardBg from "../assets/background images/Frame 1707478741.png";
+
+function AnimatedNumber({ value }: { value: number }) {
+  const spring = useSpring(0, {
+    mass: 0.8,
+    stiffness: 75,
+    damping: 15
+  });
+  
+  const display = useTransform(spring, (current) => 
+    `K${current.toLocaleString(undefined, { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })}`
+  );
+
+  useEffect(() => {
+    spring.set(value);
+  }, [value, spring]);
+
+  return <motion.span>{display}</motion.span>;
+}
 
 interface HistoryPageProps {
   userPhone: string;
@@ -98,7 +120,7 @@ export default function HistoryPage({
         <LogoHeader onBack={onBack} showBackButton={false} />
 
         {/* Dash Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-32 pt-2">
+        <div className="flex-1 overflow-y-auto no-scrollbar pb-32 pt-8">
 
           {/* Emerald Card — with Settle All Balances button */}
           <motion.div
@@ -122,13 +144,17 @@ export default function HistoryPage({
           >
 
 
-            <div className="flex flex-col gap-4 -translate-y-1 relative z-10">
-              <p className="font-['Inter:Bold',sans-serif] text-[15px] text-[#95e36c] tracking-[-0.2px] m-0">
+            <div className="flex flex-col gap-4 -translate-y-1 relative z-10 w-full">
+              <p className="font-['Space_Grotesk',sans-serif] font-bold text-[15px] text-[#95e36c] tracking-[0px] m-0 uppercase">
                 {currentStudent?.name?.split(' ')[0] || 'Student'}'s Current Balance
               </p>
-              <p className="font-['Inter:Black',sans-serif] text-[48px] text-white tracking-[-2px] leading-[1] m-0">
-                {isLoading ? "---" : `K${(financialSummary?.totalBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              </p>
+              <div className="overflow-hidden">
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[48px] text-white tracking-[-1px] leading-[1] m-0">
+                  {isLoading ? "---" : (
+                    <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
+                  )}
+                </p>
+              </div>
             </div>
 
             {/* Settle All Balances Button */}
