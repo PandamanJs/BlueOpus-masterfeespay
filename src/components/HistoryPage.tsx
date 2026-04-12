@@ -29,11 +29,11 @@ function AnimatedNumber({ value }: { value: number }) {
     stiffness: 75,
     damping: 15
   });
-  
-  const display = useTransform(spring, (current) => 
-    `K${current.toLocaleString(undefined, { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
+
+  const display = useTransform(spring, (current) =>
+    `K${current.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     })}`
   );
 
@@ -145,11 +145,14 @@ export default function HistoryPage({
 
 
             <div className="flex flex-col gap-4 -translate-y-1 relative z-10 w-full">
-              <p className="font-['Space_Grotesk',sans-serif] font-bold text-[15px] text-[#95e36c] tracking-[0px] m-0 uppercase">
-                {currentStudent?.name?.split(' ')[0] || 'Student'}'s Current Balance
-              </p>
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#95e36c] shadow-[0_0_8px_rgba(149,227,108,0.4)]" />
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-[#95e36c] tracking-[0px] m-0 uppercase">
+                  {currentStudent?.name?.split(' ')[0] || 'Student'}'s Current Balance
+                </p>
+              </div>
               <div className="overflow-hidden">
-                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[48px] text-white tracking-[-1px] leading-[1] m-0">
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[40px] text-white tracking-[-1px] leading-[1] m-0">
                   {isLoading ? "---" : (
                     <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
                   )}
@@ -171,7 +174,7 @@ export default function HistoryPage({
                 }}
                 className="bg-[#95e36c] relative z-10 rounded-[14px] px-5 py-3 flex items-center justify-center shadow-[0px_8px_16px_rgba(0,0,0,0.2)] active:scale-95 transition-transform"
               >
-                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] text-[14px] tracking-[-0.2px] whitespace-nowrap">
+                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] text-[9px] tracking-[-0.2px] whitespace-nowrap">
                   Settle All Balances
                 </span>
               </button>
@@ -179,55 +182,37 @@ export default function HistoryPage({
           </motion.div>
 
           {/* Child Selector Tabs */}
-          <div className="flex items-center gap-3 px-4 mt-4 mb-4 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-6 px-4 mt-6 mb-8 overflow-x-auto no-scrollbar">
             {students.map(student => {
               const isActive = selectedStudentId === student.id;
 
-              if (isActive) {
-                return (
-                  /* Active Tab */
-                  <div key={student.id} onClick={() => { haptics.selection(); setSelectedStudentId(student.id); }} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    paddingTop: '10px',
-                    paddingBottom: '10px',
-                    paddingLeft: '16px',
-                    paddingRight: '20px',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                    cursor: 'pointer'
-                  }}>
-                    <span style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      backgroundColor: '#4ade80',
-                      display: 'inline-block',
-                      flexShrink: 0,
-                    }} />
-                    <span style={{ fontSize: '15px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
-                      {student.name}
-                    </span>
-                  </div>
-                );
-              } else {
-                return (
-                  /* Inactive Tab */
-                  <span key={student.id} onClick={() => { haptics.selection(); setSelectedStudentId(student.id); }} style={{
-                    fontSize: '15px',
-                    fontWeight: 400,
-                    color: '#6b7280',
-                    paddingLeft: '4px',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}>
+              return (
+                <button
+                  key={student.id}
+                  onClick={() => {
+                    haptics.selection();
+                    setSelectedStudentId(student.id);
+                  }}
+                  className={`
+                    group flex items-center gap-3 shrink-0 transition-all duration-300
+                    ${isActive
+                      ? "bg-[#F5F7F9] border-2 border-[#BCBCBC] rounded-[12px] px-6 py-3.5 shadow-[0_4px_0_0_#BCBCBC,0_8px_16px_-4px_rgba(0,0,0,0.1)] translate-y-[-1px]"
+                      : "bg-transparent px-4 py-3.5"
+                    }
+                  `}
+                >
+                  <div className={`
+                    w-[12px] h-[12px] rounded-full transition-all duration-500 shrink-0
+                    ${isActive ? "bg-[#95e36c] scale-100 opacity-100 shadow-[0_0_8px_rgba(149,227,108,0.3)]" : "bg-[#95e36c] scale-0 opacity-0"}
+                  `} />
+                  <span className={`
+                    font-['Space_Grotesk',sans-serif] text-[10px] whitespace-nowrap transition-colors
+                    ${isActive ? "font-bold text-[#000000]" : "font-medium text-[#000000CC]"}
+                  `}>
                     {student.name}
                   </span>
-                );
-              }
+                </button>
+              );
             })}
           </div>
 
@@ -362,34 +347,31 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
   };
 
   return (
-    <div className="bg-white rounded-[24px] mx-4 mb-4 ring-1 ring-[#e5e7eb] shadow-[0px_8px_24px_-8px_rgba(0,0,0,0.06)] p-5 flex flex-col relative overflow-hidden">
+    <div className="bg-white rounded-[24px] mx-4 mb-4 ring-1 ring-[#e1e4e8] shadow-[0_12px_40px_-16px_rgba(0,0,0,0.12)] p-5 flex flex-col relative overflow-hidden">
       {/* Decorative Accent */}
       {isCleared && <div className="absolute top-0 right-0 w-24 h-24 bg-[#95e36c]/10 rounded-full blur-xl -mr-8 -mt-8 pointer-events-none" />}
 
       {/* Card Header */}
       <div className="flex items-start justify-between mb-6 relative z-10">
         <div className="flex flex-col gap-1 pr-2">
-          <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630] tracking-[-0.3px] leading-tight">
+          <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[18px] text-[#003630] tracking-[-0.3px] leading-tight">
             {item.name} {item.term && `- Term ${item.term}`}
           </h3>
-          <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[13px] text-[#6b7280]">
+          <p className="font-['Space_Grotesk',sans-serif] font-medium text-[13px] text-[#6b7280]">
             {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
           </p>
         </div>
 
         {/* Badge */}
         {isCleared ? (
-          <div className="flex items-center gap-2 bg-[#95e36c]/10 border-[1.5px] border-[#95e36c]/30 rounded-full px-3 py-1.5 shrink-0">
-            <BadgeCheck size={15} className="text-[#95e36c]" strokeWidth={2.5} />
-            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[11px] text-[#003630] uppercase tracking-wider pr-0.5">Cleared</span>
+          <div className="flex items-center gap-2 px-1 py-1.5 shrink-0">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#95e36c] shadow-[0_0_8px_rgba(149,227,108,0.4)]" />
+            <span className="font-['Space_Grotesk',sans-serif] font-bold text-[11px] text-[#003630] uppercase tracking-wider">Cleared</span>
           </div>
         ) : (
-          <div
-            style={{ backgroundColor: '#FFF0F0', borderColor: 'rgba(255, 107, 107, 0.3)' }}
-            className="flex items-center gap-2 border-[1.5px] rounded-full px-3 py-1.5 shrink-0"
-          >
-            <BadgeX size={15} style={{ color: '#FF6B6B' }} strokeWidth={2.5} />
-            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[11px] text-[#003630] uppercase tracking-wider pr-0.5">Not Cleared</span>
+          <div className="flex items-center gap-2 px-1 py-1.5 shrink-0">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FF6B6B] shadow-[0_0_8px_rgba(255,107,107,0.3)]" />
+            <span className="font-['Space_Grotesk',sans-serif] font-bold text-[11px] text-[#003630] uppercase tracking-wider">Not Cleared</span>
           </div>
         )}
       </div>
@@ -468,13 +450,13 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
             haptics.light();
             setIsExpanded(!isExpanded);
           }}
-          className="flex-1 h-12 bg-[#F5F7F9] border-[1.5px] border-[#e5e7eb] rounded-[8px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] text-[14px] active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+          className="flex-1 h-12 bg-[#F5F7F9] border-[1.5px] border-[#e5e7eb] rounded-[8px] font-['Space_Grotesk',sans-serif] font-bold text-[#003630] text-[14px] active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
         >
           {isExpanded ? "Hide Details" : "Show Details"}
         </button>
         <button
           onClick={handleDownload}
-          className="flex-1 h-12 bg-transparent font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] flex text-[14px] items-center justify-center gap-2 text-[#003630]/70 active:scale-[0.98] transition-all hover:bg-gray-50 rounded-[16px]"
+          className="flex-1 h-12 bg-transparent font-['Space_Grotesk',sans-serif] font-semibold flex text-[14px] items-center justify-center gap-2 text-[#003630]/70 active:scale-[0.98] transition-all hover:bg-gray-50 rounded-[16px]"
         >
           <Download size={16} />
           <span>Receipt</span>
