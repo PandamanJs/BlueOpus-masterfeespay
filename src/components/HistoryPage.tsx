@@ -116,70 +116,62 @@ export default function HistoryPage({
     <div className="bg-[#f8fafc] min-h-screen w-full overflow-hidden flex flex-col">
       <div className="relative w-full max-w-lg h-screen mx-auto flex flex-col bg-[#f9fafb]">
 
-        {/* Header */}
-        <LogoHeader onBack={onBack} showBackButton={false} />
+        {/* Brand Header — from design */}
+        <div className="bg-white border-b border-[#e4e4e4] px-7 py-6 flex items-center justify-center relative z-20">
+          <p className="font-['Space_Grotesk',sans-serif] font-bold text-[24px] text-black tracking-[-0.5px]">masterfees</p>
+        </div>
 
         {/* Dash Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-32 pt-8">
+        <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
 
-          {/* Emerald Card — with Settle All Balances button */}
+          {/* Emerald Card — from design (Frame17/Frame1 style) */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            style={{
-              backgroundImage: `url(${cardBg})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              borderRadius: '24px',
-              padding: '32px 28px',
-              minHeight: '160px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              position: 'relative',
-              overflow: 'hidden',
-              boxShadow: '0 20px 40px -12px rgba(0,54,48,0.35)',
-              margin: '0 16px 24px 16px',
-            }}
+            className="mx-4 mt-6 mb-8 p-6 rounded-[12px] relative overflow-hidden min-h-[131px] flex flex-col justify-end gap-1 shadow-[0_8px_32px_-8px_rgba(0,54,48,0.3)]"
           >
+            <img
+              alt=""
+              className="absolute inset-0 object-cover w-full h-full pointer-events-none z-0"
+              src={cardBg}
+            />
 
+            <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-[#95e36c] tracking-[-0.2px] relative z-10 m-0">
+              {currentStudent?.name}'s Current Balance
+            </p>
 
-            <div className="flex flex-col gap-4 -translate-y-1 relative z-10 w-full">
-              <p className="font-['Space_Grotesk',sans-serif] font-bold text-[15px] text-[#95e36c] tracking-[0px] m-0 uppercase">
-                {currentStudent?.name?.split(' ')[0] || 'Student'}'s Current Balance
-              </p>
+            <div className="flex items-center justify-between gap-4 mt-1 relative z-10">
               <div className="overflow-hidden">
-                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[40px] text-white tracking-[-1px] leading-[1] m-0">
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[40px] text-white tracking-[-1px] leading-tight m-0">
                   {isLoading ? "---" : (
                     <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
                   )}
                 </p>
               </div>
-            </div>
 
-            {/* Settle All Balances Button */}
-            {hasOutstandingBalance && !isLoading && (
-              <button
-                onClick={() => {
-                  haptics.heavy();
-                  if (onClearBalances) {
-                    const studentIds = students.map(s => s.id);
-                    onClearBalances(studentIds);
-                  } else {
-                    toast.info('Going to checkout...');
-                  }
-                }}
-                className="bg-[#95e36c] relative z-10 rounded-[14px] px-5 py-3 flex items-center justify-center shadow-[0px_8px_16px_rgba(0,0,0,0.2)] active:scale-95 transition-transform"
-              >
-                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] text-[9px] tracking-[-0.2px] whitespace-nowrap">
-                  Settle All Balances
-                </span>
-              </button>
-            )}
+              {hasOutstandingBalance && !isLoading && (
+                <button
+                  onClick={() => {
+                    haptics.heavy();
+                    if (onClearBalances) {
+                      const studentIds = students.map(s => s.id);
+                      onClearBalances(studentIds);
+                    } else {
+                      toast.info('Going to checkout...');
+                    }
+                  }}
+                  className="bg-[#95e36c] rounded-[8px] px-6 py-2 shadow-[0px_4px_12px_rgba(0,0,0,0.15)] active:scale-95 transition-transform"
+                >
+                  <span className="font-['Space_Grotesk',sans-serif] font-bold text-[#003630] text-[12px]">
+                    Settle All
+                  </span>
+                </button>
+              )}
+            </div>
           </motion.div>
 
-          {/* Child Selector Tabs */}
-          <div className="flex items-center gap-6 px-4 mt-6 mb-8 overflow-x-auto no-scrollbar">
+          {/* Child Selector Tabs — from design (Frame14 style) */}
+          <div className="flex items-center gap-4 px-4 overflow-x-auto no-scrollbar">
             {students.map(student => {
               const isActive = selectedStudentId === student.id;
 
@@ -191,20 +183,20 @@ export default function HistoryPage({
                     setSelectedStudentId(student.id);
                   }}
                   className={`
-                    group flex items-center gap-3 shrink-0 transition-all duration-300
-                    ${isActive
-                      ? "bg-[#F5F7F9] border-2 border-[#BCBCBC] rounded-[12px] px-6 py-3.5 shadow-[0_4px_0_0_#BCBCBC,0_8px_16px_-4px_rgba(0,0,0,0.1)] translate-y-[-1px]"
-                      : "bg-transparent px-4 py-3.5"
-                    }
+                    group flex items-center gap-3 shrink-0 h-[50px] relative rounded-[12px] transition-all
+                    ${isActive ? 'bg-[#f5f7f9] px-6' : 'bg-transparent px-3'}
                   `}
                 >
+                  {isActive && (
+                    <div className="absolute inset-0 border border-[#bcbcbc] rounded-[12px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.15)] pointer-events-none" />
+                  )}
                   <div className={`
-                    w-[12px] h-[12px] rounded-full transition-all duration-500 shrink-0 bg-[#95e36c]
-                    ${isActive ? "scale-100 opacity-100 shadow-[0_0_8px_rgba(149,227,108,0.3)]" : "scale-90 opacity-40"}
+                    w-[10px] h-[10px] rounded-full transition-all duration-300 bg-[#95e36c] shrink-0
+                    ${isActive ? "scale-100 opacity-100" : "scale-0 opacity-0"}
                   `} />
                   <span className={`
-                    font-['Space_Grotesk',sans-serif] text-[10px] whitespace-nowrap transition-colors
-                    ${isActive ? "font-bold text-[#000000]" : "font-medium text-[#000000CC]"}
+                    font-['Space_Grotesk',sans-serif] text-[12px] whitespace-nowrap
+                    ${isActive ? "font-bold text-black" : "font-medium text-[#2d2d2d]"}
                   `}>
                     {student.name}
                   </span>
@@ -213,8 +205,12 @@ export default function HistoryPage({
             })}
           </div>
 
-          {/* Content Area */}
-          <div className="space-y-4">
+          {/* Content Area — from design (FeesSection style) */}
+          <div className="mt-8 px-4 space-y-4">
+            <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-gray-400 uppercase tracking-[0.2em] mb-4">
+
+            </p>
+
             {isLoading ? (
               <div className="py-24 flex flex-col items-center justify-center gap-6">
                 <div className="relative">
@@ -225,60 +221,33 @@ export default function HistoryPage({
                   Reconciling Ledger
                 </p>
               </div>
-            ) : !hasOutstandingBalance ? (
-              <div className="space-y-4">
-                <div className="pt-2">
-                  <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-4 mb-3">Service History</p>
-                  {financialSummary?.items && financialSummary.items.length > 0 && (
-                    financialSummary.items.map((item, idx) => (
-                      <ServiceCategoryCard
-                        key={item.id || idx}
-                        item={item}
-                        studentName={currentStudent?.name || "Student"}
-                        userName={userName || "Parent"}
-                        grade={currentStudent?.grade || "N/A"}
-                        transactions={financialSummary.transactions || []}
-                        hasOutstandingBalance={hasOutstandingBalance}
-                        onPay={() => { }}
-                      />
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 pt-2">
-                <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-4 mb-3">Action Required</p>
-                {financialSummary?.items?.map((item, idx) => (
-                  <ServiceCategoryCard
-                    key={item.id || idx}
-                    item={item}
-                    studentName={currentStudent?.name || "Student"}
-                    userName={userName || "Parent"}
-                    grade={currentStudent?.grade || "N/A"}
-                    transactions={financialSummary.transactions || []}
-                    hasOutstandingBalance={hasOutstandingBalance}
-                    onPay={() => {
-                      if (onIndividualPay) {
-                        onIndividualPay({
-                          id: item.invoice_id || item.id || crypto.randomUUID(),
-                          description: item.name,
-                          amount: item.balance || 0,
-                          invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
-                          invoice_id: item.invoice_id,
-                          studentName: currentStudent?.name || "Student",
-                          studentId: selectedStudentId,
-                          term: item.term,
-                          academicYear: item.academic_year,
-                          grade: currentStudent?.grade || "N/A"
-                        });
-                      } else {
-                        toast.info('Pay action clicked!');
-                      }
-                    }}
-                  />
-                ))}
-              </div>
-            )}
+            ) : financialSummary?.items?.map((item, idx) => (
+              <ServiceCategoryCard
+                key={item.id || idx}
+                item={item}
+                studentName={currentStudent?.name || "Student"}
+                userName={userName || "Parent"}
+                grade={currentStudent?.grade || "N/A"}
+                transactions={financialSummary.transactions || []}
+                hasOutstandingBalance={hasOutstandingBalance}
+                onPay={() => {
+                  if (onIndividualPay) {
+                    onIndividualPay({
+                      id: item.invoice_id || item.id || crypto.randomUUID(),
+                      description: item.name,
+                      amount: item.balance || 0,
+                      invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
+                      invoice_id: item.invoice_id,
+                      studentName: currentStudent?.name || "Student",
+                      studentId: selectedStudentId,
+                      term: item.term,
+                      academicYear: item.academic_year,
+                      grade: currentStudent?.grade || "N/A"
+                    });
+                  }
+                }}
+              />
+            ))}
           </div>
 
         </div>
@@ -287,41 +256,22 @@ export default function HistoryPage({
   );
 }
 
-function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance, onPay, studentName, userName }: { item: any, grade: string, transactions: any[], hasOutstandingBalance: boolean, onPay: () => void, studentName: string, userName: string }) {
-  // Use user's design styles exactly
-  const [isExpanded, setIsExpanded] = useState(false);
+function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, userName }: { item: any, grade: string, transactions: any[], onPay: () => void, studentName: string, userName: string }) {
+  const [showDetails, setShowDetails] = useState(true);
   const isCleared = (item.balance || 0) <= 0;
 
   const extractDate = (obj: any) => {
     if (!obj) return 'N/A';
-
-    // Try to find any date-like string property
-    const keys = ['initiated_at', 'created_at', 'invoice_date', 'payment_date', 'date', 'issue_date', 'timestamp'];
+    const keys = ['initiated_at', 'created_at', 'invoice_date', 'payment_date', 'date'];
     let val = null;
-    for (let k of keys) {
-      if (obj[k]) { val = obj[k]; break; }
-    }
-
-    if (!val) {
-      // Fallback: look for any key ending in _at, _date, or containing date
-      for (let k of Object.keys(obj)) {
-        if ((k.endsWith('_at') || k.includes('date')) && typeof obj[k] === 'string' && /[0-9]/.test(obj[k])) {
-          val = obj[k]; break;
-        }
-      }
-    }
-
+    for (let k of keys) { if (obj[k]) { val = obj[k]; break; } }
     if (!val) return 'N/A';
-
-    // If it's already in DD/MM/YYYY format, keep it as is
     if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(val)) return val;
     const parsed = new Date(val);
     return isNaN(parsed.getTime()) ? val : parsed.toLocaleDateString('en-GB');
   };
 
-  const relatedTxs = transactions.filter(tx =>
-    tx.invoice_id === item.invoice_id
-  );
+  const relatedTxs = transactions.filter(tx => tx.invoice_id === item.invoice_id);
 
   const handleDownload = () => {
     try {
@@ -343,117 +293,86 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
       });
       toast.success("Receipt downloaded!");
     } catch (e) {
-      console.error(e);
       toast.error("Download failed");
     }
   };
 
   return (
-    <div className="bg-white rounded-[24px] mx-4 mb-4 ring-1 ring-[#e1e4e8] shadow-[0_12px_40px_-16px_rgba(0,0,0,0.12)] p-6 flex flex-col relative overflow-hidden">
-      {/* Card Header Content */}
-      <div className="relative z-10 flex flex-col gap-1 mb-6 pr-[40px]">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-[#003630] tracking-[-0.2px] leading-tight">
-            {item.name} {item.term && `- Term ${item.term}`}
-          </h3>
-          {/* Minimal Status Indicator */}
-          <div className="flex items-center gap-2">
-            <span className={`font-['Space_Grotesk',sans-serif] font-bold text-[10px] uppercase tracking-widest ${isCleared ? "text-[#003630]" : "text-[#FF6B6B]"}`}>
-              {isCleared ? "Cleared" : "Pending"}
-            </span>
-            {isCleared && <BadgeCheck size={14} className="text-[#95e36c]" strokeWidth={2.5} />}
-          </div>
+    <div className="bg-white rounded-[12px] p-4 relative overflow-hidden flex flex-col gap-4 shadow-[0px_4px_12px_rgba(0,0,0,0.1)] border border-[#e6e6e6]">
+      <div className="flex justify-between items-start gap-4">
+        <div className="flex flex-col gap-1 flex-1">
+          <p className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-black m-0">{item.name}</p>
+          <p className="font-['Space_Grotesk',sans-serif] font-normal text-[8px] text-black m-0">Grade {grade}</p>
         </div>
-        <p className="font-['Space_Grotesk',sans-serif] font-medium text-[12px] text-[#6b7280]">
-          {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
-        </p>
+
+        {/* Status Badge — from design (Frame12 style) */}
+        <div className={`flex items-center justify-center px-4 py-1.5 rounded-full gap-1 shrink-0 ${isCleared ? 'bg-[#e0f7d4]' : 'bg-[#fff0f0]'}`}>
+          <div className="shrink-0">
+            <svg width="10" height="10" viewBox="0 0 11 11" fill="none">
+              <path d="M1.4 3.8C1.4 3.1 1.6 2.5 2 2C2.4 1.5 3 1.3 3.8 1.4M3.8 1.4C4.2 1.1 4.8 0.5 5.5 0.5C6.2 0.5 6.8 1.1 7.2 1.4M7.2 1.4C8 1.3 8.6 1.5 9 2C9.4 2.5 9.6 3.1 9.6 3.8M9.6 3.8C9.9 4.2 10.5 4.8 10.5 5.5C10.5 6.2 9.9 6.8 9.6 7.2M9.6 7.2C9.7 8 9.5 8.6 9 9C8.6 9.4 8 9.6 7.2 9.6M7.2 9.6C6.8 9.9 6.2 10.5 5.5 10.5C4.8 10.5 4.2 9.9 3.8 9.6M3.8 9.6C3.1 9.7 2.5 9.5 2 9C1.6 8.6 1.4 8 1.4 7.2M1.4 7.2C1.1 6.8 0.5 6.2 0.5 5.5C0.5 4.8 1.1 4.2 1.4 3.8Z" stroke={isCleared ? "black" : "#EA3030"} strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M4 5.5L5 6.5L7 4.5" stroke={isCleared ? "black" : "#EA3030"} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[8px] m-0 ${isCleared ? 'text-[#003630]' : 'text-[#ea3030]'}`}>
+            {isCleared ? 'Cleared' : 'Not Cleared'}
+          </p>
+        </div>
       </div>
 
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden relative z-10"
-          >
-            <div className="mt-4 flex flex-col gap-2.5">
-              {/* Transaction Row */}
-              <div className="flex justify-between items-center bg-[#F8FAFB] p-3 rounded-[12px]">
-                <div className="flex flex-col gap-0.5 min-w-0 pr-2">
-                  <span className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-[#003630] truncate">{item.name} Charge</span>
-                  <span className="font-['Space_Grotesk',sans-serif] font-medium text-[10px] text-[#6b7280]">
-                    {extractDate(item)}
-                  </span>
-                </div>
-                <span className="font-['Space_Grotesk',sans-serif] font-bold text-[13px] text-[#003630] shrink-0">
-                  K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
-              </div>
+      {/* Transactions Area — from design (Frame21/TransactionRow style) */}
+      {showDetails && (
+        <div className="bg-[#F5F7F9] rounded-[8px] p-3 flex flex-col gap-2">
+          {/* Main Charge */}
+          <div className="flex items-center justify-between gap-4 text-[12px]">
+            <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal w-16 shrink-0">{extractDate(item)}</p>
+            <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">{item.name} Charge</p>
+            <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal text-right">K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+          </div>
 
-              {relatedTxs.map((tx, idx) => (
-                <div key={idx} className="flex justify-between items-center px-3 py-1">
-                  <div className="flex flex-col gap-0.5 min-w-0 pr-2">
-                    <span className="font-['Space_Grotesk',sans-serif] font-medium text-[12px] text-[#6b7280] truncate">Paid via {tx.payment_method?.replace('_', ' ') || 'Office'}</span>
-                    <span className="font-['Space_Grotesk',sans-serif] font-medium text-[10px] text-gray-400">
-                      {extractDate(tx)}
-                    </span>
-                  </div>
-                  <span className="font-['Space_Grotesk',sans-serif] font-bold text-[13px] text-[#003630] shrink-0">
-                    -K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              ))}
-
-              <div className="h-px w-full bg-gray-100 my-1" />
-
-              <div className="flex justify-between items-center pb-1 px-1 mt-1">
-                <span className="font-['Space_Grotesk',sans-serif] font-bold text-[11px] text-[#94a3b8] uppercase tracking-[0.1em]">Balance</span>
-                <span className={`font-['Space_Grotesk',sans-serif] font-bold text-[22px] tracking-[-0.5px] ${isCleared ? 'text-[#000000]' : 'text-[#ff6b6b]'}`}>
-                  {isCleared ? "K0.00" : `K${(item.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                </span>
-              </div>
+          {/* Related Payments */}
+          {relatedTxs.map((tx, idx) => (
+            <div key={idx} className="flex items-center justify-between gap-4 text-[12px]">
+              <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal w-16 shrink-0">{extractDate(tx)}</p>
+              <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">Paid via {tx.payment_method?.replace('_', ' ') || 'Office'}</p>
+              <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal text-right truncate">-K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ))}
 
-      {/* Action Buttons */}
-      {hasOutstandingBalance && !isCleared && (
-        <div className="relative mt-5 w-full z-10">
-          <div className="absolute -top-1 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white z-20"></div>
-          <button
-            onClick={onPay}
-            style={{
-              backgroundColor: '#E0F7D4',
-              borderColor: '#003630',
-              borderWidth: '1.5px',
-              borderStyle: 'solid'
-            }}
-            className="w-full h-[46px] rounded-[8px] flex items-center justify-center gap-2 shadow-[0px_2px_8px_rgba(0,0,0,0.05)] active:scale-95 transition-all group relative z-10"
-          >
-            <span style={{ color: '#003630' }} className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] tracking-[-0.2px]">Pay Now</span>
-          </button>
+          {/* Balance — from design (Frame19 style) */}
+          <div className="mt-1 pt-2 border-t border-[#dad9d9] flex items-center justify-between gap-4">
+            <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[12px] ${!isCleared ? 'text-[#ea3030]' : 'text-[#b3b3b3]'}`}>Balance</p>
+            <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-right ${!isCleared ? 'text-[#ea3030]' : 'text-[#b3b3b3]'}`}>
+              {isCleared ? "-" : `K${(item.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </p>
+          </div>
         </div>
       )}
 
-      <div className={`flex items-center gap-3 relative z-10 ${isExpanded || (!isCleared && hasOutstandingBalance) ? 'mt-4' : 'mt-5'}`}>
-        <button
-          onClick={() => {
-            haptics.light();
-            setIsExpanded(!isExpanded);
-          }}
-          className="flex-1 h-12 bg-[#F5F7F9] border-[1.5px] border-[#e5e7eb] rounded-[8px] font-['Space_Grotesk',sans-serif] font-bold text-[#003630] text-[14px] active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
-        >
-          {isExpanded ? "Hide Details" : "Show Details"}
-        </button>
-        <button
-          onClick={handleDownload}
-          className="flex-1 h-12 bg-transparent font-['Space_Grotesk',sans-serif] font-semibold flex text-[14px] items-center justify-center gap-2 text-[#003630]/70 active:scale-[0.98] transition-all hover:bg-gray-50 rounded-[16px]"
-        >
-          <Download size={16} />
-          <span>Receipt</span>
-        </button>
+      {/* Action Area — from design (Frame22, Frame23, PayNowButton) */}
+      <div className="flex flex-col gap-[10px] mt-2">
+        {!isCleared && (
+          <button
+            onClick={onPay}
+            className="bg-[#e0f7d4] h-[50px] rounded-[8px] border-[0.5px] border-[#003630] font-['Space_Grotesk',sans-serif] font-bold text-[14px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+          >
+            Pay Now
+          </button>
+        )}
+        <div className="flex items-center gap-[10px]">
+          <button
+            onClick={() => { haptics.light(); setShowDetails(!showDetails); }}
+            className="flex-1 bg-[#f5f7f9] h-[50px] rounded-[8px] border border-[#d6d6d6] font-['Space_Grotesk',sans-serif] font-bold text-[14px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+          >
+            {showDetails ? 'Hide Details' : 'Show Details'}
+          </button>
+          <button
+            onClick={handleDownload}
+            className="flex-1 h-[50px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-medium text-[14px] text-[#003630] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            <Download size={16} className="opacity-70" />
+            <span>Download</span>
+          </button>
+        </div>
       </div>
     </div>
   );
