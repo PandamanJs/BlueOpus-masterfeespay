@@ -97,7 +97,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
           <SchoolBadge schoolName={schoolName} schoolLogo={schoolLogo} />
         </div>
 
-        <h1 className="text-[32px] font-black text-black text-center mb-1 tracking-tight leading-tight">
+        <h1 className="text-[32px] font-['Agrandir:Grand_Heavy',sans-serif] font-black text-[#003630] text-center mb-1 tracking-[-0.03em] leading-tight">
           {schoolName}
         </h1>
 

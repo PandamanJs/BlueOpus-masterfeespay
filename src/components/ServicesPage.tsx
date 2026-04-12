@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import svgPaths from "../imports/svg-o96q0cdj2h";
 import { useState, useEffect, useRef, useCallback } from "react";
 import LogoHeader from "./common/LogoHeader";
-import { getInstitutionType } from "../data/students";
+import { getInstitutionType, getStudentsByPhone } from "../data/students";
 import { haptics } from "../utils/haptics";
 import { toast } from "sonner";
 import { useAppStore } from "../stores/useAppStore";
@@ -17,6 +17,7 @@ import {
   X,
   Phone,
 } from "lucide-react";
+import verifiedIcon from "../assets/button icons/verified.png";
 
 interface ServicesPageProps {
   userName: string;
@@ -31,125 +32,7 @@ interface ServicesPageProps {
   navigateToPage: (page: PageType, direction?: 'forward' | 'back') => void;
 }
 
-function DecorativeShapes() {
-  return (
-    <>
-      <motion.div
-        className="absolute flex h-[calc(1px*((var(--transform-inner-width)*0.6322111487388611)+(var(--transform-inner-height)*0.7254649996757507)))] items-center justify-center left-[calc(8%)] bottom-[80px] w-[calc(1px*((var(--transform-inner-height)*0.6882590651512146)+(var(--transform-inner-width)*0.7747961282730103)))]"
-        style={{ "--transform-inner-width": "122.546875", "--transform-inner-height": "60.953125" } as React.CSSProperties}
-        initial={{ opacity: 0 }}
-        animate={{
-          opacity: 1,
-          y: [0, 0, -12, 0],
-          rotate: [0, 0, -4, 0],
-          scale: [1, 1, 1.04, 1],
-        }}
-        transition={{
-          opacity: { duration: 0.5, delay: 0.2 },
-          y: { duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 },
-          rotate: { duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 },
-          scale: { duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 },
-        }}
-      >
-        <div className="flex-none rotate-[39.213deg] skew-x-[355.733deg]">
-          <div className="h-[60.96px] relative w-[122.559px]" data-name="path60">
-            <div className="absolute inset-[-28.71%_-14.28%]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 158 96">
-                <motion.path
-                  d={svgPaths.p23b65fc0}
-                  id="path60"
-                  stroke="var(--stroke-0, #E0F7D4)"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="35"
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ duration: 1.2, ease: "easeInOut", delay: 0.2 }}
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </motion.div>
 
-      <motion.div
-        className="absolute flex h-[calc(1px*((var(--transform-inner-width)*0.6322111487388611)+(var(--transform-inner-height)*0.7254649996757507)))] items-center justify-center left-[calc(13%)] bottom-[180px] w-[calc(1px*((var(--transform-inner-height)*0.6882590651512146)+(var(--transform-inner-width)*0.7747961282730103)))]"
-        style={{ "--transform-inner-width": "158.96875", "--transform-inner-height": "97.015625" } as React.CSSProperties}
-        initial={{ opacity: 0 }}
-        animate={{
-          opacity: 1,
-          y: [0, 0, -15, 0],
-          rotate: [0, 0, 5, 0],
-          scale: [1, 1, 1.05, 1],
-        }}
-        transition={{
-          opacity: { duration: 0.5, delay: 0.6 },
-          y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 2 },
-          rotate: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 2 },
-          scale: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 2 },
-        }}
-      >
-        <div className="flex-none rotate-[39.213deg] skew-x-[355.733deg]">
-          <div className="h-[97.03px] relative w-[158.975px]" data-name="path60 (Stroke)">
-            <div className="absolute inset-[-1.55%_-0.94%]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 162 101">
-                <motion.path
-                  d={svgPaths.p1abe0160}
-                  id="path60 (Stroke)"
-                  stroke="var(--stroke-0, #003630)"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="3"
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ duration: 1.5, ease: "easeInOut", delay: 0.6 }}
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      <motion.div
-        className="absolute flex h-[calc(1px*((var(--transform-inner-width)*0.6322111487388611)+(var(--transform-inner-height)*0.7254649996757507)))] items-center justify-center right-[calc(8%)] bottom-[60px] w-[calc(1px*((var(--transform-inner-height)*0.6882590651512146)+(var(--transform-inner-width)*0.7747961282730103)))]"
-        style={{ "--transform-inner-width": "122.546875", "--transform-inner-height": "60.953125" } as React.CSSProperties}
-        initial={{ opacity: 0 }}
-        animate={{
-          opacity: 1,
-          y: [0, 0, -18, 0],
-          rotate: [0, 0, 6, 0],
-          scale: [1, 1, 1.06, 1],
-        }}
-        transition={{
-          opacity: { duration: 0.5, delay: 1 },
-          y: { duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 },
-          rotate: { duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 },
-          scale: { duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 },
-        }}
-      >
-        <div className="flex-none rotate-[39.213deg] skew-x-[355.733deg]">
-          <div className="h-[60.96px] relative w-[122.559px]" data-name="path60">
-            <div className="absolute inset-[-28.71%_-14.28%]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 158 96">
-                <motion.path
-                  d={svgPaths.p23b65fc0}
-                  id="path60"
-                  stroke="var(--stroke-0, #E0F7D4)"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="35"
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ duration: 1.2, ease: "easeInOut", delay: 1 }}
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    </>
-  );
-}
 
 // ─── Settings Drawer ─────────────────────────────────────────────────────────
 
@@ -211,15 +94,15 @@ function SettingsDrawer({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-[14px] bg-[#95e36c]/10 flex items-center justify-center text-[#01403c]">
-                       <Settings size={20} />
+                      <Settings size={20} />
                     </div>
                     <div>
                       <h2 className="text-[18px] font-black text-[#003630] tracking-[-0.5px]">Settings</h2>
                       <p className="text-[11px] text-[#003630]/50 font-medium uppercase tracking-[0.5px]">Profile & Preferences</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={onClose} 
+                  <button
+                    onClick={onClose}
                     className="w-8 h-8 rounded-full bg-[#f1f3f5] flex items-center justify-center text-[#6b7280] active:scale-90 transition-transform"
                   >
                     <X size={16} />
@@ -239,17 +122,17 @@ function SettingsDrawer({
                     </svg>
                   </div>
 
-                    <div className="flex flex-col gap-2">
-                      <h2 className="text-[28px] font-black tracking-[-1px] leading-tight text-white drop-shadow-md font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
-                        {userName || "Louis Siwale"}
-                      </h2>
-                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 shadow-inner group/phone hover:bg-white/15 transition-colors w-fit">
-                        <Phone size={14} className="text-[#95e36c] group-hover/phone:scale-110 transition-transform" />
-                        <p className="text-[14px] font-bold tracking-[0.2px] text-white/90 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif]">
-                          {userPhone}
-                        </p>
-                      </div>
+                  <div className="flex flex-col gap-2">
+                    <h2 className="text-[28px] font-black tracking-[-1px] leading-tight text-white drop-shadow-md font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
+                      {userName || "Louis Siwale"}
+                    </h2>
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 shadow-inner group/phone hover:bg-white/15 transition-colors w-fit">
+                      <Phone size={14} className="text-[#95e36c] group-hover/phone:scale-110 transition-transform" />
+                      <p className="text-[14px] font-bold tracking-[0.2px] text-white/90 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif]">
+                        {userPhone}
+                      </p>
                     </div>
+                  </div>
                 </div>
 
                 {/* Menu Items - Premium List */}
@@ -311,8 +194,8 @@ function SettingsDrawer({
 
                   {/* Content */}
                   <div className="relative z-10 flex items-center justify-center gap-3 h-full">
-                     <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform">
-                        <LogOut size={18} className="text-[#95e36c]" strokeWidth={2.5} />
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform">
+                      <LogOut size={18} className="text-[#95e36c]" strokeWidth={2.5} />
                     </div>
                     <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[17px] text-white tracking-[-0.3px]">Sign Out</p>
                   </div>
@@ -327,13 +210,11 @@ function SettingsDrawer({
   );
 }
 
-function PageGroup1({ onBack, onShowSettings }: { onBack: () => void; onShowSettings: () => void }) {
+function PageGroup1({ onBack, onShowSettings, schoolName }: { onBack: () => void; onShowSettings: () => void; schoolName?: string }) {
   return (
     <div className="absolute contents left-0 top-0">
-      <div className="absolute left-1/2 top-[219.31px] translate-x-[-50%] w-full max-w-[600px] px-[24px]">
-        <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-[1.5] not-italic text-[13px] text-black tracking-[-0.12px]">Which one of our services would you like us to help you with today?</p>
-      </div>
-      <DecorativeShapes />
+      {/* Welcome text moved to main greeting block for better alignment */}
+
       <div className="absolute box-border h-[66px] left-1/2 top-0 translate-x-[-50%] w-full max-w-[600px]">
         <LogoHeader onBack={onBack}>
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -342,7 +223,7 @@ function PageGroup1({ onBack, onShowSettings }: { onBack: () => void; onShowSett
                 haptics.light?.();
                 onShowSettings();
               }}
-              className="size-10 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 active:scale-90 transition-transform"
+              className="flex items-center justify-center text-[#003630] active:scale-90 transition-transform"
             >
               <Settings size={18} />
             </button>
@@ -353,26 +234,36 @@ function PageGroup1({ onBack, onShowSettings }: { onBack: () => void; onShowSett
   );
 }
 
-function PageGroup2({ onBack, onShowSettings }: { onBack: () => void; onShowSettings: () => void }) {
+function PageGroup2({ onBack, onShowSettings, schoolName }: { onBack: () => void; onShowSettings: () => void; schoolName?: string }) {
   return (
     <div className="absolute contents left-0 top-0">
-      <PageGroup1 onBack={onBack} onShowSettings={onShowSettings} />
+      <PageGroup1 onBack={onBack} onShowSettings={onShowSettings} schoolName={schoolName} />
     </div>
   );
 }
 
 function Frame2({ onPayFees, isUniversity }: { onPayFees?: () => void; isUniversity?: boolean }) {
   return (
-    <div className="content-stretch flex gap-[15px] h-[44px] items-start relative shrink-0 w-full animate-fade-in" style={{ animationDelay: '100ms' }}>
+    <div className="w-full animate-fade-in" style={{ animationDelay: '100ms' }}>
       <button
         onClick={() => {
           haptics.medium?.();
           onPayFees?.();
         }}
-        className="btn-dark btn-tactile box-border content-stretch flex gap-[8px] items-center justify-center overflow-clip px-[24px] py-[10px] relative shrink-0 w-full touch-manipulation"
-        data-name="Button"
+        className="w-full h-[60px] rounded-[18px] btn-dark btn-tactile flex items-center justify-between px-6 transition-all group shadow-[0_4px_0_0_#001a17,0_20px_40px_-10px_rgba(0,54,48,0.4)]"
       >
-        <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] leading-[24px] not-italic relative shrink-0 text-[15px] text-nowrap text-white tracking-[-0.15px] whitespace-pre">{isUniversity ? 'Pay Tuition' : 'Pay for School Fees'}</p>
+        <div className="flex items-center gap-4">
+          <div className="text-[#95e36c] group-active:scale-95 transition-transform">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+            </svg>
+          </div>
+          <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-white tracking-[-0.2px]">
+            {isUniversity ? 'Pay Tuition' : 'Pay for School Fees'}
+          </p>
+        </div>
+        <ChevronRight size={14} strokeWidth={3} className="text-white opacity-80" />
       </button>
     </div>
   );
@@ -380,35 +271,28 @@ function Frame2({ onPayFees, isUniversity }: { onPayFees?: () => void; isUnivers
 
 function Frame3({ onViewHistory, debtCount }: { onViewHistory: () => void; debtCount?: number }) {
   return (
-    <div className="content-stretch flex gap-[15px] h-[43px] items-start relative shrink-0 w-full animate-fade-in" style={{ animationDelay: '200ms' }}>
+    <div className="w-full animate-fade-in" style={{ animationDelay: '200ms' }}>
       <button
         onClick={() => {
           haptics.light?.();
           onViewHistory();
         }}
-        className="btn-ghost btn-tactile basis-0 grow min-h-px min-w-px relative shrink-0 touch-manipulation"
-        data-name="Button"
+        className="w-full h-[60px] rounded-[18px] bg-white border border-gray-100 shadow-[0_4px_0_0_#f3f4f6,0_15px_30px_-10px_rgba(0,0,0,0.08)] active:translate-y-[2px] active:shadow-[0_2px_0_0_#f3f4f6,0_10px_20px_-5px_rgba(0,0,0,0.05)] transition-all flex items-center justify-between px-6 group"
       >
-        <div className="flex flex-row items-center justify-center overflow-clip rounded-[inherit] size-full">
-          <div className="box-border content-stretch flex gap-[8px] items-center justify-center px-[24px] py-[10px] relative w-full">
-            <p className="font-['Inter:Extra_Light',sans-serif] font-extralight leading-[24px] not-italic relative shrink-0 text-[#2d3648] text-[15px] text-nowrap tracking-[-0.15px] whitespace-pre">
-              Payment History
-              {debtCount !== undefined && debtCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: -3, right: -16, minWidth: 16, height: 16,
-                  padding: '0 4px',
-                  backgroundColor: '#ff3b30', borderRadius: 8,
-                  boxShadow: '0 0 0 2px #fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: '-apple-system, system-ui, sans-serif',
-                  fontSize: 10, fontWeight: 700, color: '#fff',
-                }}>
-                  {debtCount}
-                </span>
-              )}
-            </p>
+        <div className="flex items-center gap-4 text-[#003630]">
+          <div className="group-active:scale-95 transition-transform">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
           </div>
+          <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#003630] tracking-[-0.2px]">
+            Payment History
+          </p>
         </div>
+        <ChevronRight size={14} strokeWidth={3} className="text-[#003630] opacity-40" />
       </button>
     </div>
   );
@@ -416,17 +300,27 @@ function Frame3({ onViewHistory, debtCount }: { onViewHistory: () => void; debtC
 
 function Frame4({ onSelectService }: { onSelectService: (service: string) => void }) {
   return (
-    <div className="content-stretch flex gap-[15px] h-[44px] items-start relative shrink-0 w-full animate-fade-in" style={{ animationDelay: '300ms' }}>
+    <div className="w-full animate-fade-in" style={{ animationDelay: '300ms' }}>
       <button
-        disabled
-        className="btn-ghost btn-tactile basis-0 grow min-h-px min-w-px relative shrink-0 touch-manipulation opacity-40 pointer-events-none saturate-50"
-        data-name="Button"
+        onClick={() => {
+          haptics.light?.();
+          onSelectService("payment-plans");
+        }}
+        className="w-full h-[60px] rounded-[18px] bg-white border border-gray-100 shadow-[0_4px_0_0_#f3f4f6,0_15px_30px_-10px_rgba(0,0,0,0.08)] active:translate-y-[2px] active:shadow-[0_2px_0_0_#f3f4f6,0_10px_20px_-5px_rgba(0,0,0,0.05)] transition-all flex items-center justify-between px-6 group"
       >
-        <div className="flex flex-row items-center justify-center overflow-clip rounded-[inherit] size-full">
-          <div className="box-border content-stretch flex gap-[8px] items-center justify-center px-[24px] py-[10px] relative w-full">
-            <p className="font-['Inter:Extra_Light',sans-serif] font-extralight leading-[24px] not-italic relative shrink-0 text-[#2d3648] text-[15px] text-nowrap tracking-[-0.15px] whitespace-pre opacity-70">Policies</p>
+        <div className="flex items-center gap-4 text-[#003630]">
+          <div className="group-active:scale-95 transition-transform">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
           </div>
+          <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#003630] tracking-[-0.2px]">
+            Policies & Refunds
+          </p>
         </div>
+        <ChevronRight size={14} strokeWidth={3} className="text-[#003630] opacity-40" />
       </button>
     </div>
   );
@@ -434,7 +328,7 @@ function Frame4({ onSelectService }: { onSelectService: (service: string) => voi
 
 function Frame6({ onSelectService, onViewHistory, onPayFees, isUniversity, debtCount }: { onSelectService: (service: string) => void; onViewHistory: () => void; onPayFees?: () => void; isUniversity?: boolean; debtCount?: number }) {
   return (
-    <div className="absolute content-stretch flex flex-col gap-[24px] items-start left-1/2 translate-x-[-50%] top-[300px] w-full max-w-[600px] px-[24px]">
+    <div className="absolute flex flex-col gap-4 items-start left-1/2 translate-x-[-50%] top-[300px] w-full max-w-[600px] px-6">
       <Frame2 onPayFees={onPayFees} isUniversity={isUniversity} />
       <Frame3 onViewHistory={onViewHistory} debtCount={debtCount} />
       <Frame4 onSelectService={onSelectService} />
@@ -446,20 +340,21 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
   const institutionType = schoolName ? getInstitutionType(schoolName) : undefined;
   const isUniversity = institutionType === 'university';
 
-  const [showSettings, setShowSettings] = useState(false);
-  const [currentTime, setCurrentTime] = useState(() => {
-    const now = new Date();
-    return now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  });
+  const storeSchoolName = useAppStore(state => state.selectedSchool);
+  const [inferredSchoolName, setInferredSchoolName] = useState("");
+  const displaySchoolName = schoolName || storeSchoolName || inferredSchoolName || "";
 
   useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }));
-    };
-    const interval = setInterval(tick, 30000); // update every 30s
-    return () => clearInterval(interval);
-  }, []);
+    if (!schoolName && !storeSchoolName && userPhone) {
+      getStudentsByPhone(userPhone).then(students => {
+        if (students && students.length > 0) {
+          setInferredSchoolName(students[0].schoolName);
+        }
+      });
+    }
+  }, [schoolName, storeSchoolName, userPhone]);
+
+  const [showSettings, setShowSettings] = useState(false);
 
   // ── Inactivity auto-refresh after 5 minutes ──────────────────────────────
   const INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
@@ -503,19 +398,32 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
 
 
   return (
-    <div className="bg-white min-h-screen w-full overflow-hidden flex items-center justify-center" data-name="Page 2">
-      <div className="relative w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen mx-auto">
-        <PageGroup2 onBack={onBack} onShowSettings={() => setShowSettings(true)} />
-        <div className="absolute font-['Inter:Regular',sans-serif] font-normal leading-[0.5] left-1/2 translate-x-[-50%] not-italic text-[18px] text-black top-[164px] tracking-[-0.18px] w-full max-w-[600px] px-[24px]">
-          <p className="font-['IBM_Plex_Sans_Devanagari:Light',sans-serif] mb-[14px]">{greeting}, </p>
-          <div className="flex items-baseline justify-between">
-            <p className="font-['Agrandir:Grand_Heavy',sans-serif] text-[#003630]">{userName}</p>
-            <span
-              className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[13px] tracking-[-0.1px]"
-              style={{ color: 'rgba(156, 163, 175, 0.85)' }}
-            >
-              {currentTime}
-            </span>
+    <div className="bg-[#F9FAFB] min-h-screen w-full overflow-hidden flex items-center justify-center">
+      <div className="relative w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen mx-auto overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-[300px] bg-white shadow-[inset_0_-2px_10px_rgba(0,0,0,0.02)]">
+          <PageGroup2 onBack={onBack} onShowSettings={() => setShowSettings(true)} schoolName={displaySchoolName} />
+        </div>
+        <div className="absolute left-1/2 translate-x-[-50%] top-[110px] w-full max-w-[600px] px-[24px] flex flex-col gap-3">
+          <p className="font-['Inter:Light',sans-serif] text-[18px] text-[#003630]/60 leading-none">
+            {greeting},
+          </p>
+          <div className="flex items-center justify-between">
+            <p className="font-['Inter:Black',sans-serif] font-bold text-[34px] text-[#003630] leading-tight tracking-[1.5px]">
+              {userName}
+            </p>
+            <div className="flex items-center gap-2 translate-y-1">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/7595/7595571.png"
+                alt="Verified"
+                className="w-[16px] h-[16px] object-contain"
+              />
+              <span className="font-['Inter:SemiBold',sans-serif] text-[12px] text-[#003630]">Account Verified</span>
+            </div>
+          </div>
+          <div className="mt-8 max-w-[340px]">
+            <p className="font-['Inter:Regular',sans-serif] text-[15px] text-[#003630]/70 leading-[1.6] tracking-[-0.2px]">
+              Welcome to the <span className="font-bold text-[#003630]">{displaySchoolName || 'school'}</span> payment portal. What would you like to do today?
+            </p>
           </div>
         </div>
         <Frame6 onSelectService={handleViewPaymentPlans} onViewHistory={onViewHistory} onPayFees={onPayFees} isUniversity={isUniversity} debtCount={debtCount} />
