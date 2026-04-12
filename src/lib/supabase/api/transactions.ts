@@ -482,9 +482,10 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
             
             if (!seenIds.has(invId) && !seenRefs.has(invRef)) {
                 // Try to extract name from invoice_items JSON
-                let serviceName = "School Fees";
+                let serviceName = "School Fee Payment";
                 if (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
-                    serviceName = inv.invoice_items.items[0]?.name || inv.invoice_items.items[0]?.description || serviceName;
+                    const firstItem = inv.invoice_items.items[0];
+                    serviceName = firstItem.description || firstItem.name || serviceName;
                 }
 
                 results.push({
@@ -617,10 +618,11 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         const invoiceItems: any[] = invoices.map(inv => {
             const total = Number((inv as any).total_amount_cached || inv.total_amount || 0);
             let name = inv.service_name;
-            if (!name && inv.invoice_items?.items?.[0]?.name) {
-                name = inv.invoice_items.items[0].name;
+            if (!name && inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
+                const firstItem = inv.invoice_items.items[0];
+                name = firstItem.description || firstItem.name;
             }
-            if (!name) name = 'School Fees';
+            if (!name) name = 'School Fee Payment';
 
             return {
                 type: 'invoice',

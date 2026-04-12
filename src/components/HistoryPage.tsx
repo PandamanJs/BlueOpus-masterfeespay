@@ -185,7 +185,7 @@ export default function HistoryPage({
                   className={`h-full relative rounded-[12px] shrink-0 transition-all ${isActive ? 'bg-[#f5f7f9]' : 'bg-transparent'}`}
                 >
                   {isActive && (
-                    <div aria-hidden="true" className="absolute border border-[#bcbcbc] border-solid inset-0 pointer-events-none rounded-[12px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.15)]" />
+                    <div aria-hidden="true" className="absolute border-[2px] border-[#a3a3a3] border-solid inset-0 pointer-events-none rounded-[12px] shadow-[0px_10px_20px_0px_rgba(0,0,0,0.25)]" />
                   )}
                   <div className="flex flex-row items-center justify-center h-full">
                     <div className="flex gap-[10px] items-center justify-center px-[25px] py-[4px] relative h-full">
@@ -196,7 +196,7 @@ export default function HistoryPage({
                           </svg>
                         </div>
                       )}
-                      <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[12px] text-black whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold" : "font-['Space_Grotesk',sans-serif] font-medium"}`}>
+                      <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[10px] text-black whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold" : "font-['Space_Grotesk',sans-serif] font-medium"}`}>
                         <p className="m-0">{student.name}</p>
                       </div>
                     </div>
@@ -258,7 +258,7 @@ export default function HistoryPage({
 }
 
 function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, userName }: { item: any, grade: string, transactions: any[], onPay: () => void, studentName: string, userName: string }) {
-  const [showDetails, setShowDetails] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
   const isCleared = (item.balance || 0) <= 0;
 
   const extractDate = (obj: any) => {
@@ -276,21 +276,23 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
 
   const handleDownload = () => {
     try {
-      const amountPaid = item.expected - (item.balance || 0);
+      const amountPaid = (item.expected || 0) - (item.balance || 0);
       generateReceiptPDF({
-        schoolName: "School Fees Payment",
+        schoolName: schoolName || "Master Fees Payment",
         totalAmount: amountPaid,
         refNumber: item.invoice_id?.substring(0, 12).toUpperCase() || 'REF-HIST',
         dateTime: new Date().toLocaleString(),
         scheduleId: `#${(item.invoice_id || '0').substring(0, 5)}`,
         services: [{
           id: item.id,
-          description: item.name,
-          amount: amountPaid,
+          description: `${item.name} ${item.term ? `(Term ${item.term})` : ''}`,
+          amount: item.expected || 0,
           invoiceNo: item.invoice_number || 'N/A',
           studentName: studentName
         }],
-        parentName: userName
+        parentName: userName,
+        admissionNumber: item.admission_number || '', // Try to find admission number in item
+        isPaid: isCleared
       });
       toast.success("Receipt downloaded!");
     } catch (e) {
@@ -303,7 +305,9 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
       <div className="flex justify-between items-start gap-4">
         <div className="flex flex-col gap-1 flex-1">
           <p className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-black m-0">{item.name}</p>
-          <p className="font-['Space_Grotesk',sans-serif] font-normal text-[8px] text-black m-0">Grade {grade}</p>
+          <p className="font-['Space_Grotesk',sans-serif] font-normal text-[8px] text-black m-0">
+            {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
+          </p>
         </div>
 
         {/* Status Badge — from design (Frame12 style) */}
@@ -326,15 +330,19 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
           {/* Main Charge */}
           <div className="flex items-center justify-between gap-4 text-[12px]">
             <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal w-16 shrink-0">{extractDate(item)}</p>
-            <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">{item.name} Charge</p>
+            <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">
+              {item.description || `${item.name} Invoice`}
+            </p>
             <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal text-right">K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
-
+          
           {/* Related Payments */}
           {relatedTxs.map((tx, idx) => (
             <div key={idx} className="flex items-center justify-between gap-4 text-[12px]">
               <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal w-16 shrink-0">{extractDate(tx)}</p>
-              <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">Paid via {tx.payment_method?.replace('_', ' ') || 'Office'}</p>
+              <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">
+                {tx.description || `Paid via ${tx.payment_method?.replace('_', ' ') || 'Office'}`}
+              </p>
               <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal text-right truncate">-K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
           ))}
@@ -354,7 +362,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         {!isCleared && (
           <button
             onClick={onPay}
-            className="bg-[#e0f7d4] h-[50px] rounded-[8px] border-[0.5px] border-[#003630] font-['Space_Grotesk',sans-serif] font-bold text-[14px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+            className="bg-[#e0f7d4] h-[50px] rounded-[8px] border-[0.5px] border-[#003630] font-['Space_Grotesk',sans-serif] font-bold text-[10px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
           >
             Pay Now
           </button>
@@ -362,13 +370,13 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         <div className="flex items-center gap-[10px]">
           <button
             onClick={() => { haptics.light(); setShowDetails(!showDetails); }}
-            className="flex-1 bg-[#f5f7f9] h-[50px] rounded-[8px] border border-[#d6d6d6] font-['Space_Grotesk',sans-serif] font-bold text-[14px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+            className="flex-1 bg-[#f5f7f9] h-[50px] rounded-[8px] border border-[#d6d6d6] font-['Space_Grotesk',sans-serif] font-bold text-[10px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
           >
             {showDetails ? 'Hide Details' : 'Show Details'}
           </button>
           <button
             onClick={handleDownload}
-            className="flex-1 h-[50px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-medium text-[14px] text-[#003630] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="flex-1 h-[50px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-medium text-[10px] text-[#003630] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <Download size={16} className="opacity-70" />
             <span>Download</span>

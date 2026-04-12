@@ -157,3 +157,25 @@ export async function updateParent(
         throw error;
     }
 }
+
+/**
+ * Log a dispute for a student balance.
+ */
+export async function logDispute(studentId: string, parentId: string, notes: string): Promise<void> {
+    try {
+        const { error } = await supabase
+            .from('disputes')
+            .insert({
+                student_id: studentId,
+                parent_id: parentId,
+                notes: notes,
+                status: 'pending',
+                created_at: new Date().toISOString()
+            });
+
+        if (error) handleSupabaseError(error, 'logDispute');
+    } catch (error) {
+        console.error('[logDispute] Error:', error);
+        throw error;
+    }
+}

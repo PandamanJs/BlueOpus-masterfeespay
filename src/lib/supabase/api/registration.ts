@@ -262,7 +262,12 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
 
         const invoiceItems = invoices.map(inv => {
             const invId = (inv as any).invoice_id || inv.id;
-            const invName = inv.service_name || 'School Fees';
+            let invName = inv.service_name;
+            if (!invName && inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
+                const firstItem = inv.invoice_items.items[0];
+                invName = firstItem.description || firstItem.name;
+            }
+            if (!invName) invName = 'School Fee Payment';
             const total = Number((inv as any).total_amount_cached || inv.total_amount || 0);
             
             const paid = transactions.filter(tx => {
@@ -272,13 +277,15 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
                 return tx.invoice_id === invId || 
                        metaService === invName || 
                        reason.includes(invName) ||
-                       (invName === 'School Fees' && !tx.invoice_id && !metaService);
+                       (invName === 'School Fee Payment' && !tx.invoice_id && !metaService);
             }).reduce((sum, tx) => sum + (Number(tx.amount || 0)), 0);
 
             return {
                 type: 'invoice',
                 invoice_id: invId,
                 name: invName,
+                description: inv.invoice_items?.items?.[0]?.description || invName,
+                invoice_number: inv.invoice_number,
                 expected: total,
                 collected: paid,
                 balance: Math.max(0, total - paid),
