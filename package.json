@@ -38,7 +38,7 @@
             "vite-plugin-pwa": "^1.2.0"
       },
       "scripts": {
-            "dev": "vite",
+    "dev": "vite --host",
             "build": "vite build",
             "lint": "echo 'No linting configured'"
       }

@@ -12,8 +12,8 @@ interface LogoHeaderProps {
 
 function Logo() {
     return (
-        <div className="size-[24px] flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="size-[28px] flex items-center justify-center">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2L2 12L12 22L22 12L12 2Z" />
                 <path d="M9 13L12 10L15 13" />
             </svg>
@@ -41,7 +41,7 @@ export default function LogoHeader({ onBack, showBackButton = false, className, 
     };
 
     return (
-        <div className={`h-[66px] w-full relative bg-white/95 backdrop-blur-[20px] flex items-center px-4 ${className}`}>
+        <div className={`h-[66px] w-full sticky top-0 z-[100] bg-white/95 backdrop-blur-[20px] flex items-center px-4 ${className}`}>
             <div aria-hidden="true" className="absolute border-[#e5e7eb] border-[0px_0px_1px] border-solid inset-0 pointer-events-none" />
             
             {showBackButton && onBack && (
