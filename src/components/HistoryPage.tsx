@@ -145,12 +145,9 @@ export default function HistoryPage({
 
 
             <div className="flex flex-col gap-4 -translate-y-1 relative z-10 w-full">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#95e36c] shadow-[0_0_8px_rgba(149,227,108,0.4)]" />
-                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-[#95e36c] tracking-[0px] m-0 uppercase">
-                  {currentStudent?.name?.split(' ')[0] || 'Student'}'s Current Balance
-                </p>
-              </div>
+              <p className="font-['Space_Grotesk',sans-serif] font-bold text-[15px] text-[#95e36c] tracking-[0px] m-0 uppercase">
+                {currentStudent?.name?.split(' ')[0] || 'Student'}'s Current Balance
+              </p>
               <div className="overflow-hidden">
                 <p className="font-['Space_Grotesk',sans-serif] font-bold text-[40px] text-white tracking-[-1px] leading-[1] m-0">
                   {isLoading ? "---" : (
@@ -202,8 +199,8 @@ export default function HistoryPage({
                   `}
                 >
                   <div className={`
-                    w-[12px] h-[12px] rounded-full transition-all duration-500 shrink-0
-                    ${isActive ? "bg-[#95e36c] scale-100 opacity-100 shadow-[0_0_8px_rgba(149,227,108,0.3)]" : "bg-[#95e36c] scale-0 opacity-0"}
+                    w-[12px] h-[12px] rounded-full transition-all duration-500 shrink-0 bg-[#95e36c]
+                    ${isActive ? "scale-100 opacity-100 shadow-[0_0_8px_rgba(149,227,108,0.3)]" : "scale-90 opacity-40"}
                   `} />
                   <span className={`
                     font-['Space_Grotesk',sans-serif] text-[10px] whitespace-nowrap transition-colors
@@ -352,33 +349,24 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
   };
 
   return (
-    <div className="bg-white rounded-[24px] mx-4 mb-4 ring-1 ring-[#e1e4e8] shadow-[0_12px_40px_-16px_rgba(0,0,0,0.12)] p-5 flex flex-col relative overflow-hidden">
-      {/* Decorative Accent */}
-      {isCleared && <div className="absolute top-0 right-0 w-24 h-24 bg-[#95e36c]/10 rounded-full blur-xl -mr-8 -mt-8 pointer-events-none" />}
-
-      {/* Card Header */}
-      <div className="flex items-start justify-between mb-6 relative z-10">
-        <div className="flex flex-col gap-1 pr-2">
-          <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[18px] text-[#003630] tracking-[-0.3px] leading-tight">
+    <div className="bg-white rounded-[24px] mx-4 mb-4 ring-1 ring-[#e1e4e8] shadow-[0_12px_40px_-16px_rgba(0,0,0,0.12)] p-6 flex flex-col relative overflow-hidden">
+      {/* Card Header Content */}
+      <div className="relative z-10 flex flex-col gap-1 mb-6 pr-[40px]">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-[#003630] tracking-[-0.2px] leading-tight">
             {item.name} {item.term && `- Term ${item.term}`}
           </h3>
-          <p className="font-['Space_Grotesk',sans-serif] font-medium text-[13px] text-[#6b7280]">
-            {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
-          </p>
+          {/* Minimal Status Indicator */}
+          <div className="flex items-center gap-2">
+            <span className={`font-['Space_Grotesk',sans-serif] font-bold text-[10px] uppercase tracking-widest ${isCleared ? "text-[#003630]" : "text-[#FF6B6B]"}`}>
+              {isCleared ? "Cleared" : "Pending"}
+            </span>
+            {isCleared && <BadgeCheck size={14} className="text-[#95e36c]" strokeWidth={2.5} />}
+          </div>
         </div>
-
-        {/* Badge */}
-        {isCleared ? (
-          <div className="flex items-center gap-2 px-1 py-1.5 shrink-0">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#95e36c] shadow-[0_0_8px_rgba(149,227,108,0.4)]" />
-            <span className="font-['Space_Grotesk',sans-serif] font-bold text-[11px] text-[#003630] uppercase tracking-wider">Cleared</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 px-1 py-1.5 shrink-0">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#FF6B6B] shadow-[0_0_8px_rgba(255,107,107,0.3)]" />
-            <span className="font-['Space_Grotesk',sans-serif] font-bold text-[11px] text-[#003630] uppercase tracking-wider">Not Cleared</span>
-          </div>
-        )}
+        <p className="font-['Space_Grotesk',sans-serif] font-medium text-[12px] text-[#6b7280]">
+          {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
+        </p>
       </div>
 
       <AnimatePresence>
@@ -389,29 +377,29 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden relative z-10"
           >
-            <div className="mt-5 flex flex-col gap-3">
+            <div className="mt-4 flex flex-col gap-2.5">
               {/* Transaction Row */}
-              <div className="flex justify-between items-center bg-[#f9fafb] p-3 rounded-[14px]">
-                <div className="flex flex-col gap-1 min-w-0 pr-2">
-                  <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#003630] truncate">{item.name} Charge</span>
-                  <span className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] text-[#6b7280]">
+              <div className="flex justify-between items-center bg-[#F8FAFB] p-3 rounded-[12px]">
+                <div className="flex flex-col gap-0.5 min-w-0 pr-2">
+                  <span className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-[#003630] truncate">{item.name} Charge</span>
+                  <span className="font-['Space_Grotesk',sans-serif] font-medium text-[10px] text-[#6b7280]">
                     {extractDate(item)}
                   </span>
                 </div>
-                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] shrink-0">
+                <span className="font-['Space_Grotesk',sans-serif] font-bold text-[13px] text-[#003630] shrink-0">
                   K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
 
               {relatedTxs.map((tx, idx) => (
-                <div key={idx} className="flex justify-between items-center p-2 pl-3">
+                <div key={idx} className="flex justify-between items-center px-3 py-1">
                   <div className="flex flex-col gap-0.5 min-w-0 pr-2">
-                    <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[13px] text-[#6b7280] truncate">Paid via {tx.payment_method?.replace('_', ' ') || 'Office'}</span>
-                    <span className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] text-gray-400">
+                    <span className="font-['Space_Grotesk',sans-serif] font-medium text-[12px] text-[#6b7280] truncate">Paid via {tx.payment_method?.replace('_', ' ') || 'Office'}</span>
+                    <span className="font-['Space_Grotesk',sans-serif] font-medium text-[10px] text-gray-400">
                       {extractDate(tx)}
                     </span>
                   </div>
-                  <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] shrink-0">
+                  <span className="font-['Space_Grotesk',sans-serif] font-bold text-[13px] text-[#003630] shrink-0">
                     -K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -420,8 +408,8 @@ function ServiceCategoryCard({ item, grade, transactions, hasOutstandingBalance,
               <div className="h-px w-full bg-gray-100 my-1" />
 
               <div className="flex justify-between items-center pb-1 px-1 mt-1">
-                <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] uppercase tracking-widest">Balance</span>
-                <span className={`font-['IBM_Plex_Sans_Devanagari:ExtraBold',sans-serif] font-[900] text-[24px] tracking-[-0.5px] ${isCleared ? 'text-[#d1d5db]' : 'text-[#ff6b6b]'}`}>
+                <span className="font-['Space_Grotesk',sans-serif] font-bold text-[11px] text-[#94a3b8] uppercase tracking-[0.1em]">Balance</span>
+                <span className={`font-['Space_Grotesk',sans-serif] font-bold text-[22px] tracking-[-0.5px] ${isCleared ? 'text-[#000000]' : 'text-[#ff6b6b]'}`}>
                   {isCleared ? "K0.00" : `K${(item.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                 </span>
               </div>
