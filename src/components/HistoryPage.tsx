@@ -301,7 +301,15 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
   };
 
   return (
-    <div className="bg-white rounded-[12px] p-4 relative overflow-hidden flex flex-col gap-4 shadow-[0px_4px_12px_rgba(0,0,0,0.1)] border border-[#e6e6e6]">
+    <div 
+      className="rounded-[12px] p-4 relative overflow-hidden flex flex-col gap-4 shadow-[0px_8px_32px_rgba(0,0,0,0.06)] border border-white/40"
+      style={{
+        background: "rgba(255, 255, 255, 0.65)",
+        backdropFilter: "blur(16px) saturate(160%)",
+        WebkitBackdropFilter: "blur(16px) saturate(160%)",
+        boxShadow: isCleared ? "inset 0 4px 0 0 #95e36c, 0 8px 32px rgba(0,0,0,0.06)" : "0 8px 32px rgba(0,0,0,0.06)"
+      }}
+    >
       <div className="flex justify-between items-start gap-4">
         <div className="flex flex-col gap-1 flex-1">
           <p className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-black m-0">{item.name}</p>
@@ -329,21 +337,21 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         <div className="bg-[#F5F7F9] rounded-[8px] p-3 flex flex-col gap-2">
           {/* Main Charge */}
           <div className="flex items-center justify-between gap-4 text-[12px]">
-            <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal w-16 shrink-0">{extractDate(item)}</p>
-            <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">
+            <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal w-16 shrink-0">{extractDate(item)}</p>
+            <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
               {item.description || `${item.name} Invoice`}
             </p>
-            <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal text-right">K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right">K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
           
           {/* Related Payments */}
           {relatedTxs.map((tx, idx) => (
             <div key={idx} className="flex items-center justify-between gap-4 text-[12px]">
-              <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal w-16 shrink-0">{extractDate(tx)}</p>
-              <p className="font-['Inter',sans-serif] text-[#585858] font-normal flex-1 truncate">
+              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal w-16 shrink-0">{extractDate(tx)}</p>
+              <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
                 {tx.description || `Paid via ${tx.payment_method?.replace('_', ' ') || 'Office'}`}
               </p>
-              <p className="font-['Space_Grotesk',sans-serif] text-[#585858] font-normal text-right truncate">-K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
           ))}
 
@@ -405,8 +413,11 @@ function EmptySummaryState() {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, height: 0, scale: 0.9, marginTop: 0, marginBottom: 0, padding: 0 }}
           transition={{ duration: 0.5 }}
-          style={{ paddingTop: '10px' }}
-          className="mx-4 mt-2 mb-4 pb-12 px-12 bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] flex flex-col items-center text-center gap-6 shadow-[0px_12px_32px_-8px_rgba(0,0,0,0.08)] relative overflow-hidden origin-top"
+          style={{ 
+            paddingTop: '10px',
+            boxShadow: "inset 0 4px 0 0 #95e36c, 0 12px 32px -8px rgba(0,0,0,0.08)"
+          }}
+          className="mx-4 mt-2 mb-4 pb-12 px-12 bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] flex flex-col items-center text-center gap-6 relative overflow-hidden origin-top"
         >
           <div className="absolute top-0 right-0 w-48 h-48 bg-[#95e36c]/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
 
