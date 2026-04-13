@@ -1034,52 +1034,53 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                     onBack();
                 }} />
 
-                <div className="flex-1 flex flex-col px-[44px] pt-[48px] pb-[280px] overflow-y-auto no-scrollbar gap-4">
+                <div className="flex-1 flex flex-col pt-[48px] pb-[280px] overflow-y-auto no-scrollbar gap-4">
                     {/* Header Card */}
-                    <div className="bg-[#f5f7f9] rounded-[22px] p-[20px] shadow-inner border border-gray-50/50 flex flex-col gap-1">
-                        <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] font-bold leading-[34px] not-italic text-[24px] text-black tracking-[-0.18px]">
-                            Products/Services Cart
-                        </p>
-                        <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-[1.5] not-italic text-[#4b5563] text-[14px] tracking-[-0.12px]">
-                            Add the products and services you would like to pay for and proceed to checkout.
-                        </p>
+                    <div className="px-[44px]">
+                        <div className="bg-[#f5f7f9] rounded-[22px] p-[20px] shadow-inner border border-gray-50/50 flex flex-col gap-1">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] font-bold leading-[34px] not-italic text-[24px] text-black tracking-[-0.18px]">
+                                Products/Services Cart
+                            </p>
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-[1.5] not-italic text-[#4b5563] text-[14px] tracking-[-0.12px]">
+                                Add the products and services you would like to pay for and proceed to checkout.
+                            </p>
+                        </div>
                     </div>
 
-                    {/* Child Selection Section */}
-                    <div className="mt-[12px] mb-[10px] flex flex-col items-center gap-4">
-                        <div className="flex gap-[10px] items-center relative w-full overflow-x-auto no-scrollbar pb-1 px-1">
-                            {selectedStudents.map(student => (
-                                <ChildPill
-                                    key={student.id}
-                                    name={student.name}
-                                    id={student.id}
-                                    isActive={activeStudentId === student.id}
-                                    admissionNumber={student.admissionNumber}
-                                    hasBalance={student.balances > 0}
-                                    onClick={() => setActiveStudentId(student.id)}
-                                />
-                            ))}
+                    <div className="px-[24px] flex flex-col gap-4">
+                        {/* Child Selection Section */}
+                        <div className="mt-[12px] mb-[10px] flex flex-col items-center gap-4">
+                            <div className="flex gap-[10px] items-center relative w-full overflow-x-auto no-scrollbar pb-1 px-1">
+                                {selectedStudents.map(student => (
+                                    <ChildPill
+                                        key={student.id}
+                                        name={student.name}
+                                        id={student.id}
+                                        isActive={activeStudentId === student.id}
+                                        admissionNumber={student.admissionNumber}
+                                        hasBalance={student.balances > 0}
+                                        onClick={() => setActiveStudentId(student.id)}
+                                    />
+                                ))}
+                            </div>
                         </div>
 
-                    </div>
+                        <div className="flex flex-col gap-[18px]">
+                            {/* Child Services Empty State (when no popup is open) */}
+                            {!showAddFeesForm && !showOtherServicesPopup && activeStudentServices.length === 0 && (
+                                <div className="flex flex-col items-center justify-center py-8 text-center bg-white/50 border border-dashed border-gray-300 rounded-[20px]">
+                                    <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#6b7280] text-[14px]">No services selected yet</p>
+                                    <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[#9ca3af] text-[12px] mt-1">Add fees or services below</p>
+                                </div>
+                            )}
 
-                    <div className="flex flex-col gap-[18px]">
-
-
-                        {/* Child Services Empty State (when no popup is open) */}
-                        {!showAddFeesForm && !showOtherServicesPopup && activeStudentServices.length === 0 && (
-                            <div className="flex flex-col items-center justify-center py-8 text-center bg-white/50 border border-dashed border-gray-300 rounded-[20px]">
-                                <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#6b7280] text-[14px]">No services selected yet</p>
-                                <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[#9ca3af] text-[12px] mt-1">Add fees or services below</p>
-                            </div>
-                        )}
-
-                        {/* Service Table - only visible when not adding stuff */}
-                        {!showAddFeesForm && !showOtherServicesPopup && activeStudentServices.length > 0 && (
-                            <div className="w-full">
-                                <ServiceTable services={activeStudentServices} onRemoveItem={handleRemoveService} />
-                            </div>
-                        )}
+                            {/* Service Table - only visible when not adding stuff */}
+                            {!showAddFeesForm && !showOtherServicesPopup && activeStudentServices.length > 0 && (
+                                <div className="w-full">
+                                    <ServiceTable services={activeStudentServices} onRemoveItem={handleRemoveService} />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
