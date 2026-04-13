@@ -4,7 +4,7 @@ import tickSvgPaths from "../imports/svg-m9kcpl04lu";
 import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
 import LogoHeader from "./common/LogoHeader";
-// import { WifiOff } from "lucide-react"; // Removed as unused
+import { BadgeCheck } from "lucide-react";
 
 interface Student {
   name: string;
@@ -24,132 +24,118 @@ interface PayForSchoolFeesProps {
 
 
 
-function Radio({ isSelected }: { isSelected: boolean }) {
-  return (
-    <div className="absolute left-1/2 rounded-[9999px] size-[15px] top-1/2 translate-x-[-50%] translate-y-[-50%]" data-name="Radio">
-      <div aria-hidden="true" className="absolute border border-[#5f75a0] border-solid inset-0 pointer-events-none rounded-[9999px]" />
-      {isSelected && (
-        <div className="absolute inset-[3px] rounded-full bg-[#003630]" />
-      )}
-    </div>
-  );
-}
+function StudentCard({
+  student,
+  isSelected,
+  onClick
+}: {
+  student: Student;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const isCleared = student.balances <= 0;
 
-function RadioBase({ isSelected }: { isSelected: boolean }) {
   return (
-    <div
-      className="relative rounded-[3px] shrink-0 size-[15px]"
-      data-name="_Radio Base"
+    <motion.div
+      onClick={onClick}
+      className={`
+        relative rounded-[20px] p-5 border transition-all cursor-pointer active:scale-[0.98] group
+        ${isSelected
+          ? 'border-[#95e36c] shadow-[0px_20px_40px_rgba(149,227,108,0.15)] ring-1 ring-[#95e36c]/20'
+          : 'border-white/40 shadow-[0px_8px_32px_rgba(0,0,0,0.06)]'
+        }
+      `}
+      style={{
+        background: isSelected ? "rgba(255, 255, 255, 1)" : "rgba(255, 255, 255, 1)",
+        backdropFilter: "blur(16px) saturate(160%)",
+        WebkitBackdropFilter: "blur(16px) saturate(160%)",
+        boxShadow: isCleared
+          ? `inset 0 4px 0 0 #95e36c, ${isSelected ? '0 20px 40px rgba(149,227,108,0.1)' : '0 8px 32px rgba(0,0,0,0.06)'}`
+          : "0 8px 32px rgba(0,0,0,0.06)"
+      }}
     >
-      <Radio isSelected={isSelected} />
-    </div>
-  );
-}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Selection Indicator - Resized to 12x12 */}
+          <div className="relative w-[15px] h-[15px] shrink-0 flex items-center justify-center isolate">
+            <div className={`w-full h-full rounded-full border-[2px] border-solid transition-all duration-300 ${isSelected
+              ? 'border-[#95e36c] bg-[#95e36c]'
+              : 'border-[#4b5563] bg-white opacity-100'
+              }`}
+              style={{ minWidth: '16px', minHeight: '16px' }}
+            />
+            {isSelected && (
+              <motion.svg
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="absolute z-10"
+                width="8" height="9" viewBox="0 0 24 24" fill="none"
+                stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </motion.svg>
+            )}
+          </div>
 
-function TickCircle() {
-  return (
-    <div className="relative shrink-0 size-[17px]" data-name="tick-circle">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17 17">
-        <g id="tick-circle">
-          <path d={tickSvgPaths.p2aa26200} fill="var(--fill-0, #95E36C)" id="Vector" />
-          <g id="Vector_2" opacity="0"></g>
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function Frame2({ name }: { name: string }) {
-  return (
-    <div className="h-[16px] relative shrink-0 w-[94px]">
-      <p className="absolute font-['IBM_Plex_Sans_Condensed:SemiBold',sans-serif] leading-[normal] left-0 not-italic text-[12px] text-black text-nowrap top-0 whitespace-pre">{name}</p>
-    </div>
-  );
-}
-
-function Frame({ grade, id, admissionNumber }: { grade: string; id: string; admissionNumber?: string }) {
-  // Prioritize admission number for display, fallback to truncated UUID
-  const displayId = admissionNumber || (id.length > 20 ? `${id.substring(0, 8)}...` : id);
-
-  return (
-    <div className="content-stretch flex gap-[14px] items-center relative shrink-0 w-full">
-      <p className="font-['Inter:Regular',sans-serif] font-normal leading-[normal] not-italic relative shrink-0 text-[8px] text-black text-center w-[40px]">{grade}</p>
-      <div className="flex h-[calc(1px*((var(--transform-inner-width)*1)+(var(--transform-inner-height)*0)))] items-center justify-center relative shrink-0 w-[calc(1px*((var(--transform-inner-height)*1)+(var(--transform-inner-width)*0)))]" style={{ "--transform-inner-width": "8", "--transform-inner-height": "0" } as React.CSSProperties}>
-        <div className="flex-none rotate-[270deg]">
-          <div className="h-0 relative w-[8px]">
-            <div className="absolute bottom-0 left-0 right-0 top-[-0.5px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 8 1">
-                <line id="Line 49" stroke="var(--stroke-0, black)" strokeWidth="0.5" x2="8" y1="0.25" y2="0.25" />
-              </svg>
+          {/* Info Section */}
+          <div className="flex flex-col min-w-0">
+            <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[13px] text-black tracking-[-0.3px] truncate">
+              {student.name}
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="font-['Inter',sans-serif] font-medium text-[10px] text-[#4b5563]">
+                {student.grade}
+              </span>
+              <span className="font-['Inter',sans-serif] font-normal text-[10px] text-[#9ca3af]">
+                {student.admissionNumber || student.id.substring(0, 8)}
+              </span>
             </div>
           </div>
         </div>
-      </div>
-      <p className="basis-0 font-['Inter:Regular',sans-serif] font-normal grow leading-[normal] min-h-px min-w-px not-italic relative shrink-0 text-[8px] text-black text-center">{displayId}</p>
-    </div>
-  );
-}
 
-function Frame4({ student }: { student: Student }) {
-  return (
-    <div className="content-stretch flex flex-col gap-px items-start relative shrink-0 w-[104px]">
-      <Frame2 name={student.name} />
-      <Frame grade={student.grade} id={student.id} admissionNumber={student.admissionNumber} />
-    </div>
-  );
-}
+        <div className="flex items-center gap-2">
+          {/* Status Pill */}
+          <div
+            className={`flex items-center gap-2 px-3 py-1 rounded-full transition-all duration-300 ${student.balances > 0
+              ? 'bg-[#FFF5F5] text-[#EA3030]'
+              : 'bg-[#F0FFF4] text-[#16A34A]'
+              }`}
+          >
+            {student.balances > 0 ? (
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="#EA3030" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            ) : (
+              <svg
+                width="10" height="10" viewBox="0 0 24 24" fill="none"
+                stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            )}
+            <span className="font-['Inter',sans-serif] font-bold text-[10px] tracking-tight">
+              {student.balances > 0 ? `K${Math.floor(student.balances).toLocaleString()} Balance` : 'Cleared'}
+            </span>
+          </div>
 
-function Frame6({ balances }: { balances: number }) {
-  const isCredit = balances < 0;
-  const hasOutstanding = balances > 0;
-
-  return (
-    <div className={`relative h-[44px] rounded-[14px] shrink-0 w-fit min-w-[135px] border transition-all duration-300 group flex items-center justify-between px-[16px] ${
-      hasOutstanding 
-        ? 'bg-red-50/50 border-red-100 shadow-[0px_2px_8px_rgba(239,68,68,0.04)]' 
-        : isCredit
-          ? 'bg-[#95e36c]/10 border-[#95e36c]/20 shadow-[0px_2px_8px_rgba(149,227,108,0.04)]'
-          : 'bg-[#f8fafc] border-[#f1f3f5] shadow-sm'
-      }`}>
-
-      <div className="flex flex-col justify-center">
-        <div className="flex items-baseline gap-[3px]">
-          <span className={`font-['Inter:Medium',sans-serif] text-[10px] uppercase tracking-wider ${
-            hasOutstanding ? 'text-red-400' : isCredit ? 'text-[#95e36c]' : 'text-gray-400'
-          }`}>
-            ZMW
-          </span>
-          <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] tabular-nums tracking-[-0.1px] leading-tight ${
-            hasOutstanding ? 'text-[#ef4444]' : isCredit ? 'text-[#003630]' : 'text-gray-700'
-          }`}>
-            {balances.toLocaleString()}
-          </span>
+          {/* Far Right Chevron */}
+          <div className="shrink-0">
+            <svg
+              width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
         </div>
-        <p className={`font-['Inter:Medium',sans-serif] text-[9px] uppercase tracking-[0.3px] mt-[1.5px] ${
-          hasOutstanding ? 'text-red-500/70' : isCredit ? 'text-[#003630]/60' : 'text-gray-400'
-        }`}>
-          {hasOutstanding ? 'Due Balance' : isCredit ? 'Credit Balance' : 'No Balance'}
-        </p>
       </div>
-
-      <div className={`flex items-center justify-center w-[22px] h-[22px] rounded-full transition-all duration-300 ml-[10px] ${
-        hasOutstanding ? 'bg-red-500/10' : isCredit ? 'bg-[#95e36c]/20' : 'bg-gray-100'
-      }`}>
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className={`transition-transform group-active:translate-x-0.5 ${
-          hasOutstanding ? 'text-red-500' : isCredit ? 'text-[#003630]' : 'text-gray-400'
-        }`}>
-          <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-function Frame8({ balances }: { balances: number }) {
-  return (
-    <div className="content-stretch flex gap-[6px] items-start justify-end relative shrink-0 w-fit min-w-[155px]">
-      <Frame6 balances={balances} />
-    </div>
+    </motion.div>
   );
 }
 
@@ -194,104 +180,63 @@ export default function PayForSchoolFees({
   };
 
   return (
-    <div className="bg-gradient-to-br from-[#f9fafb] to-[#f5f7f9] min-h-screen w-full flex items-center justify-center" data-name="Pay for school fees page 1">
-      <div className="relative w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen mx-auto bg-gradient-to-br from-[#f9fafb] to-[#f5f7f9] flex flex-col overflow-hidden">
+    <div className="bg-white min-h-screen w-full flex items-center justify-center" data-name="Pay for school fees page 1">
+      <div className="relative w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen mx-auto bg-white flex flex-col overflow-hidden">
         {/* Header - Fixed height */}
-        <div className="flex-shrink-0">
-          <LogoHeader showBackButton onBack={() => {
-            hapticFeedback('light');
-            onBack();
-          }} />
+        <div className="flex-shrink-0 bg-white relative z-10">
+          <LogoHeader showBackButton={false} />
         </div>
 
         {/* Content - Scrollable area */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* Title and Instructions - Premium */}
-          <div className="flex-shrink-0 px-[28px] sm:px-[40px] pt-[20px] pb-[24px]">
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              <div className="inline-flex items-center gap-[8px] mb-[16px]">
-                <div className="w-[3px] h-[24px] bg-gradient-to-b from-[#95e36c] to-[#003630] rounded-full" />
-                <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[22px] text-[#003630] tracking-[-0.4px]">
-                  Select Accounts
-                </h2>
-              </div>
-              <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-[1.5] text-[#6b7280] text-[13px] tracking-[-0.2px]">
-                Choose the students you want to make a payment for
-              </p>
-            </motion.div>
+        <div className="flex-1 overflow-y-auto w-full pb-[140px]" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+
+          {/* Inner Inset Grey Card */}
+          <div className="mx-[1px] sm:mx-[0px] mt-[0px] bg-gray-50 rounded-[28px] border border-gray-200/60 shadow-[0_4px_32px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden pb-[40px]">
+            {/* Title and Instructions - Premium */}
+            <div className="flex-shrink-0 px-[24px] sm:px-[28px] pt-[28px] pb-[0px]">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="flex flex-col gap-0.5"
+              >
+                <div className="flex items-center gap-4">
+                  <BadgeCheck className="w-[22px] h-[22px] text-[#003630]" strokeWidth={2.5} />
+                  <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[28px] text-[#003630] tracking-tight[1.5px]">
+                    Select Accounts
+                  </h2>
+                </div>
+                <p className="font-['Inter',sans-serif] font-medium text-[#4b5563] text-[14px] leading-relaxed">
+                  Choose the Students you want to make a payment for.
+                </p>
+              </motion.div>
+            </div>
           </div>
 
-          {/* Student Cards - Scrollable with bottom padding for fixed buttons */}
-          <div
-            className="flex-1 overflow-y-auto px-[28px] pb-[140px] space-y-[12px]"
-            style={{
-              WebkitOverflowScrolling: 'touch',
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none'
-            }}
-          >
+          {/* Student Cards - Outside the grey card */}
+          <div className="px-[20px] sm:px-[28px] pt-[24px] space-y-[12px]">
             {students.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <p className="text-gray-500 text-center">No students found</p>
+              <div className="flex flex-col items-center justify-center py-20 bg-white/40 rounded-[24px] border border-dashed border-gray-200">
+                <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+                  <span className="text-2xl">👥</span>
+                </div>
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-gray-500 text-center px-8">No students found associated with this account</p>
               </div>
             ) : (
-              students.map((student, index) => {
-                const isSelected = selectedStudents.includes(student.id);
-                return (
-                  <motion.div
-                    key={student.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    onClick={() => toggleStudent(student.id)}
-                    className={`
-                      relative rounded-[20px] p-[16px] border-[1.5px]
-                      transition-all cursor-pointer active:scale-[0.98]
-                      ${isSelected
-                        ? 'bg-white border-[#95e36c] shadow-[0px_8px_24px_rgba(149,227,108,0.25)]'
-                        : 'bg-white border-[#e5e7eb] hover:border-[#d1d5db] shadow-[0px_4px_16px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)]'
-                      }
-                    `}
-                  >
-                    {/* Selection Indicator Line - Optional but nice backup if "stroke" meant this */}
-                    {isSelected && (
-                      <motion.div
-                        initial={{ scaleY: 0 }}
-                        animate={{ scaleY: 1 }}
-                        className="absolute left-0 top-4 bottom-4 w-[4px] bg-[#95e36c] rounded-r-full"
-                      />
-                    )}
-
-                    <div className="flex items-center justify-between gap-[12px]">
-                      <div className="flex items-center gap-[12px] flex-1 pl-2">
-                        {isSelected ? (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                          >
-                            <TickCircle />
-                          </motion.div>
-                        ) : (
-                          <RadioBase isSelected={false} />
-                        )}
-                        <Frame4 student={student} />
-                      </div>
-                      <Frame8 balances={student.balances} />
-                    </div>
-                  </motion.div>
-                );
-              })
+              students.map((student, index) => (
+                <StudentCard
+                  key={student.id}
+                  student={student}
+                  isSelected={selectedStudents.includes(student.id)}
+                  onClick={() => toggleStudent(student.id)}
+                />
+              ))
             )}
           </div>
         </div>
 
         {/* Fixed Bottom Buttons Container */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#e5e7eb] px-[28px] pt-[16px] pb-[20px] shadow-[0px_-4px_16px_rgba(0,0,0,0.06)] z-50">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#EA3030] px-[28px] pt-[16px] pb-[20px] shadow-[0px_-4px_16px_rgba(0,0,0,0.06)] z-50">
           <div className="w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] mx-auto flex flex-col gap-[12px]">
             {/* Clear Balances Button - Only show if selected student has balance */}
             {hasSelectedStudentWithBalance && (
@@ -300,18 +245,18 @@ export default function PayForSchoolFees({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 onClick={handleClearBalances}
-                className={`btn-primary btn-tactile relative w-full h-[56px] rounded-[18px] overflow-hidden touch-manipulation group ${!isOnline ? 'opacity-50 grayscale' : ''}`}
+                className={`btn-tactile relative w-full h-[56px] rounded-[18px] bg-white border-[2px] !border-[#EA3030] overflow-hidden touch-manipulation group ${!isOnline ? 'opacity-50 grayscale' : ''}`}
               >
-                {/* Shine Effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                {/* Subtle Shine Effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#EA3030]/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
 
                 {/* Content */}
                 <div className="relative z-10 flex items-center justify-center gap-[10px] h-full group-active:scale-[0.98] transition-all">
-                  <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630] tracking-[-0.3px]">
+                  <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#EA3030] font-bold tracking-[-0.3px]">
                     {isOnline ? 'Clear Balances' : 'Go Online to Clear Balances'}
                   </p>
                   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="transition-transform group-hover:translate-x-0.5">
-                    <path d="M6.75 13.5L11.25 9L6.75 4.5" stroke="#003630" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6.75 13.5L11.25 9L6.75 4.5" stroke="#EA3030" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
               </motion.button>

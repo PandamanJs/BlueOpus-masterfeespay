@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { getStudentsByPhone, getInstitutionType } from "../data/students";
 import type { Student } from "../data/students";
-import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent } from "../lib/supabase/api/transactions";
+import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "../lib/supabase/api/transactions";
 import type { Transaction } from "../types";
 import type { PaymentHistoryRecord } from "../lib/supabase/types";
 
@@ -687,11 +687,20 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
   const [studentServices, setStudentServices] = useState<Record<string, Service[]>>({});
 
   const [financialSummary, setFinancialSummary] = useState<any>(null);
+  const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
+  const [invoicesWithBalance, setInvoicesWithBalance] = useState<PaymentHistoryRecord[]>([]);
 
   useEffect(() => {
     if (activeStudentId) {
-      getStudentFinancialSummary(activeStudentId).then(summary => {
-          setFinancialSummary(summary);
+      // Fetch all required data in parallel
+      Promise.all([
+        getStudentFinancialSummary(activeStudentId),
+        getPendingTransactionsForStudent(activeStudentId),
+        getInvoicesWithBalanceForStudent(activeStudentId)
+      ]).then(([summary, pending, invoices]) => {
+        setFinancialSummary(summary);
+        setPendingTransactions(pending);
+        setInvoicesWithBalance(invoices);
       });
     }
   }, [activeStudentId]);

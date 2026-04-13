@@ -301,7 +301,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
   };
 
   return (
-    <div 
+    <div
       className="rounded-[12px] p-4 relative overflow-hidden flex flex-col gap-4 shadow-[0px_8px_32px_rgba(0,0,0,0.06)] border border-white/40"
       style={{
         background: "rgba(255, 255, 255, 0.65)",
@@ -343,7 +343,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
             </p>
             <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right">K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
-          
+
           {/* Related Payments */}
           {relatedTxs.map((tx, idx) => (
             <div key={idx} className="flex items-center justify-between gap-4 text-[12px]">
@@ -399,6 +399,7 @@ function EmptySummaryState() {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
+
     const timer = setTimeout(() => {
       setIsVisible(false);
     }, 4500); // Disappear after 4.5 seconds
@@ -413,7 +414,7 @@ function EmptySummaryState() {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, height: 0, scale: 0.9, marginTop: 0, marginBottom: 0, padding: 0 }}
           transition={{ duration: 0.5 }}
-          style={{ 
+          style={{
             paddingTop: '10px',
             boxShadow: "inset 0 4px 0 0 #95e36c, 0 12px 32px -8px rgba(0,0,0,0.08)"
           }}
