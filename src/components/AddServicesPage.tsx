@@ -134,10 +134,10 @@ function TrashIcon({ onClick }: { onClick: () => void }) {
                 haptics.selection();
                 onClick();
             }}
-            className="size-[18px] cursor-pointer text-red-500 hover:text-red-600 active:scale-90 transition-all flex items-center justify-center p-1 rounded-full hover:bg-red-50"
+            className="size-[24px] cursor-pointer text-[#9ca3af] hover:text-red-500 active:scale-90 transition-all flex items-center justify-center rounded-full hover:bg-red-50/50"
             aria-label="Remove item"
         >
-            <Trash2 size={14} strokeWidth={2.5} />
+            <Trash2 size={18} strokeWidth={2.5} />
         </button>
     );
 }
@@ -1037,11 +1037,14 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                 <div className="flex-1 flex flex-col pt-[48px] pb-[280px] overflow-y-auto no-scrollbar gap-4">
                     {/* Header Card */}
                     <div className="px-[44px]">
-                        <div className="bg-[#f5f7f9] rounded-[22px] p-[20px] shadow-inner border border-gray-50/50 flex flex-col gap-1">
-                            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] font-bold leading-[34px] not-italic text-[24px] text-black tracking-[-0.18px]">
+                        <div className="bg-[#f5f7f9] rounded-[22px] p-[20px] shadow-inner border border-gray-50/50 flex flex-col gap-4">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] font-bold leading-[34px] not-italic text-[24px] text-black tracking-[-0.18px] flex items-center gap-3">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
+                                </svg>
                                 Products/Services Cart
                             </p>
-                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-[1.5] not-italic text-[#4b5563] text-[14px] tracking-[-0.12px]">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-[1.5] not-italic text-[#4b5563] text-[14px] tracking-[-0.12px] ">
                                 Add the products and services you would like to pay for and proceed to checkout.
                             </p>
                         </div>
@@ -1085,111 +1088,108 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                 </div>
 
                 {/* Footer - Fixed Bottom */}
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#e5e7eb] px-[20px] pt-[16px] pb-[32px] shadow-[0px_-4px_24px_rgba(0,0,0,0.08)] z-50">
-                    <div className="w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] mx-auto flex flex-col gap-[12px]">
+                <div className="fixed bottom-0 left-0 right-0 bg-white px-[20px] pt-[16px] pb-[32px] shadow-[0px_-4px_24px_rgba(0,0,0,0.08)] z-50 transition-all duration-300">
+                    <div className="w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] mx-auto flex flex-col gap-[16px]">
 
-                        {/* Action Grid: 2x2 */}
-                        <div className="grid grid-cols-2 gap-[10px] w-full">
-
-                            {!showAddFeesForm && !showOtherServicesPopup && (
-                                <>
-                                    {/* Item 1,1: Add Fees */}
-                                    <button
-                                        onClick={() => {
-                                            if (hasTuitionDebt) {
-                                                handleClearOutstandingDebt('tuition');
-                                                return;
-                                            }
-                                            handleAddSchoolFees();
-                                        }}
-                                        className={`relative h-[56px] rounded-[16px] transition-all touch-manipulation overflow-hidden group shadow-sm`}
-                                    >
-                                        <div className="absolute inset-0 bg-[#003630] group-hover:bg-[#004d45] transition-colors" />
-                                        {!hasTuitionDebt && (
-                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-                                        )}
-                                        <div className="relative z-10 flex items-center justify-center gap-[8px] h-full group-active:scale-[0.96] transition-transform px-2">
-                                            <div className="bg-white/20 p-1.5 rounded-lg shrink-0">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                    {hasTuitionDebt ? (
-                                                        <path d="M7 11V7a5 5 0 0 1 10 0v4M3 11h18v11H3z" />
-                                                    ) : (
-                                                        <path d="M12 5v14M5 12h14" />
-                                                    )}
-                                                </svg>
-                                            </div>
-                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-white tracking-[-0.2px] text-left leading-tight">
-                                                {hasTuitionDebt ? 'Clear Debt' : (isUniversity ? 'Add Tuition' : 'Add Fees')}
-                                            </span>
-                                        </div>
-                                    </button>
-
-                                    {/* Item 1,2: Other Services */}
-                                    <button
-                                        onClick={() => {
-                                            if (hasOtherDebt) {
-                                                handleClearOutstandingDebt('other');
-                                                return;
-                                            }
-                                            haptics.buttonPress();
-                                            handleAddOtherServices();
-                                        }}
-                                        className={`h-[56px] transition-all touch-manipulation active:scale-[0.96] flex items-center justify-center shadow-sm group px-2 rounded-[16px] ${hasOtherDebt
-                                            ? 'bg-[#FFF1F0]/40 border-red-200 border-[1.5px]'
-                                            : 'bg-white border-[1.5px] border-[#e5e7eb] hover:border-[#d1d5db] active:bg-gray-50'
-                                            }`}
-                                    >
-                                        <div className={`${hasOtherDebt ? 'bg-red-50' : 'bg-[#f0fdf4]'} p-1.5 rounded-lg mr-[8px] shrink-0`}>
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hasOtherDebt ? "#ef4444" : "#003630"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                {hasOtherDebt ? (
-                                                    <path d="M7 11V7a5 5 0 0 1 10 0v4M3 11h18v11H3z" />
-                                                ) : (
-                                                    <path d="M12 5v14M5 12h14" />
-                                                )}
-                                            </svg>
-                                        </div>
-                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] tracking-[-0.2px] text-left leading-tight ${hasOtherDebt ? 'text-red-500' : 'text-[#003630]'}`}>
-                                            {hasOtherDebt ? 'Clear Balance' : 'Other Services'}
-                                        </span>
-                                    </button>
-                                </>
-                            )}
-
-                            {/* Item 2,1: Total Display */}
-                            <div className="bg-[#f8fafc] rounded-[16px] border-[1.5px] border-[#e5e7eb] flex flex-col justify-center px-[16px] h-[56px] shadow-sm">
-                                <span className="text-[17px] font-['Inter:Bold',sans-serif] text-[#003630] leading-none">
-                                    ZMW {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 0 })}
-                                </span>
-                                <span className="text-[9px] text-[#9ca3af] font-black uppercase tracking-[0.5px] mt-1">Total Amount</span>
-                            </div>
-
-                            {/* Item 2,2: Checkout Button */}
-                            <button
-                                onClick={() => {
-                                    if (hasServices) {
-                                        haptics.buttonPress();
-                                        handleNextOrCheckout();
-                                    }
-                                }}
-                                disabled={!hasServices}
-                                className={`h-[56px] relative rounded-[16px] overflow-hidden group transition-all shadow-sm ${hasServices
-                                    ? 'bg-[#003630] touch-manipulation cursor-pointer'
-                                    : 'bg-gray-100 border border-gray-200 cursor-not-allowed'
-                                    }`}
-                            >
-                                {hasServices && (
-                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-                                )}
-
-                                <div className={`relative z-10 flex items-center justify-center gap-[8px] h-full ${hasServices ? 'group-active:scale-[0.95] transition-transform' : ''}`}>
-                                    <p className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] tracking-[-0.2px] ${hasServices ? 'text-white' : 'text-gray-400'}`}>
-                                        {totalAmount > 0 ? "Checkout" : "Next"}
+                        {!showAddFeesForm && !showOtherServicesPopup && (
+                            <div className="flex flex-col gap-[16px] w-full pt-4">
+                                <div className="w-full h-[1.5px] bg-gray-200" />
+                                <div className="flex items-center justify-between px-2 py-2">
+                                    <p className="font-['Inter',sans-serif] font-black text-[20px] text-black tracking-tight">Subtotal</p>
+                                    <p className="font-['Inter',sans-serif] font-black text-[20px] text-black tracking-tight">
+                                        K{(studentServices[activeStudentId] || []).reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                                     </p>
-                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                        <path d="M6 12L10 8L6 4" stroke={hasServices ? "white" : "#9ca3af"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-[10px] w-full">
+                                {/* Add Fees */}
+                                <button
+                                    onClick={() => {
+                                        if (hasTuitionDebt) {
+                                            handleClearOutstandingDebt('tuition');
+                                            return;
+                                        }
+                                        handleAddSchoolFees();
+                                    }}
+                                    className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
+                                >
+                                    <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 5v14M5 12h14" />
+                                        </svg>
+                                    </div>
+                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
+                                        {hasTuitionDebt ? 'Clear Debt' : (isUniversity ? 'Add Tuition' : 'Add Fees')}
+                                    </span>
+                                </button>
+
+                                {/* Other Services */}
+                                <button
+                                    onClick={() => {
+                                        if (hasOtherDebt) {
+                                            handleClearOutstandingDebt('other');
+                                            return;
+                                        }
+                                        haptics.buttonPress();
+                                        handleAddOtherServices();
+                                    }}
+                                    className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
+                                >
+                                    <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 5v14M5 12h14" />
+                                        </svg>
+                                    </div>
+                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
+                                        {hasOtherDebt ? 'Clear Balance' : 'Other Services'}
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                        {/* Unified Checkout Bar */}
+                        <div className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] shadow-[0px_25px_60px_rgba(0,0,0,0.15)] h-[90px]">
+                            <div className="flex items-center gap-[14px] pl-[16px]">
+                                <div className="text-[#003630]">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
                                     </svg>
                                 </div>
-                            </button>
+                                <div className="flex flex-col">
+                                    <p className="font-['Inter',sans-serif] font-bold text-[24px] text-black leading-none tracking-tight">
+                                        K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                    </p>
+                                    <p className="font-['Inter',sans-serif] text-[10px] text-[#a1a1a1] font-light uppercase tracking-[0.8px] mt-1">GRAND TOTAL</p>
+                                </div>
+                            </div>
+
+                            <div className="relative group p-2 z-20">
+                                <button
+                                    onClick={() => {
+                                        if (hasServices) {
+                                            haptics.buttonPress();
+                                            handleNextOrCheckout();
+                                        }
+                                    }}
+                                    disabled={!hasServices}
+                                    className={`h-[60px] w-[180px] relative rounded-[14px] transition-all duration-300 flex items-center justify-center gap-[16px] z-30 ${hasServices
+                                        ? 'bg-[#003630] touch-manipulation cursor-pointer active:scale-[0.97] drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)]'
+                                        : 'bg-gray-50 cursor-not-allowed'
+                                        }`}
+                                >
+                                    <div className="relative z-10 flex items-center justify-center gap-[16px] h-full w-full">
+                                        <p className={`font-['Inter',sans-serif] font-extrabold text-[17px] ${hasServices ? 'text-white' : 'text-gray-300'}`}>
+                                            {totalAmount > 0 ? "Checkout" : "Next"}
+                                        </p>
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={hasServices ? "text-[#95e36c]" : "text-gray-200"}>
+                                            <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    </div>
+                                    {hasServices && (
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
