@@ -6,7 +6,7 @@ import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent, get
 import type { Transaction } from "../types";
 import type { PaymentHistoryRecord } from "../lib/supabase/types";
 
-import AddOtherServicesPopup from "./AddOtherServicesPopup";
+
 import { haptics } from "../utils/haptics";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -209,362 +209,8 @@ function ServiceTable({ services, onRemoveItem }: { services: Service[]; onRemov
     );
 }
 
-
-
-const YEAR_OPTIONS = ["2026", "2027", "2028", "2029"];
-
-const TERM_OPTIONS = ["Term 1", "Term 2", "Term 3"];
-const SEMESTER_OPTIONS = ["Semester 1", "Semester 2"];
-
-import { getSchoolByName } from "../lib/supabase/api/schools";
-
-function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studentGrade, termServiceMap, activeGradeId }: { onDone: (grade: string, year: string, term: string, price: number) => void; onClose: () => void; schoolName: string; hasTuitionDebt: boolean; studentGrade?: string; termServiceMap?: Record<number, string[]>; activeGradeId?: string }) {
-    const institutionType = getInstitutionType(schoolName);
-    const isUniversity = institutionType === 'university';
-
-    const [gradeOptions, setGradeOptions] = useState<Array<{ name?: string; label: string; value: string; price: number; grade_id?: string }>>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedGrade, setSelectedGrade] = useState("");
-    const [selectedYear, setSelectedYear] = useState("2026");
-    const [selectedTerm, setSelectedTerm] = useState(isUniversity ? "Semester 1" : "Term 1");
-    const [paymentPeriod, setPaymentPeriod] = useState<"term" | "year">("term");
-
-    const [gradeTab, setGradeTab] = useState<'primary' | 'secondary'>('primary');
-
-    useEffect(() => {
-        const fetchGrades = async () => {
-            setLoading(true);
-            const school = await getSchoolByName(schoolName);
-            if (school?.grade_pricing && school.grade_pricing.length > 0) {
-                let processedOptions = school.grade_pricing;
-                setGradeOptions(processedOptions);
-
-                let preSelected = "";
-                if (activeGradeId) {
-                    const exactMatch = processedOptions.find((opt: any) => opt.grade_id === activeGradeId || opt.value === activeGradeId);
-                    if (exactMatch) preSelected = exactMatch.value;
-                }
-
-                if (!preSelected && studentGrade) {
-                    const normalize = (g: string) => g.toLowerCase().replace(/^(grade|form|year)\s*0*/, '').match(/^([a-z0-9]+)/)?.[1] || g.toLowerCase();
-                    const normS = normalize(studentGrade);
-                    const matched = processedOptions.find((opt: any) => normalize(opt.name || opt.label) === normS);
-                    if (matched) preSelected = matched.value;
-                }
-
-                setSelectedGrade(preSelected || processedOptions[0]?.value || "");
-            }
-            setLoading(false);
-        };
-        fetchGrades();
-    }, [schoolName, studentGrade, activeGradeId]);
-
-    const isTermBlocked = (termName: string) => {
-        if (!termServiceMap) return false;
-        const termNum = parseInt(termName.replace(/\D/g, ''));
-        if (!termNum) return false;
-        const existing = termServiceMap[termNum] || [];
-        return existing.some(s => s.toLowerCase().includes('tuition') || s.toLowerCase().includes('school fees') || s.toLowerCase().includes('fees'));
-    };
-
-    // Derive primary and secondary grades for the tabs
-    const secondaryGrades = gradeOptions.filter(opt => {
-        const name = opt.name || opt.label.split(' - ')[0] || '';
-        return ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12',
-            'Form 1', 'Form 2', 'Form 3', 'Form 4', 'Form 5', 'Form 6'].includes(name) ||
-            name.includes('Secondary');
-    });
-
-    const primaryGrades = gradeOptions.filter(opt => !secondaryGrades.includes(opt));
-
-    const availableTerms = TERM_OPTIONS;
-    const availableSemesters = SEMESTER_OPTIONS;
-    const hasTuitionBalance = hasTuitionDebt;
-
-    const handleDone = () => {
-        const gradeOption = gradeOptions.find(opt => opt.value === selectedGrade);
-        if (gradeOption) {
-            const multiplier = isUniversity ? 2 : 3;
-            const finalPrice = paymentPeriod === "year" ? gradeOption.price * multiplier : gradeOption.price;
-            const termLabel = paymentPeriod === "year" ? "Full Year" : selectedTerm;
-            onDone(gradeOption.label, selectedYear, termLabel, finalPrice);
-        }
-    };
-
-    return (
-        <>
-            <motion.div
-                className="fixed inset-0 z-40"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={onClose}
-            >
-                <div className="absolute inset-0 bg-black/30" />
-            </motion.div>
-
-            <motion.div
-                className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-[600px]"
-                initial={{ y: "100%", opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: "100%", opacity: 0 }}
-                transition={{
-                    type: "spring",
-                    damping: 32,
-                    stiffness: 380,
-                    mass: 0.8
-                }}
-            >
-                <div className="flex justify-center pt-[12px] pb-[6px]">
-                    <div className="w-[36px] h-[5px] bg-white/90 rounded-full shadow-sm" />
-                </div>
-
-                <div className="bg-white rounded-t-[32px] shadow-[0px_-12px_44px_rgba(0,0,0,0.12)] overflow-hidden flex flex-col max-h-[90vh]">
-                    <div className="h-[2px] bg-gradient-to-r from-transparent via-[#95e36c]/60 to-transparent" />
-
-                    <div className="relative px-[16px] pt-[16px] pb-[12px] border-b border-[#f0f1f3]">
-                        <div className="absolute top-0 right-0 w-[80px] h-[80px] bg-gradient-to-br from-[#95e36c]/5 to-transparent rounded-bl-[40px] pointer-events-none" />
-
-                        <div className="relative flex items-start justify-between">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-[8px] mb-[4px]">
-                                    <div className="flex items-center justify-center size-[22px] rounded-full border-[1.5px] border-black">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 5v14M5 12h14" />
-                                        </svg>
-                                    </div>
-                                    <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] tracking-[-0.5px] leading-[1.1]">
-                                        {isUniversity ? 'Add Products / Services' : 'Add Products / Services'}
-                                    </h2>
-                                </div>
-                                <p className="font-['Inter:Regular',sans-serif] text-[11px] text-[#6b7280] tracking-[-0.1px] leading-[1.4] ml-[11px]">
-                                    {isUniversity ? '' : ''}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    haptics.selection();
-                                    onClose();
-                                }}
-                                className="w-[32px] h-[32px] flex items-center justify-center rounded-full bg-[#f5f7f9]/70 backdrop-blur-sm border border-[#e5e7eb]/60 hover:bg-[#e5e7eb]/90 active:scale-90 transition-all touch-manipulation shadow-sm ml-[8px]"
-                            >
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                    <path d="M12 4L4 12M4 4L12 12" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-[20px] pt-[12px] pb-[40px] space-y-[40px] min-h-[400px]">
-                        <div>
-                            <label className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] text-[#6b7280] tracking-[1px] uppercase mb-[16px] pl-[4px]">
-                                {isUniversity ? "" : ""}
-                            </label>
-
-                            {(() => {
-                                if (loading) {
-                                    return (
-                                        <div className="py-4 flex justify-center">
-                                            <div className="w-5 h-5 border-2 border-[#95e36c] border-t-transparent rounded-full animate-spin"></div>
-                                        </div>
-                                    );
-                                }
-
-                                if (!gradeOptions || gradeOptions.length === 0) {
-                                    return (
-                                        <div className="py-4 text-center text-sm text-gray-400">
-                                            No grades found for this school.
-                                        </div>
-                                    );
-                                }
-
-                                return (
-                                    <div className="space-y-[10px]">
-                                        <label className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] tracking-[-0.2px] mb-[10px] pl-[4px]">
-                                            Select Grade
-                                        </label>
-                                        <div className="relative group">
-                                            <select
-                                                value={selectedGrade}
-                                                onChange={(e) => {
-                                                    haptics.selection();
-                                                    setSelectedGrade(e.target.value);
-                                                }}
-                                                className="w-full h-[78px] px-[24px] bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630] appearance-none cursor-pointer hover:border-[#d1d5db] focus:border-[#95e36c] focus:outline-none transition-all shadow-sm tracking-[-0.2px]"
-                                            >
-                                                <option value="" disabled>Select Grade</option>
-                                                {gradeOptions.map((opt) => (
-                                                    <option key={opt.value} value={opt.value}>
-                                                        {opt.label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <div className="absolute right-[20px] top-1/2 -translate-y-1/2 pointer-events-none transition-transform group-hover:translate-y-[-calc(50%-1px)]">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M6 9l6 6 6-6" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        <div className="h-[1px] bg-[#e5e7eb]/10" />
-
-                                <div className="space-y-[10px]">
-                                    <span className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] tracking-[-0.2px] mb-[10px] pl-[4px]">Academic Year</span>
-                                    <div className="relative group">
-                                        <select
-                                            value={selectedYear}
-                                            onChange={(e) => {
-                                                haptics.selection();
-                                                setSelectedYear(e.target.value);
-                                            }}
-                                            className="w-full h-[78px] px-[24px] bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630] appearance-none cursor-pointer hover:border-[#d1d5db] focus:border-[#95e36c] focus:outline-none transition-all shadow-sm tracking-[-0.2px]"
-                                        >
-                                            {YEAR_OPTIONS.map(y => (
-                                                <option key={y} value={y}>{y}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-[20px] top-1/2 -translate-y-1/2 pointer-events-none transition-transform group-hover:translate-y-[-calc(50%-1px)]">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M6 9l6 6 6-6" />
-                                            </svg>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-[10px]">
-                                    <span className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] tracking-[-0.2px] mb-[10px] pl-[4px]">Select Payment Period</span>
-                                    <div className="grid grid-cols-3 gap-[10px]">
-                                        {(isUniversity ? availableSemesters : availableTerms).map((term) => {
-                                            const isActive = paymentPeriod === 'term' && selectedTerm === term;
-                                            const isBlockedByInvoice = isTermBlocked(term);
-                                            const isBlockedByDebt = hasTuitionBalance && !isBlockedByInvoice;
-
-                                            return (
-                                                <button
-                                                    key={term}
-                                                    disabled={isBlockedByInvoice || isBlockedByDebt}
-                                                    onClick={() => {
-                                                        haptics.selection();
-                                                        setPaymentPeriod("term");
-                                                        setSelectedTerm(term);
-                                                    }}
-                                                    className={`h-[78px] rounded-[24px] flex flex-col items-center justify-center border-[1.5px] transition-all relative active:scale-95 ${isActive
-                                                        ? 'bg-[#95e36c] border-transparent shadow-[0px_4px_12px_rgba(149,227,108,0.25)]'
-                                                        : (isBlockedByInvoice || isBlockedByDebt)
-                                                            ? 'bg-[#FFF1F0]/40 border-[#FFCCC7]/30 cursor-not-allowed opacity-80'
-                                                            : 'bg-white border-[#f1f3f5] text-[#4b5563] hover:border-[#d1d5db]'
-                                                        }`}
-                                                >
-                                                    <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] tracking-[-0.1px] ${isActive ? 'text-[#003630]' : (isBlockedByInvoice || isBlockedByDebt) ? 'text-red-400' : 'text-[#6b7280]'}`}>
-                                                        {term.split(' ')[1] ? `Term ${term.split(' ')[1]}` : term}
-                                                    </span>
-                                                    {isBlockedByInvoice ? (
-                                                        <span className="text-[7.5px] text-red-500 font-bold uppercase tracking-[0.5px] mt-[1px]">Invoiced</span>
-                                                    ) : isBlockedByDebt ? (
-                                                        <span className="text-[7.5px] text-red-500 font-bold uppercase tracking-[0.5px] mt-[1px]">Unpaid</span>
-                                                    ) : null}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="border-t border-[#f1f3f5] px-[20px] pt-[16px] pb-[24px] bg-white">
-                        <div className="grid grid-cols-2 gap-[12px]">
-                            <div className="h-[56px] bg-white rounded-[18px] border border-[#f1f3f5] shadow-[0px_2px_8px_rgba(0,0,0,0.04)] flex flex-col items-center justify-center">
-                                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] leading-none mb-[4px]">
-                                    K{(() => {
-                                        const gradeOption = gradeOptions.find(opt => opt.value === selectedGrade);
-                                        if (!gradeOption) return "0";
-                                        const multiplier = isUniversity ? 2 : 3;
-                                        const finalPrice = paymentPeriod === "year" ? gradeOption.price * multiplier : gradeOption.price;
-                                        return finalPrice.toLocaleString();
-                                    })()}
-                                </span>
-                                <span className="font-['Inter:SemiBold',sans-serif] text-[9px] text-[#9ca3af] uppercase tracking-[0.6px]">
-                                    Total Amount
-                                </span>
-                            </div>
-
-                            <button
-                                onClick={() => {
-                                    haptics.medium();
-                                    handleDone();
-                                }}
-                                className={`h-[56px] rounded-[18px] border transition-all group flex items-center justify-center gap-[6px] active:scale-[0.97] ${selectedGrade
-                                    ? 'bg-[#003630] border-transparent shadow-[0px_8px_20px_rgba(0,54,48,0.2)]'
-                                    : 'bg-white border-[#f1f3f5] shadow-[0px_2px_8px_rgba(0,0,0,0.04)]'
-                                    }`}
-                            >
-                                <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] transition-colors ${selectedGrade ? 'text-white' : 'text-[#6b7280]'
-                                    }`}>
-                                    Next
-                                </span>
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className={`transition-opacity ${selectedGrade ? 'opacity-100' : 'opacity-40'}`}>
-                                    <path d="M6 12L10 8L6 4" stroke={selectedGrade ? "white" : "currentColor"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="h-[env(safe-area-inset-bottom,20px)] bg-white/98" />
-                </div>
-            </motion.div>
-        </>
-    );
-}
-
-
-/**
- * Helper function to build service description with all metadata
- */
-function buildServiceDescription(service: {
-    name: string;
-    term: string;
-    route?: string;
-    paymentPeriod?: string;
-    uniformItems?: string[];
-}): string {
-    let description = service.name;
-
-    if (service.term) {
-        description += ` - ${service.term}`;
-    }
-
-    if (service.paymentPeriod) {
-        const periodLabels: Record<string, string> = {
-            'term': 'Per Term',
-            'week': 'Per Week',
-            'day': 'Per Day',
-            'year': 'Full Year'
-        };
-        description += ` (${periodLabels[service.paymentPeriod] || service.paymentPeriod})`;
-    }
-
-    if (service.route) {
-        description += ` - ${service.route}`;
-    }
-
-    if (service.uniformItems && service.uniformItems.length > 0) {
-        if (service.uniformItems.includes('uniform-complete')) {
-            description += ' (Complete Set)';
-        } else {
-            description += ` (${service.uniformItems.length} item${service.uniformItems.length > 1 ? 's' : ''})`;
-        }
-    }
-
-    return description;
-}
-
-export default function AddServicesPage({ selectedStudentIds, userPhone, schoolName, onBack, onNext, onCheckout }: AddServicesPageProps) {
+export default function AddServicesPage({
+    selectedStudentIds, userPhone, schoolName, onBack, onNext, onCheckout }: AddServicesPageProps) {
     const [allStudents, setAllStudents] = useState<Student[]>([]);
 
     useEffect(() => {
@@ -1000,47 +646,22 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                                         K{(studentServices[activeStudentId] || []).reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                                     </p>
                                 </div>
-                                <div className="grid grid-cols-2 gap-[10px] w-full">
-                                    {/* Add Fees */}
+                                <div className="w-full">
                                     <button
                                         onClick={() => {
-                                            if (hasTuitionDebt) {
-                                                handleClearOutstandingDebt('tuition');
-                                                return;
-                                            }
-                                            handleAddSchoolFees();
-                                        }}
-                                        className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
-                                    >
-                                        <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M12 5v14M5 12h14" />
-                                            </svg>
-                                        </div>
-                                        <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
-                                            {hasTuitionDebt ? 'Clear Debt' : (isUniversity ? 'Add Tuition' : 'Add Fees')}
-                                        </span>
-                                    </button>
-
-                                    {/* Other Services */}
-                                    <button
-                                        onClick={() => {
-                                            if (hasOtherDebt) {
-                                                handleClearOutstandingDebt('other');
-                                                return;
-                                            }
                                             haptics.buttonPress();
-                                            handleAddOtherServices();
+                                            // Handle opening the new unified interface
+                                            toast.info("Opening Products & Services selection...");
                                         }}
-                                        className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
+                                        className="h-[80px] w-full rounded-[14px] border border-[#e5e7eb] bg-[#f9fafb] flex items-center justify-center gap-3 px-5 active:scale-[0.98] transition-all group hover:border-[#003630]/20 hover:bg-white shadow-sm"
                                     >
-                                        <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <div className="bg-[#003630]/5 p-1.5 rounded-xl group-active:bg-[#003630]/10 transition-colors">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M12 5v14M5 12h14" />
                                             </svg>
                                         </div>
-                                        <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
-                                            {hasOtherDebt ? 'Clear Balance' : 'Other Services'}
+                                        <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#003630] tracking-[-0.3px]">
+                                            Add Products / Services
                                         </span>
                                     </button>
                                 </div>
@@ -1048,7 +669,7 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                         )}
 
                         {/* Unified Checkout Bar */}
-                        <div className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] shadow-[0px_25px_60px_rgba(0,0,0,0.15)] h-[90px]">
+                        <div className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] shadow-[0px_25px_60px_rgba(0,0,0,0.15)] h-[80px]">
                             <div className="flex items-center gap-[14px] pl-[16px]">
                                 <div className="text-[#003630]">
                                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round">
@@ -1094,48 +715,7 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                     </div>
                 </div>
 
-                {/* Popups Section */}
-                <AnimatePresence>
-                    {/* Add School Fees Popup */}
-                    {showAddFeesForm && (
-                        <AddSchoolFeesForm
-                            onClose={() => setShowAddFeesForm(false)}
-                            onDone={(grade, year, term, price) => {
-                                const newService: Service = {
-                                    id: `fees-${Date.now()}`,
-                                    description: `${grade} - ${term} (${year})`,
-                                    amount: price,
-                                    invoiceNo: `NEW-${Math.floor(1000 + Math.random() * 9000)}`,
-                                    term: parseInt(term.replace(/\D/g, '')) || 1,
-                                    academicYear: parseInt(year)
-                                };
-                                setStudentServices(prev => ({
-                                    ...prev,
-                                    [activeStudentId]: [...(prev[activeStudentId] || []), newService]
-                                }));
-                                setShowAddFeesForm(false);
-                                toast.success("School fees added to account");
-                            }}
-                            schoolName={schoolName}
-                            hasTuitionDebt={(financialSummary?.totalBalance || 0) > 0}
-                            studentGrade={activeStudent?.grade}
-                            activeGradeId={financialSummary?.student?.active_grade_id}
-                            termServiceMap={financialSummary?.termServiceMap}
-                        />
-                    )}
 
-                    {/* Add Other Services Popup */}
-                    {showOtherServicesPopup && (
-                        <AddOtherServicesPopup
-                            schoolName={schoolName}
-                            userPhone={userPhone}
-                            onClose={() => setShowOtherServicesPopup(false)}
-                            onDone={handleOtherServicesDone}
-                            student={activeStudent}
-                            blockedServiceNames={blockedServiceNames}
-                        />
-                    )}
-                </AnimatePresence>
             </div>
         </div>
     );
