@@ -8,6 +8,7 @@ import OnboardingProgressBar from './OnboardingProgressBar';
 import type { ParentData } from './ParentInformationPage';
 
 interface ReviewPageProps {
+  parentData: ParentData;
   students: StudentData[];
   onBack: () => void;
   onConfirm: () => void;
@@ -24,10 +25,16 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [disputedIds, setDisputedIds] = useState<Set<string>>(new Set());
   const [disputeNotes, setDisputeNotes] = useState<Record<string, string>>({});
+  const isTemporaryStudentId = (studentId: string) => studentId.startsWith('new-') || studentId.startsWith('review-');
 
   useEffect(() => {
     async function fetchData() {
       if (!activeStudentId) return;
+      if (isTemporaryStudentId(activeStudentId)) {
+        setFinancialData(null);
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       try {
         const data = await getStudentFinancialSummary(activeStudentId);
@@ -148,9 +155,15 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
                     <div className="size-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
                       <Info size={24} className="text-gray-300" />
                     </div>
-                    <p className="text-[14px] text-gray-500 max-w-[200px]">
-                      No financial records found for this student. Please confirm to proceed.
-                    </p>
+                    {activeStudentId.startsWith('review-') ? (
+                      <p className="text-[14px] text-gray-500 max-w-[240px]">
+                        This learner request is pending school confirmation. Charges and payments will appear after approval.
+                      </p>
+                    ) : (
+                      <p className="text-[14px] text-gray-500 max-w-[200px]">
+                        No financial records found for this student. Please confirm to proceed.
+                      </p>
+                    )}
                     <button 
                       onClick={handleToggleConfirm}
                       className="mt-6 h-11 px-8 rounded-xl bg-[#003630] text-white text-[14px] font-bold"

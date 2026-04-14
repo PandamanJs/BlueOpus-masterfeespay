@@ -5,6 +5,7 @@ import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
 import LogoHeader from "./common/LogoHeader";
 import { BadgeCheck } from "lucide-react";
+import { toast } from "sonner";
 
 interface Student {
   name: string;
@@ -12,6 +13,7 @@ interface Student {
   grade: string;
   balances: number;
   admissionNumber?: string;
+  verificationStatus?: 'unverified' | null;
 }
 
 interface PayForSchoolFeesProps {
@@ -34,16 +36,18 @@ function StudentCard({
   onClick: () => void;
 }) {
   const isCleared = student.balances <= 0;
+  const isUnverified = student.verificationStatus === 'unverified';
 
   return (
     <motion.div
       onClick={onClick}
       className={`
-        relative rounded-[20px] p-5 border transition-all cursor-pointer active:scale-[0.98] group
+        relative rounded-[20px] p-5 border transition-all active:scale-[0.98] group
         ${isSelected
           ? 'border-[#95e36c] shadow-[0px_20px_40px_rgba(149,227,108,0.15)] ring-1 ring-[#95e36c]/20'
           : 'border-white/40 shadow-[0px_8px_32px_rgba(0,0,0,0.06)]'
         }
+        ${isUnverified ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}
       `}
       style={{
         background: isSelected ? "rgba(255, 255, 255, 1)" : "rgba(255, 255, 255, 1)",
@@ -54,6 +58,14 @@ function StudentCard({
           : "0 8px 32px rgba(0,0,0,0.06)"
       }}
     >
+      {isUnverified && (
+        <div className="mb-3 inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-3 py-1">
+          <span className="font-['Inter',sans-serif] text-[10px] font-bold text-amber-700 uppercase tracking-wide">
+            Pending School Confirmation • Payments unlock after school confirms details
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Selection Indicator - Resized to 12x12 */}
@@ -148,10 +160,24 @@ export default function PayForSchoolFees({
   initialSelectedStudents = []
 }: PayForSchoolFeesProps) {
   // Initialize state with passed initial selections
-  const [selectedStudents, setSelectedStudents] = useState<string[]>(initialSelectedStudents);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>(
+    initialSelectedStudents.filter(studentId => {
+      const student = students.find(s => s.id === studentId);
+      return student?.verificationStatus !== 'unverified';
+    })
+  );
   const { isOnline } = useOfflineManager();
+  const hasUnverifiedStudents = students.some(student => student.verificationStatus === 'unverified');
 
   const toggleStudent = (studentId: string) => {
+    const student = students.find(s => s.id === studentId);
+    if (student?.verificationStatus === 'unverified') {
+      toast.info("This profile is pending school confirmation", {
+        description: "Your child details were saved. Payments unlock once the school confirms the profile.",
+      });
+      return;
+    }
+
     hapticFeedback('selection');
     setSelectedStudents(prev =>
       prev.includes(studentId)
@@ -169,7 +195,7 @@ export default function PayForSchoolFees({
   // Check if any selected student has balances
   const hasSelectedStudentWithBalance = selectedStudents.some(studentId => {
     const student = students.find(s => s.id === studentId);
-    return student && student.balances > 0;
+    return student && student.verificationStatus !== 'unverified' && student.balances > 0;
   });
 
   const handleClearBalances = () => {
@@ -215,6 +241,17 @@ export default function PayForSchoolFees({
 
           {/* Student Cards - Outside the grey card */}
           <div className="px-[20px] sm:px-[28px] pt-[24px] space-y-[12px]">
+            {hasUnverifiedStudents && (
+              <div className="rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="font-['Inter',sans-serif] text-[12px] text-amber-800 font-semibold">
+                  Some profiles are pending school confirmation.
+                </p>
+                <p className="font-['Inter',sans-serif] text-[11px] text-amber-700 mt-1">
+                  Your child details are safely saved. Please contact the school to confirm the profile before payment.
+                </p>
+              </div>
+            )}
+
             {students.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 bg-white/40 rounded-[24px] border border-dashed border-gray-200">
                 <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-4">

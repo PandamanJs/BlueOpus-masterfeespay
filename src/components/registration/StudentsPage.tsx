@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, X, Loader2, Pencil, ChevronDown, User, Sparkles, UserRoundPlus, ChevronRight, Info } from 'lucide-react';
 import { type ParentData } from './ParentInformationPage';
-import { type StudentData, getGradesBySchool, getClassesByGrade, type SchoolGrade } from '../../lib/supabase/api/registration';
+import { type StudentData, getGradesBySchool, getClassesByGrade, scoreStudentMatches, type SchoolGrade, type MatchCandidate } from '../../lib/supabase/api/registration';
 import { haptics } from '../../utils/haptics';
 import LogoHeader from '../common/LogoHeader';
 import OnboardingProgressBar from './OnboardingProgressBar';
@@ -93,7 +93,7 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData, onEd
           {student.name}
         </h3>
         <p className="text-[12px] text-gray-500 font-medium">
-          Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
+          {formatGradeAndClass(student.grade, student.class)}
         </p>
         {(student.parentName || student.otherParentName) && (
           <p className="text-[12px] text-[#95e36c] font-black uppercase tracking-wider mt-1">
@@ -120,7 +120,52 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData, onEd
   );
 }
 
+function getMatchGuidance(confidenceBand?: StudentData['confidenceBand']): string {
+  if (confidenceBand === 'high') return 'Likely your child';
+  if (confidenceBand === 'medium') return 'Please confirm details';
+  return 'Needs school confirmation';
+}
+
+function getBlockingReason(student: StudentData): { title: string; description: string; actionLabel: string } | null {
+  if (student.isGuardianLinkLocked) {
+    return {
+      title: 'This learner is already linked to two guardians.',
+      description: 'Please contact the school to transfer or update guardian access.',
+      actionLabel: 'School Help',
+    };
+  }
+
+  if (student.requiresSchoolReview) {
+    return {
+      title: 'Similar learner details were found.',
+      description: 'To avoid linking the wrong child, the school needs to confirm this match first.',
+      actionLabel: 'School Review',
+    };
+  }
+
+  if (student.confidenceBand === 'low') {
+    return {
+      title: 'We could not match this learner with enough certainty.',
+      description: 'Please refine the name/grade/class or ask the school to assist with linking.',
+      actionLabel: 'Refine Search',
+    };
+  }
+
+  return null;
+}
+
+function formatGradeAndClass(grade?: string, className?: string): string {
+  const normalizedGrade = String(grade || '')
+    .trim()
+    .replace(/^(grade\s*)+/i, '')
+    .trim();
+  const normalizedClass = String(className || '').trim();
+  const classSuffix = normalizedClass && normalizedClass.toLowerCase() !== 'general' ? ` ${normalizedClass}` : '';
+  return `Grade ${normalizedGrade || 'Unknown'}${classSuffix}`;
+}
+
 export default function StudentsPage({ parentData, onComplete, onBack, initialStudents }: StudentsPageProps) {
+  const registrationSessionIdRef = useRef<string>(crypto.randomUUID());
   const [searchQuery, setSearchQuery] = useState('');
   const [students, setStudents] = useState<StudentData[]>(initialStudents || []);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -148,6 +193,11 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
   const [searchResults, setSearchResults] = useState<StudentData[]>([]);
   const [smartMatchResults, setSmartMatchResults] = useState<StudentData[]>([]);
+  const [pendingMediumCandidate, setPendingMediumCandidate] = useState<StudentData | null>(null);
+  const [pendingDuplicateReview, setPendingDuplicateReview] = useState<{
+    draft: StudentData;
+    candidates: StudentData[];
+  } | null>(null);
 
   // ── Back-navigation fix for the Add/Edit form ────────────────────────────
   const showAddFormRef = useRef(showAddForm);
@@ -209,6 +259,9 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           // If no specific streams exist for this grade (e.g. Baby Class), 
           // we use 'General' as the default value to keep it simple.
           setNewStudent(prev => ({ ...prev, class: 'General' }));
+        } else {
+          // Clear selection if multiple classes exist to force a manual choice
+          setNewStudent(prev => ({ ...prev, class: '' }));
         }
       } catch (error) {
         console.error("Failed to load classes for grade:", error);
@@ -219,13 +272,28 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     fetchClassesForGrade();
   }, [newStudent.grade, parentData.schoolId, availableGrades]);
 
+  const candidateToStudentData = (candidate: MatchCandidate): StudentData => ({
+    id: candidate.studentId,
+    name: candidate.displayName,
+    grade: candidate.grade || 'Unknown',
+    class: candidate.className || 'A',
+    studentId: 'Existing Record',
+    confidenceBand: candidate.confidenceBand,
+    confidenceScore: candidate.confidenceScore,
+    requiresSchoolReview: candidate.requiresSchoolReview,
+    matchCandidateId: candidate.candidateId,
+  });
+
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (searchQuery.trim().length >= 2) {
         try {
-          const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
-          const results = await searchStudentsByName(searchQuery, parentData.schoolId);
-          setSearchResults(results);
+          const scored = await scoreStudentMatches({
+            registrationSessionId: registrationSessionIdRef.current,
+            schoolId: parentData.schoolId,
+            queryName: searchQuery.trim(),
+          });
+          setSearchResults(scored.candidates.map(candidateToStudentData));
         } catch (error) {
           console.error("Search error:", error);
           setSearchResults([]);
@@ -243,8 +311,14 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     const timer = setTimeout(async () => {
       if (newStudent.name.trim().length >= 2) {
         try {
-          const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
-          const results = await searchStudentsByName(newStudent.name, parentData.schoolId);
+          const scored = await scoreStudentMatches({
+            registrationSessionId: registrationSessionIdRef.current,
+            schoolId: parentData.schoolId,
+            queryName: newStudent.name.trim(),
+            queriedGrade: newStudent.grade || undefined,
+            queriedClass: newStudent.class || undefined,
+          });
+          const results = scored.candidates.map(candidateToStudentData);
           // Filter out students already added
           setSmartMatchResults(results.filter(r => !students.find(s => s.id === r.id)));
         } catch (error) {
@@ -258,9 +332,34 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     return () => clearTimeout(timer);
   }, [newStudent.name, parentData.schoolId, showAddForm, editingId, students]);
 
-  const addStudent = (student: StudentData) => {
+  const addStudent = (student: StudentData, options?: { forceMediumConfirm?: boolean }) => {
     console.log('[Registration] addStudent called:', student);
     haptics.selection();
+    if (!student.id.startsWith('new-') && student.isGuardianLinkLocked) {
+      import('sonner').then(({ toast }) => toast.error(
+        'This learner already has two guardians linked.',
+        { description: 'Please contact the school to transfer or update guardian access.' }
+      ));
+      return;
+    }
+    if (!student.id.startsWith('new-') && student.requiresSchoolReview) {
+      import('sonner').then(({ toast }) => toast.info(
+        'Similar learner details were found.',
+        { description: 'To avoid linking the wrong child, the school needs to confirm this match first.' }
+      ));
+      return;
+    }
+    if (!student.id.startsWith('new-') && student.confidenceBand === 'low') {
+      import('sonner').then(({ toast }) => toast.info(
+        'We could not confidently match this learner.',
+        { description: 'Please refine the name/grade/class or ask the school to assist with linking.' }
+      ));
+      return;
+    }
+    if (!student.id.startsWith('new-') && student.confidenceBand === 'medium' && !options?.forceMediumConfirm) {
+      setPendingMediumCandidate(student);
+      return;
+    }
     if (!students.find((s) => s.id === student.id)) {
       setStudents([...students, student]);
       setSearchQuery('');
@@ -312,6 +411,20 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     return isValid;
   };
 
+  const createManualStudentDraft = (): StudentData => ({
+    id: `new-${Date.now()}`,
+    name: newStudent.name,
+    grade: newStudent.grade,
+    class: newStudent.class,
+    studentId: 'New Registration',
+  });
+
+  const finalizeManualStudentCreation = (studentToAdd: StudentData) => {
+    addStudent(studentToAdd);
+    import('sonner').then(({ toast }) => toast.success('New record added to application'));
+    handleCloseForm();
+  };
+
   const handleSaveStudent = () => {
     haptics.buttonPress();
     if (validateNewStudent()) {
@@ -323,18 +436,23 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           class: newStudent.class,
         } : s));
         import('sonner').then(({ toast }) => toast.success('Record updated successfully'));
+        handleCloseForm();
       } else {
-        const studentToAdd: StudentData = {
-          id: `new-${Date.now()}`,
-          name: newStudent.name,
-          grade: newStudent.grade,
-          class: newStudent.class,
-          studentId: 'New Registration',
-        };
-        addStudent(studentToAdd);
-        import('sonner').then(({ toast }) => toast.success('New record added to application'));
+        const studentToAdd = createManualStudentDraft();
+        const likelyDuplicates = smartMatchResults
+          .filter(candidate => !candidate.isGuardianLinkLocked && candidate.confidenceBand !== 'low')
+          .slice(0, 3);
+
+        if (likelyDuplicates.length > 0) {
+          setPendingDuplicateReview({
+            draft: studentToAdd,
+            candidates: likelyDuplicates,
+          });
+          return;
+        }
+
+        finalizeManualStudentCreation(studentToAdd);
       }
-      handleCloseForm();
     }
   };
 
@@ -345,6 +463,32 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     setShowAddForm(false);
   };
 
+  const openManualAddForm = (prefillName?: string) => {
+    const parsedName = (prefillName || '').trim();
+    setEditingId(null);
+    setFormErrors({ name: '', grade: '', class: '', studentId: '' });
+    setNewStudent(prev => ({
+      ...prev,
+      name: parsedName || prev.name || '',
+      grade: '',
+      class: '',
+      studentId: '',
+    }));
+
+    if (parsedName) {
+      // Show immediate suggestions from current search while refined matching recalculates.
+      const immediate = searchResults
+        .filter(r => !students.find(s => s.id === r.id))
+        .slice(0, 6);
+      setSmartMatchResults(immediate);
+    } else {
+      setSmartMatchResults([]);
+    }
+
+    setShowAddForm(true);
+    window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form');
+  };
+
   const handleCancelAdd = () => {
     haptics.light();
     setEditingId(null);
@@ -353,10 +497,39 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     }
   };
 
+  const handleConfirmMediumMatch = () => {
+    if (!pendingMediumCandidate) return;
+    addStudent(pendingMediumCandidate, { forceMediumConfirm: true });
+    setPendingMediumCandidate(null);
+    import('sonner').then(({ toast }) => toast.success('Student match confirmed.'));
+  };
+
+  const handleChooseExistingMatch = (candidate: StudentData) => {
+    addStudent(candidate);
+    setPendingDuplicateReview(null);
+    handleCloseForm();
+    import('sonner').then(({ toast }) => toast.success('Existing student added to your account list.'));
+  };
+
+  const handleCreateDuplicateAnyway = () => {
+    if (!pendingDuplicateReview) return;
+    finalizeManualStudentCreation(pendingDuplicateReview.draft);
+    setPendingDuplicateReview(null);
+  };
+
   const handleComplete = () => {
     haptics.heavy();
     if (students.length === 0) {
       import('sonner').then(({ toast }) => toast.error('Add at least one child to continue'));
+      return;
+    }
+
+    const blockedStudents = students.filter(s => !s.id.startsWith('new-') && s.isGuardianLinkLocked);
+    if (blockedStudents.length > 0) {
+      import('sonner').then(({ toast }) => toast.error(
+        'One or more selected students cannot be linked right now.',
+        { description: 'This student already has two parent/guardian profiles assigned. Please request support from the school office.' }
+      ));
       return;
     }
     onComplete(students);
@@ -396,17 +569,121 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
               Add Pupils to your Account
             </h1>
           </div>
-          <p className="text-[14px] text-gray-500 tracking-[-0.2px] leading-relaxed pl-[14px]">
-            Add your child(ren) to your account.
-            <br />
-            <ul>Search for your child's name</ul>
-            <ul>If you cannot find your child, please add them manually by entering their details.</ul>
-          </p>
+          <div className="text-[14px] text-gray-500 tracking-[-0.2px] leading-relaxed pl-[14px]">
+            <p>Add your child(ren) to your account.</p>
+            <p>• Search for your child's name.</p>
+            <p>• If you cannot find your child, add them manually by entering their details.</p>
+          </div>
         </motion.div>
 
 
 
         {/* Actions Section */}
+        <AnimatePresence>
+          {pendingMediumCandidate && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center px-4 pb-6"
+            >
+              <motion.div
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 40, opacity: 0 }}
+                className="w-full max-w-sm bg-white rounded-[20px] border border-gray-200 shadow-xl overflow-hidden"
+              >
+                <div className="p-5 border-b border-gray-100">
+                  <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630]">
+                    Confirm student match
+                  </h3>
+                  <p className="text-[12px] text-gray-500 mt-1">
+                    Please double-check the name, grade, and class before adding this learner.
+                  </p>
+                </div>
+                <div className="p-5 space-y-2">
+                  <p className="text-[14px] font-bold text-[#003630]">{pendingMediumCandidate.name}</p>
+                  <p className="text-[12px] text-gray-500">
+                    {formatGradeAndClass(pendingMediumCandidate.grade, pendingMediumCandidate.class)}
+                  </p>
+                </div>
+                <div className="p-4 border-t border-gray-100 flex items-center gap-2">
+                  <button
+                    onClick={() => setPendingMediumCandidate(null)}
+                    className="flex-1 h-11 rounded-[12px] border border-gray-200 text-gray-600 text-[13px] font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmMediumMatch}
+                    className="flex-1 h-11 rounded-[12px] bg-[#003630] text-white text-[13px] font-semibold"
+                  >
+                    Confirm & Add
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {pendingDuplicateReview && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] bg-black/45 backdrop-blur-sm flex items-end sm:items-center justify-center px-4 pb-6"
+            >
+              <motion.div
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 40, opacity: 0 }}
+                className="w-full max-w-md bg-white rounded-[20px] border border-gray-200 shadow-xl overflow-hidden"
+              >
+                <div className="p-5 border-b border-gray-100">
+                  <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630]">
+                    Are you sure this is not your child?
+                  </h3>
+                  <p className="text-[12px] text-gray-500 mt-1">
+                    We found a likely match. Please confirm before creating a new learner record.
+                  </p>
+                </div>
+
+                <div className="p-4 space-y-2 max-h-[45vh] overflow-y-auto">
+                  {pendingDuplicateReview.candidates.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      onClick={() => handleChooseExistingMatch(candidate)}
+                      className="w-full text-left rounded-[12px] border border-amber-200 bg-amber-50/40 p-3 hover:bg-amber-50 transition-colors"
+                    >
+                      <p className="font-bold text-[#003630] text-[14px] truncate">{candidate.name}</p>
+                      <p className="text-[11px] text-gray-600 mt-0.5">{formatGradeAndClass(candidate.grade, candidate.class)}</p>
+                      <p className="text-[10px] text-amber-700 uppercase font-black tracking-wider mt-1">
+                        {getMatchGuidance(candidate.confidenceBand)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-4 border-t border-gray-100 flex items-center gap-2">
+                  <button
+                    onClick={() => setPendingDuplicateReview(null)}
+                    className="flex-1 h-11 rounded-[12px] border border-gray-200 text-gray-600 text-[13px] font-semibold"
+                  >
+                    Check Matches
+                  </button>
+                  <button
+                    onClick={handleCreateDuplicateAnyway}
+                    className="flex-1 h-11 rounded-[12px] bg-[#003630] text-white text-[13px] font-semibold"
+                  >
+                    Create New Anyway
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {!showAddForm ? (
           <div className="space-y-4">
             {/* Search and Add Section */}
@@ -451,7 +728,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
               </motion.div>
 
               <AnimatePresence>
-                {searchResults.length > 0 && (
+                {searchResults.length > 0 && !pendingMediumCandidate && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -462,22 +739,49 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                       <button
                         key={student.id}
                         onClick={() => addStudent(student)}
-                        className="w-full p-3 text-left border-b border-gray-50 hover:bg-gray-50 flex items-center justify-between group"
+                        disabled={student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low'}
+                        className={`w-full p-3 text-left border-b border-gray-50 flex items-center justify-between group ${(student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low') ? 'opacity-60 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50'}`}
                       >
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-[#003630] text-sm truncate">{student.name}</p>
                           <div className="flex flex-col gap-0.5 mt-0.5">
                             <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">
-                              Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? student.class : ''}
+                              {formatGradeAndClass(student.grade, student.class)}
                             </span>
+                            {!!student.confidenceBand && (
+                              <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                                student.confidenceBand === 'high' ? 'bg-emerald-50 text-emerald-700' :
+                                student.confidenceBand === 'medium' ? 'bg-amber-50 text-amber-700' :
+                                'bg-gray-100 text-gray-600'
+                              }`}>
+                                {getMatchGuidance(student.confidenceBand)}
+                              </span>
+                            )}
                             {(student.parentName || student.otherParentName) && (
                               <span className="text-[10px] text-[#95e36c] font-black uppercase tracking-wider">
                                 Guardian: {student.parentName || student.otherParentName}
                               </span>
                             )}
+                            {getBlockingReason(student) && (
+                              <span className="text-[10px] text-amber-700 font-black uppercase tracking-wider">
+                                {getBlockingReason(student)?.title}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#003630] ml-2 flex-shrink-0" />
+                        <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold ml-2 flex-shrink-0 ${
+                          (student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low')
+                            ? 'bg-gray-200 text-gray-500'
+                            : student.confidenceBand === 'medium'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {(student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low')
+                            ? (getBlockingReason(student)?.actionLabel || 'Review')
+                            : student.confidenceBand === 'medium'
+                              ? 'Confirm'
+                              : 'Add'}
+                        </div>
                       </button>
                     ))}
                   </motion.div>
@@ -490,7 +794,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     initial={{ opacity: 0, height: 0, marginTop: 0 }}
                     animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
                     exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                    onClick={() => { haptics.light(); setShowAddForm(true); window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form'); }}
+                    onClick={() => { haptics.light(); openManualAddForm(searchQuery); }}
                     className="w-full h-[56px] rounded-[12px] bg-[#f3f4f6] border border-[#6b7280] flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors overflow-hidden"
                   >
                     <Plus size={18} className="text-[#374151]" />
@@ -584,13 +888,14 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                           {smartMatchResults.slice(0, 3).map(match => (
                             <button
                               key={match.id}
+                              disabled={match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low'}
                               onClick={(e) => {
                                 e.preventDefault();
                                 haptics.light();
                                 addStudent(match);
                                 handleCloseForm();
                               }}
-                              className="w-full bg-white flex items-center justify-between p-3 rounded-[12px] border border-amber-100/50 hover:bg-amber-100/30 active:scale-[0.98] transition-all text-left"
+                              className={`w-full bg-white flex items-center justify-between p-3 rounded-[12px] border border-amber-100/50 transition-all text-left ${(match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low') ? 'opacity-60 cursor-not-allowed bg-gray-50' : 'hover:bg-amber-100/30 active:scale-[0.98]'}`}
                             >
                               <div className="flex-1 min-w-0">
                                 <div className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate">
@@ -598,19 +903,43 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                                 </div>
                                 <div className="text-[11px] text-gray-500 font-medium flex flex-col gap-1 mt-0.5">
                                   <div className="flex items-center gap-1.5">
-                                    <span>Grade {match.grade.toString().replace(/^(grade\s+)/i, '')}{match.class && match.class !== 'General' ? match.class : ''}</span>
+                                    <span>{formatGradeAndClass(match.grade, match.class)}</span>
                                     <div className="size-0.5 rounded-full bg-gray-300" />
                                     <span>{match.studentId}</span>
                                   </div>
+                                  {!!match.confidenceBand && (
+                                    <span className={`uppercase text-[9px] font-black tracking-wider ${
+                                      match.confidenceBand === 'high' ? 'text-emerald-700' :
+                                      match.confidenceBand === 'medium' ? 'text-amber-700' :
+                                      'text-gray-600'
+                                    }`}>
+                                      {getMatchGuidance(match.confidenceBand)}
+                                    </span>
+                                  )}
                                   {(match.parentName || match.otherParentName) && (
                                     <span className="text-[#95e36c] uppercase text-[9px] font-black tracking-wider">
                                       Guardian: {match.parentName || match.otherParentName}
                                     </span>
                                   )}
+                                  {getBlockingReason(match) && (
+                                    <span className="text-amber-700 uppercase text-[9px] font-black tracking-wider">
+                                      {getBlockingReason(match)?.title}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
-                              <div className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold">
-                                Add
+                              <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold ${
+                                (match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low')
+                                  ? 'bg-gray-200 text-gray-500'
+                                  : match.confidenceBand === 'medium'
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-emerald-100 text-emerald-700'
+                              }`}>
+                                {(match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low')
+                                  ? (getBlockingReason(match)?.actionLabel || 'Review')
+                                  : match.confidenceBand === 'medium'
+                                    ? 'Confirm'
+                                    : 'Add'}
                               </div>
                             </button>
                           ))}
@@ -619,63 +948,78 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     )}
                   </div>
 
-                  {/* Grade & Class Grid */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2.5">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade</label>
-                      <div className="relative group">
-                        <select
-                          value={newStudent.grade}
-                          onFocus={() => { setFocusedField('grade'); haptics.light(); }}
-                          onBlur={() => setFocusedField(null)}
-                          onChange={(e) => setNewStudent({ ...newStudent, grade: e.target.value })}
-                          className={`${inputClasses('grade')} appearance-none pr-12`}
-                          disabled={isLoadingMetadata}
-                        >
-                          {isLoadingMetadata ? (
-                            <option value="">Loading...</option>
-                          ) : availableGrades.length === 0 ? (
-                            <option value="">⚠ No grades</option>
-                          ) : (
-                            <>
-                              <option value="">Select Grade</option>
-                              {availableGrades.map(g => (
-                                <option key={g.grade_id} value={g.grade_name}>{g.grade_name}</option>
-                              ))}
-                            </>
-                          )}
-                        </select>
-                        <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'grade' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
-                      </div>
+                  {/* Grade Selection */}
+                  <div className="space-y-2.5">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade</label>
+                    <div className="relative group">
+                      <select
+                        value={newStudent.grade}
+                        onFocus={() => { setFocusedField('grade'); haptics.light(); }}
+                        onBlur={() => setFocusedField(null)}
+                        onChange={(e) => setNewStudent({ ...newStudent, grade: e.target.value })}
+                        className={`${inputClasses('grade')} appearance-none pr-12 cursor-pointer`}
+                        disabled={isLoadingMetadata}
+                      >
+                        {isLoadingMetadata ? (
+                          <option value="">Loading grades...</option>
+                        ) : availableGrades.length === 0 ? (
+                          <option value="">⚠ No grades available</option>
+                        ) : (
+                          <>
+                            <option value="">Select Grade</option>
+                            {availableGrades.map(g => (
+                              <option key={g.grade_id} value={g.grade_name}>{g.grade_name}</option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                      <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'grade' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
+                    </div>
+                  </div>
+
+                  {/* Class/Stream Selection - Larger dropdown for better usability */}
+                  <div className="space-y-2.5 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1 flex items-center justify-between">
+                      <span>Class / Stream</span>
+                      {isLoadingClasses && <Loader2 size={12} className="animate-spin text-[#95e36c]" />}
+                    </label>
+
+                    <div className="relative group">
+                      <select
+                        value={newStudent.class}
+                        onFocus={() => { setFocusedField('class'); haptics.light(); }}
+                        onBlur={() => setFocusedField(null)}
+                        onChange={(e) => setNewStudent({ ...newStudent, class: e.target.value })}
+                        className={`${inputClasses('class')} appearance-none pr-12 cursor-pointer`}
+                        disabled={isLoadingClasses || !newStudent.grade}
+                      >
+                        {!newStudent.grade ? (
+                          <option value="">Select grade first</option>
+                        ) : isLoadingClasses ? (
+                          <option value="">Fetching school streams...</option>
+                        ) : availableClasses.length === 0 ? (
+                          <>
+                            <option value="">Select Class / Stream</option>
+                            <option value="General">General (Single Stream)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="">Select Class / Stream</option>
+                            {availableClasses.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                      <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'class' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
                     </div>
 
-                    <div className="space-y-2.5">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Class/Stream</label>
-                      <div className="relative group">
-                        <select
-                          value={newStudent.class}
-                          onFocus={() => { setFocusedField('class'); haptics.light(); }}
-                          onBlur={() => setFocusedField(null)}
-                          onChange={(e) => setNewStudent({ ...newStudent, class: e.target.value })}
-                          className={`${inputClasses('class')} appearance-none pr-12`}
-                          disabled={isLoadingClasses || (availableClasses.length === 0 && newStudent.class === 'General')}
-                        >
-                          {isLoadingClasses ? (
-                            <option value="">Loading...</option>
-                          ) : availableClasses.length === 0 ? (
-                            <option value="General">General</option>
-                          ) : (
-                            <>
-                              <option value="">Select</option>
-                              {availableClasses.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </>
-                          )}
-                        </select>
-                        <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'class' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
-                      </div>
-                    </div>
+                    {!newStudent.grade && (
+                      <p className="text-[12px] text-gray-400 pl-1 italic">Select a grade above to load class streams.</p>
+                    )}
+                    {newStudent.grade && !isLoadingClasses && availableClasses.length === 0 && (
+                      <p className="text-[12px] text-gray-500 pl-1">No specific classes found for this grade. Use <span className="font-bold">General</span>.</p>
+                    )}
                   </div>
 
                   <button

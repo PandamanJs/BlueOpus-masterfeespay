@@ -18,8 +18,8 @@ import {
 import { useAppStore } from '../stores/useAppStore';
 import { hapticFeedback } from '../utils/haptics';
 import { toast } from 'sonner';
-import { updateParent, logDispute } from '../lib/supabase/api/parents';
-import { getStudentsByPhone } from '../data/students';
+import { updateParent, logDispute, markStudentAsVerified } from '../lib/supabase/api/parents';
+import { getStudentsByParentId, getStudentsByPhone } from '../data/students';
 import type { Student } from '../data/students';
 import type { PageType } from '../stores/useAppStore';
 import LogoHeader from "./common/LogoHeader";
@@ -87,11 +87,14 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [selectedDisputeStudent, setSelectedDisputeStudent] = useState<{ id: string, name: string } | null>(null);
+  const [verifyingStudentId, setVerifyingStudentId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
       try {
-        const data = await getStudentsByPhone(userPhone);
+        const data = userId
+          ? await getStudentsByParentId(userId)
+          : await getStudentsByPhone(userPhone);
         setStudents(data);
       } catch (error) {
         console.error('Error fetching students:', error);
@@ -100,7 +103,18 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
       }
     };
     fetchStudents();
-  }, [userPhone]);
+  }, [userPhone, userId]);
+
+  const refreshStudents = async () => {
+    try {
+      const data = userId
+        ? await getStudentsByParentId(userId)
+        : await getStudentsByPhone(userPhone);
+      setStudents(data);
+    } catch (error) {
+      console.error('Error refreshing students:', error);
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -249,18 +263,43 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
                         <div className="mt-4 pt-4 border-t border-[#f1f3f5] flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-[#003630]/40 group-hover:text-[#95e36c] transition-colors">
                              <AlertCircle size={14} />
-                             <span className="text-[10px] font-black uppercase tracking-widest">Verified Account</span>
+                             <span className="text-[10px] font-black uppercase tracking-widest">
+                               {student.verificationStatus === 'unverified' ? 'Pending School Confirmation' : 'School Confirmed'}
+                             </span>
                           </div>
                           
-                          <button 
-                            onClick={() => {
-                              hapticFeedback('light');
-                              setSelectedDisputeStudent({ id: student.id, name: student.name });
-                            }}
-                            className="h-[32px] px-4 rounded-full border border-red-100 bg-red-50/50 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-600 hover:text-white transition-all active:scale-95"
-                          >
-                            Dispute Balance
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {student.verificationStatus === 'unverified' && (
+                              <button
+                                onClick={async () => {
+                                  hapticFeedback('light');
+                                  setVerifyingStudentId(student.id);
+                                  try {
+                                    await markStudentAsVerified(student.id, userId);
+                                    await refreshStudents();
+                                    toast.success('Student profile marked as confirmed.');
+                                  } catch {
+                                    toast.error('Could not update school confirmation status.');
+                                  } finally {
+                                    setVerifyingStudentId(null);
+                                  }
+                                }}
+                                disabled={verifyingStudentId === student.id}
+                                className="h-[32px] px-4 rounded-full border border-[#95e36c]/40 bg-[#95e36c]/10 text-[#003630] text-[10px] font-black uppercase tracking-wider hover:bg-[#95e36c] hover:text-[#003630] transition-all active:scale-95 disabled:opacity-60"
+                              >
+                                {verifyingStudentId === student.id ? 'Updating...' : 'Mark Details as Updated'}
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => {
+                                hapticFeedback('light');
+                                setSelectedDisputeStudent({ id: student.id, name: student.name });
+                              }}
+                              className="h-[32px] px-4 rounded-full border border-red-100 bg-red-50/50 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-600 hover:text-white transition-all active:scale-95"
+                            >
+                              Dispute Balance
+                            </button>
+                          </div>
                         </div>
 
                         {/* Background Decoration */}

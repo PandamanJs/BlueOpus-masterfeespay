@@ -367,8 +367,8 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
       if (onInactivityRefresh) {
         onInactivityRefresh();
       } else {
-        // Fallback: trigger a full page reload
-        window.location.reload();
+        // Fallback: keep user in-session and do nothing destructive.
+        console.log('[ServicesPage] No inactivity refresh handler provided. Skipping auto-reload.');
       }
     }, INACTIVITY_MS);
   }, [onInactivityRefresh, INACTIVITY_MS]);

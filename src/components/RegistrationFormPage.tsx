@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ParentInformationPage, { type ParentData } from './registration/ParentInformationPage';
 import StudentsPage from './registration/StudentsPage';
 import ReviewPage from './registration/ReviewPage';
-import { type StudentData, registerParent, linkStudentsToParent } from '../lib/supabase/api/registration';
+import { type StudentData, registerParent, linkStudentsToParent, rollbackParentCreation } from '../lib/supabase/api/registration';
 import { getSchools } from '../lib/supabase/api/schools';
 import type { School } from '../types';
 import { useAppStore } from '../stores/useAppStore';
 
 interface RegistrationFormPageProps {
   onBack: () => void;
-  onComplete: (data: { name: string; phone: string; schoolName: string }) => void;
+  onComplete: (data: { name: string; phone: string; schoolName: string; parentId: string }) => void;
 }
 
 type RegistrationStep = 'parent' | 'students' | 'review';
@@ -25,8 +25,8 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Duplicate account detection state
-  const [pendingParentId, setPendingParentId] = useState<string | null>(null);
   const [duplicateAccountName, setDuplicateAccountName] = useState<string | null>(null);
+  const [duplicateAccountField, setDuplicateAccountField] = useState<'phone' | 'email' | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   // ── Back-navigation fix ──────────────────────────────────────────────────
@@ -87,34 +87,30 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
 
   const handleReviewBack = () => { window.history.back(); };
 
-  const handleFinalConfirm = async (confirmedParentId?: string) => {
+  const handleFinalConfirm = async () => {
     if (parentData && studentsData.length > 0) {
-      console.log('[Registration] handleFinalConfirm started:', { confirmedParentId, studentsCount: studentsData.length });
+      console.log('[Registration] handleFinalConfirm started:', { studentsCount: studentsData.length });
       setIsSubmitting(true);
+      let createdParentId: string | null = null;
       try {
         let resolvedParentId: string;
 
-        if (confirmedParentId) {
-          console.log('[Registration] Using confirmed existing parentId:', confirmedParentId);
-          resolvedParentId = confirmedParentId;
-        } else {
-          console.log('[Registration] Registering/looking up parent...');
-          // 1. Register / look up parent
-          const result = await registerParent(parentData);
-          console.log('[Registration] Parent register result:', result);
+        console.log('[Registration] Registering/looking up parent...');
+        // 1. Register / look up parent
+        const result = await registerParent(parentData);
+        console.log('[Registration] Parent register result:', result);
 
-          if (result.isExisting) {
-            console.log('[Registration] Existing account detected, showing modal with name:', result.existingName);
-            setPendingParentId(result.parentId);
-            setDuplicateAccountName(result.existingName || 'Unknown');
-            setShowDuplicateModal(true);
-            setIsSubmitting(false);
-            return;
-          }
-
-          resolvedParentId = result.parentId;
+        if (result.isExisting) {
+          console.log('[Registration] Existing account detected by credential:', result.duplicateField);
+          setDuplicateAccountName(result.existingName || 'Unknown');
+          setDuplicateAccountField(result.duplicateField || null);
+          setShowDuplicateModal(true);
+          setIsSubmitting(false);
+          return;
         }
 
+        resolvedParentId = result.parentId;
+        createdParentId = result.wasCreated ? result.parentId : null;
         console.log('[Registration] Proceeding with parentId:', resolvedParentId);
 
         // 2. Link Students
@@ -130,12 +126,22 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         onComplete({
           name: parentData.fullName,
           phone: parentData.phone,
-          schoolName: schoolName
+          schoolName: schoolName,
+          parentId: resolvedParentId
         });
 
       } catch (error) {
         console.error('[Registration] CRITICAL FAILURE:', error);
-        toast.error("Registration failed. Please try again.");
+        if (createdParentId) {
+          try {
+            await rollbackParentCreation(createdParentId);
+          } catch (rollbackError) {
+            console.error('[Registration] Rollback failed:', rollbackError);
+          }
+        }
+        toast.error('Registration failed and no partial account was kept.', {
+          description: error instanceof Error ? error.message : undefined,
+        });
       } finally {
         setIsSubmitting(false);
       }
@@ -144,73 +150,10 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
     }
   };
 
-  // Called when parent clicks "Yes, that's me" on the duplicate modal
-  const handleConfirmExistingAccount = async () => {
+  const handleDismissDuplicate = async () => {
     setShowDuplicateModal(false);
-    if (pendingParentId) {
-      await handleFinalConfirm(pendingParentId);
-    }
-  };
-
-  // Called when parent clicks "No, create new account"
-  const handleRejectDuplicate = async () => {
-    setShowDuplicateModal(false);
-    setPendingParentId(null);
     setDuplicateAccountName(null);
-    // Force-create a new parent by bypassing the duplicate check
-    if (parentData && studentsData.length > 0) {
-      setIsSubmitting(true);
-      try {
-        const nameParts = parentData.fullName.trim().split(' ');
-        const supabaseClient = (await import('../lib/supabase/client')).supabase;
-        
-        // Check if the email is already taken — if so, skip it to avoid
-        // unique constraint violations. This handles the case where a family
-        // member already registered with the same email.
-        let emailToUse: string | null = parentData.email.trim() || null;
-        if (emailToUse) {
-          const { data: emailCheck } = await supabaseClient
-            .from('parents')
-            .select('parent_id')
-            .eq('email', emailToUse)
-            .limit(1)
-            .maybeSingle();
-          
-          if (emailCheck) {
-            console.log('[Registration] Email already taken, omitting from new account');
-            emailToUse = null;  // Don't include duplicate email
-          }
-        }
-
-        const { data: newParent, error } = await supabaseClient
-          .from('parents')
-          .insert({
-            first_name: nameParts[0],
-            last_name: nameParts.slice(1).join(' ') || '',
-            email: emailToUse,
-            phone_number: parentData.phone,
-            created_at: new Date().toISOString()
-          })
-          .select('parent_id')
-          .single();
-
-        if (error || !newParent) {
-          console.error('[Registration] Failed to create new parent:', error);
-          throw new Error('Failed to create parent');
-        }
-
-        console.log('[Registration] Created new parent:', newParent.parent_id);
-        await linkStudentsToParent(newParent.parent_id, studentsData, parentData.schoolId);
-        toast.success('Registration completed successfully!');
-        const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
-        onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName });
-      } catch (err) {
-        console.error('[Registration] Reject duplicate error:', err);
-        toast.error('Registration failed. Please try again.');
-      } finally {
-        setIsSubmitting(false);
-      }
-    }
+    setDuplicateAccountField(null);
   };
 
   if (isSubmitting) {
@@ -250,10 +193,10 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
                   <AlertTriangle size={24} className="text-amber-600" />
                 </div>
                 <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.4px]">
-                  Existing Account Found
+                  Account Already Exists
                 </h2>
                 <p className="text-[13px] text-gray-500 mt-1 leading-relaxed">
-                  Your phone number or email matches an account under the name:
+                  This {duplicateAccountField || 'credential'} already belongs to an account under the name:
                 </p>
                 <p className="text-[17px] font-bold text-[#003630] mt-1 tracking-[-0.3px]">
                   {duplicateAccountName}
@@ -263,25 +206,16 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
               {/* Body */}
               <div className="px-6 py-5 space-y-3">
                 <p className="text-[13px] text-gray-500 leading-relaxed">
-                  Is this your account? Confirming will link your children to this existing profile.
+                  Please log in with that account or go back and use different contact details.
                 </p>
 
-                {/* Yes button */}
+                {/* Close button */}
                 <button
-                  onClick={handleConfirmExistingAccount}
+                  onClick={handleDismissDuplicate}
                   className="w-full h-13 rounded-[16px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_6px_16px_rgba(0,54,48,0.2)] py-3"
                 >
-                  <CheckCircle2 size={18} className="text-[#95e36c]" />
-                  Yes, that's my account
-                </button>
-
-                {/* No button */}
-                <button
-                  onClick={handleRejectDuplicate}
-                  className="w-full h-13 rounded-[16px] border-[1.5px] border-gray-200 text-gray-600 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all py-3"
-                >
-                  <X size={18} />
-                  No, create a new account
+                  <X size={18} className="text-[#95e36c]" />
+                  Go Back and Edit
                 </button>
 
                 <p className="text-[11px] text-center text-gray-400 pt-1">

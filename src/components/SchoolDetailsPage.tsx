@@ -10,7 +10,7 @@ import LogoHeader from "./common/LogoHeader";
 interface SchoolDetailsPageProps {
   schoolName: string;
   schoolLogo?: string | null;
-  onProceed: (userName: string, userPhone: string) => void;
+  onProceed: (userName: string, userPhone: string) => Promise<void> | void;
   onBack: () => void;
   onRegistration: () => void;
 }
@@ -73,7 +73,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
       }
       saveLastPhone(phoneNumber);
       hapticFeedback('medium');
-      onProceed(parentData.name, phoneNumber);
+      await Promise.resolve(onProceed(parentData.name, phoneNumber));
     } catch (error) {
       toast.error("Validation failed");
     } finally {
@@ -120,10 +120,13 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
           <button
             onClick={validateAndProceed}
             disabled={isValidating || !isOnline}
-            className="w-full h-[60px] rounded-[18px] btn-dark btn-tactile transition-all flex items-center justify-center gap-2 text-white font-semibold text-[16px]"
+            className={`w-full h-[60px] rounded-[18px] btn-dark btn-tactile transition-all flex items-center justify-center gap-2 text-white font-semibold text-[16px] ${isValidating ? 'opacity-90 cursor-wait' : ''}`}
           >
             {isValidating ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Signing In...</span>
+              </div>
             ) : (
               <div className="flex items-center justify-center gap-2 h-full">
                 <span>Sign In</span>

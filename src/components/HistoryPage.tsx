@@ -15,13 +15,14 @@ import {
   BadgeX
 } from "lucide-react";
 import LogoHeader from "./common/LogoHeader";
-import { getStudentFinancialSummary } from "../lib/supabase/api/registration";
+import { getStudentFinancialSummary } from "../lib/supabase/api/transactions";
 import { getStudentsByPhone } from "../data/students";
 import type { Student } from "../data/students";
-import type { FinancialSummary } from "../lib/supabase/api/registration";
 import { haptics } from "../utils/haptics";
 import { toast } from "sonner";
 import cardBg from "../assets/background images/Frame 1707478741.png";
+
+type FinancialSummary = any;
 
 function AnimatedNumber({ value }: { value: number }) {
   const spring = useSpring(0, {
@@ -94,6 +95,12 @@ export default function HistoryPage({
   // 2. Fetch Financial Summary when selected student changes
   useEffect(() => {
     if (!selectedStudentId) return;
+    const selectedStudent = students.find(s => s.id === selectedStudentId);
+    if (selectedStudent?.verificationStatus === 'unverified') {
+      setFinancialSummary(null);
+      setIsLoading(false);
+      return;
+    }
 
     const loadSummary = async () => {
       setIsLoading(true);
@@ -107,10 +114,11 @@ export default function HistoryPage({
       }
     };
     loadSummary();
-  }, [selectedStudentId]);
+  }, [selectedStudentId, students]);
 
-  const hasOutstandingBalance = (financialSummary?.totalBalance ?? 0) > 0;
   const currentStudent = students.find(s => s.id === selectedStudentId);
+  const isSelectedUnverified = currentStudent?.verificationStatus === 'unverified';
+  const hasOutstandingBalance = !isSelectedUnverified && (financialSummary?.totalBalance ?? 0) > 0;
 
   return (
     <div className="bg-[#f8fafc] min-h-screen w-full overflow-hidden flex flex-col">
@@ -154,8 +162,7 @@ export default function HistoryPage({
                   onClick={() => {
                     haptics.heavy();
                     if (onClearBalances) {
-                      const studentIds = students.map(s => s.id);
-                      onClearBalances(studentIds);
+                      onClearBalances([selectedStudentId]);
                     } else {
                       toast.info('Going to checkout...');
                     }
@@ -222,7 +229,23 @@ export default function HistoryPage({
                   Reconciling Ledger
                 </p>
               </div>
-            ) : financialSummary?.items?.map((item, idx) => (
+            ) : isSelectedUnverified ? (
+              <div className="py-16 flex flex-col items-center justify-center gap-4 text-center">
+                <BadgeX className="text-amber-500" size={28} />
+                <p className="font-['Space_Grotesk',sans-serif] text-[14px] text-gray-600 font-bold uppercase tracking-[0.12em]">
+                  No payment history
+                </p>
+                <p className="text-[12px] text-gray-400 max-w-[320px] leading-relaxed">
+                  This profile is pending school confirmation, so invoices and payment history are not available yet. Please contact your school to confirm the student details.
+                </p>
+                <button
+                  onClick={onBack}
+                  className="mt-2 bg-[#003630] text-white rounded-[8px] px-5 py-2 text-[12px] font-bold uppercase tracking-[0.1em] active:scale-95 transition-transform"
+                >
+                  Go Back
+                </button>
+              </div>
+            ) : (financialSummary?.items?.length ? financialSummary.items.map((item, idx) => (
               <ServiceCategoryCard
                 key={item.id || idx}
                 item={item}
@@ -248,6 +271,13 @@ export default function HistoryPage({
                   }
                 }}
               />
+            )) : (
+              <div className="py-16 flex flex-col items-center justify-center gap-4 text-center">
+                <BadgeCheck className="text-[#95e36c]" size={28} />
+                <p className="font-['Space_Grotesk',sans-serif] text-[13px] text-gray-500 font-bold uppercase tracking-[0.12em]">
+                  No uncleared balances
+                </p>
+              </div>
             ))}
           </div>
 

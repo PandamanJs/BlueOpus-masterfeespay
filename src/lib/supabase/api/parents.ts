@@ -1,19 +1,85 @@
 import { supabase, handleSupabaseError } from '../client';
 import type { Parent, ParentWithStudents, StudentWithSchool } from '../types';
-import { phoneOrFilter } from '../../../utils/reconciliation';
+import { phoneVariants } from '../../../utils/reconciliation';
+
+async function fetchStudentsForParentId(parentId: string): Promise<StudentWithSchool[]> {
+    const selectClause = `
+        *,
+        school:schools(*),
+        student_grade(
+            grade_id,
+            is_active,
+            grade:grades(grade_name)
+        )
+    `;
+
+    const isLegacyLinkQueryUnsupported = (error: any): boolean => {
+        const message = String(error?.message || '').toLowerCase();
+        const details = String(error?.details || '').toLowerCase();
+        const hint = String(error?.hint || '').toLowerCase();
+        const combined = `${message} ${details} ${hint}`;
+
+        return (
+            /column .* does not exist/.test(combined) ||
+            /failed to parse logic tree/.test(combined) ||
+            /unknown column/.test(combined) ||
+            /student_parent_id|student_other_parent_id/.test(combined)
+        );
+    };
+
+    const fetchByLink = async (primaryCol: string, secondaryCol: string): Promise<{ data: any[]; missingColumns: boolean }> => {
+        const { data, error } = await supabase
+            .from('students')
+            .select(selectClause)
+            .or(`${primaryCol}.eq.${parentId},${secondaryCol}.eq.${parentId}`);
+
+        if (error) {
+            // Some deployments still use one pair of link columns only.
+            if (isLegacyLinkQueryUnsupported(error)) return { data: [], missingColumns: true };
+            handleSupabaseError(error, `fetchStudentsForParentId (${primaryCol}/${secondaryCol})`);
+        }
+        return { data: data || [], missingColumns: false };
+    };
+
+    // Query modern schema first. Only attempt legacy schema when modern rows are empty.
+    const modern = await fetchByLink('parent_id', 'other_parent_id');
+    let legacy: { data: any[]; missingColumns: boolean } = { data: [], missingColumns: true };
+    if ((modern.data || []).length === 0) {
+        legacy = await fetchByLink('student_parent_id', 'student_other_parent_id');
+    }
+
+    // Support mixed deployments where some rows are linked through modern columns
+    // and others still exist on legacy columns.
+    const mergedRows = [...modern.data, ...legacy.data];
+    const dedupedRows = Array.from(
+        new Map(mergedRows.map((row: any) => [row.student_id, row])).values()
+    );
+
+    return dedupedRows.map((s: any) => {
+        const activeGrade = s.student_grade?.find((sg: any) => sg.is_active) || s.student_grade?.[0];
+        return {
+            ...s,
+            id: s.student_id,
+            name: `${s.first_name || ''} ${s.last_name || ''}`.trim(),
+            grade: activeGrade?.grade?.grade_name || 'Unknown',
+            gradeId: activeGrade?.grade_id,
+            admissionNumber: s.admission_number,
+        };
+    }) as StudentWithSchool[];
+}
 
 /**
- * Get parent by phone number — queries `parents` table in Master-fees Database.
+ * Get parent by phone number - queries `parents` table in Master-fees Database.
  */
 export async function getParentByPhone(phone: string): Promise<ParentWithStudents | null> {
     try {
-        const orQuery = phoneOrFilter('phone_number', phone);
-        console.log('[getParentByPhone] Querying with:', orQuery);
+        const variants = phoneVariants(phone).filter(v => v.replace(/\D/g, '').length >= 9);
+        console.log('[getParentByPhone] Querying with variants:', variants);
 
         const { data: parentRaw, error: parentError } = await supabase
             .from('parents')
             .select('*')
-            .or(orQuery)
+            .in('phone_number', variants)
             .limit(1)
             .maybeSingle();
 
@@ -34,33 +100,7 @@ export async function getParentByPhone(phone: string): Promise<ParentWithStudent
             updated_at: null,
         } as unknown as Parent;
 
-        // Get students for this parent with their school info and current grade
-        const { data: studentsRaw, error: studentsError } = await supabase
-            .from('students')
-            .select(`
-                *,
-                school:schools(*),
-                student_grade(
-                    grade_id,
-                    is_active,
-                    grade:grades(grade_name)
-                )
-            `)
-            .or(`parent_id.eq.${parent.id},other_parent_id.eq.${parent.id}`);
-
-        if (studentsError) handleSupabaseError(studentsError, 'getParentByPhone - students');
-
-        const mappedStudents = (studentsRaw || []).map((s: any) => {
-            const activeGrade = s.student_grade?.find((sg: any) => sg.is_active) || s.student_grade?.[0];
-            return {
-                ...s,
-                id: s.student_id,
-                name: `${s.first_name || ''} ${s.last_name || ''}`.trim(),
-                grade: activeGrade?.grade?.grade_name || 'Unknown',
-                gradeId: activeGrade?.grade_id,
-                admissionNumber: s.admission_number,
-            };
-        });
+        const mappedStudents = await fetchStudentsForParentId(parent.id);
 
         return { ...parent, students: mappedStudents as StudentWithSchool[] };
     } catch (error) {
@@ -75,6 +115,19 @@ export async function getParentByPhone(phone: string): Promise<ParentWithStudent
 export async function getStudentsByParentPhone(phone: string): Promise<StudentWithSchool[]> {
     const parentData = await getParentByPhone(phone);
     return parentData?.students || [];
+}
+
+/**
+ * Get students for a parent by parent_id.
+ */
+export async function getStudentsByParentId(parentId: string): Promise<StudentWithSchool[]> {
+    try {
+        if (!parentId?.trim()) return [];
+        return await fetchStudentsForParentId(parentId.trim());
+    } catch (error) {
+        console.error('[getStudentsByParentId] Error:', error);
+        throw error;
+    }
 }
 
 /**
@@ -159,23 +212,70 @@ export async function updateParent(
 }
 
 /**
- * Log a dispute for a student balance.
+ * Log a parent dispute against a student's account.
  */
-export async function logDispute(studentId: string, parentId: string, notes: string): Promise<void> {
+export async function logDispute(studentId: string, parentId: string, reason: string): Promise<void> {
     try {
         const { error } = await supabase
-            .from('disputes')
+            .from('refund_requests')
             .insert({
                 student_id: studentId,
                 parent_id: parentId,
-                notes: notes,
+                amount: 0,
+                reason: reason.trim(),
                 status: 'pending',
-                created_at: new Date().toISOString()
+                meta_data: {
+                    source: 'account_profile',
+                    type: 'student_account_dispute'
+                },
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
             });
 
         if (error) handleSupabaseError(error, 'logDispute');
     } catch (error) {
         console.error('[logDispute] Error:', error);
+        throw error;
+    }
+}
+
+/**
+ * Mark a student record as verified/updated by parent.
+ * We clear the explicit `unverified` marker.
+ */
+export async function markStudentAsVerified(studentId: string, parentId: string): Promise<void> {
+    try {
+        const { data: currentStudent, error: fetchError } = await supabase
+            .from('students')
+            .select('metadata')
+            .eq('student_id', studentId)
+            .or(`parent_id.eq.${parentId},other_parent_id.eq.${parentId}`)
+            .maybeSingle();
+
+        if (fetchError) handleSupabaseError(fetchError, 'markStudentAsVerified - fetch');
+        if (!currentStudent) throw new Error('Student not found for this parent.');
+
+        const currentMetadata = (currentStudent as any).metadata;
+        const nextMetadata = currentMetadata && typeof currentMetadata === 'object'
+            ? { ...currentMetadata }
+            : undefined;
+
+        if (nextMetadata && 'verification_status' in nextMetadata) {
+            delete nextMetadata.verification_status;
+        }
+
+        const payload: any = { verification_status: null };
+        if (nextMetadata) payload.metadata = nextMetadata;
+
+        const { error: updateError } = await supabase
+            .from('students')
+            .update(payload)
+            .eq('student_id', studentId)
+            .or(`parent_id.eq.${parentId},other_parent_id.eq.${parentId}`);
+
+        if (updateError) handleSupabaseError(updateError, 'markStudentAsVerified - update');
+    } catch (error) {
+        console.error('[markStudentAsVerified] Error:', error);
         throw error;
     }
 }

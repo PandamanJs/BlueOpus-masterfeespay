@@ -634,6 +634,8 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
                 invoiced: total,
                 balance: total,
                 status: inv.status,
+                term: inv.term,
+                academic_year: inv.academic_year || inv.year,
                 initiated_at: (inv as any).created_at || (inv as any).issued_at || (inv as any).date_issued || null,
                 transactions: [] // We'll fill this specifically
             };
@@ -648,12 +650,15 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         if (!hasTuitionInvoice && tuitionPrice > 0) {
             fallbackItems.push({
                 type: 'tuition',
+                id: `virtual-tuition-${studentId}`,
                 name: `${activeGradeName} Tuition Fees`,
                 expected: tuitionPrice,
                 collected: 0,
                 invoiced: 0,
                 balance: tuitionPrice,
                 status: 'unpaid',
+                term: null, // Virtual debt might not have a fixed term yet
+                academic_year: new Date().getFullYear(),
                 initiated_at: null,
                 transactions: []
             });
@@ -674,6 +679,8 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
                     invoiced: 0,
                     balance: price,
                     status: 'unpaid',
+                    term: en.term,
+                    academic_year: en.academic_year || en.year,
                     initiated_at: null,
                     transactions: []
                 });
@@ -683,11 +690,13 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         const allItems = [...invoiceItems, ...fallbackItems];
 
         // 5. Attribute payments — match each transaction to exactly ONE item
+        let totalPaid = 0;
         let unallocatedPaymentsTotal = 0;
         const unallocatedTxs: any[] = [];
 
         transactions.forEach(tx => {
             const amount = Number(tx.amount || 0);
+            totalPaid += amount;
             const txInvoiceId = (tx as any).invoice_id;
             const reason = (tx.reason || '').toLowerCase();
 
@@ -708,6 +717,7 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
 
             if (match) {
                 match.collected += amount;
+                if (!match.transactions) match.transactions = [];
                 match.transactions.push(tx); // Attach transaction to this specific item
             } else {
                 // If no match found, this is an orphan/unallocated payment (surplus source)
@@ -719,17 +729,15 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         // Finalize balances with Waterfall Logic:
         // Automatically apply overpayments (credits) to any other outstanding debt for this student.
         items.length = 0;
-        let surplus = unallocatedPaymentsTotal; // Start with unallocated orphan payments
+        let surplusValue = unallocatedPaymentsTotal; // Start with unallocated orphan payments
         
         // Phase 1: Identify all items with surplus (overpayments)
         const provisionalItems = allItems.map(it => {
             const rawBalance = Math.max(it.expected, it.invoiced) - it.collected;
             if (rawBalance < 0) {
                 const cred = Math.abs(rawBalance);
-                surplus += cred;
+                surplusValue += cred;
                 // An overpayment means this item is 'cleared' and contributes to the global surplus.
-                // We do NOT set credit_applied here because no credit was used TO pay this item; 
-                // this item itself IS the source of the credit.
                 return { ...it, balance: 0, status: 'cleared', credit_applied: 0 };
             }
             // Items with debt (balance > 0) start with 0 credit_applied
@@ -740,31 +748,27 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         provisionalItems.sort((a,b) => (a.initiated_at || '').localeCompare(b.initiated_at || ''));
 
         provisionalItems.forEach(it => {
-            if (it.balance > 0 && surplus > 0) {
-                const deduction = Math.min(it.balance, surplus);
+            if (it.balance > 0 && surplusValue > 0) {
+                const deduction = Math.min(it.balance, surplusValue);
                 it.balance -= deduction;
-                // THIS is where credit is applied: to settle a debt.
-                it.credit_applied = deduction; 
-                surplus -= deduction;
+                it.credit_applied = (it.credit_applied || 0) + deduction; 
+                surplusValue -= deduction;
             }
             items.push(it);
         });
 
         // Phase 3: Total remaining absolute surplus
-        // If there's still a surplus (net positive balance for student), we keep it on the most recent item 
-        // to show a net negative balance (Credit) in the statement. 
-        // We handle the edge case where items might be empty by adding a placeholder surplus item.
-        if (surplus > 0) {
+        if (surplusValue > 0) {
             if (items.length > 0) {
-                items[items.length - 1].balance -= surplus; 
+                items[items.length - 1].balance -= surplusValue; 
             } else {
                 items.push({
                     type: 'surplus',
                     name: 'Account Credit / Surplus',
                     expected: 0,
-                    collected: surplus,
+                    collected: surplusValue,
                     invoiced: 0,
-                    balance: -surplus,
+                    balance: -surplusValue,
                     status: 'cleared',
                     initiated_at: new Date().toISOString()
                 });
@@ -772,17 +776,34 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         }
 
         const totalBalance = items.reduce((sum, it) => sum + (it.balance || 0), 0);
+        const totalInvoiced = allItems.reduce((sum, it) => sum + it.expected, 0);
+
+        // Term Locking Map (for AddServicesPage)
+        const termServiceMap: Record<number, string[]> = {};
+        items.forEach(it => {
+            if (it.term) {
+                if (!termServiceMap[it.term]) termServiceMap[it.term] = [];
+                termServiceMap[it.term].push(it.name.toLowerCase());
+            }
+        });
 
         return {
             student: {
                 id: student.student_id,
                 name: `${student.first_name} ${student.last_name}`,
                 admission_number: student.admission_number,
-                grade: activeGradeName
+                grade: activeGradeName,
+                active_grade_id: activeGradeId
             },
             items,
-            totalBalance,
-            transactions
+            termServiceMap,
+            totalInvoiced,
+            totalPaid,
+            totalBalance: Math.max(0, totalBalance),
+            netBalanceRaw: totalBalance,
+            surplus: surplusValue,
+            transactions,
+            reconciledAt: new Date().toISOString()
         };
 
     } catch (e) {

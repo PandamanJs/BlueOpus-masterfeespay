@@ -9,8 +9,13 @@
  * Now powered by Supabase instead of mock data!
  */
 
-import { getParentByPhone, getStudentsByParentPhone } from '../lib/supabase/api/parents';
-import { getStudentsOutstandingBalances, getStudentsUnpaidInvoicesCount, getStudentsActualDebt } from '../lib/supabase/api/transactions';
+import { getParentByPhone, getStudentsByParentPhone, getStudentsByParentId as getStudentsByParentIdApi } from '../lib/supabase/api/parents';
+import {
+  getStudentsOutstandingBalances,
+  getStudentsUnpaidInvoicesCount,
+  getStudentsActualDebt,
+  getStudentFinancialSummary
+} from '../lib/supabase/api/transactions';
 import type { StudentWithSchool } from '../lib/supabase/types';
 
 // Re-export types for backward compatibility
@@ -18,6 +23,7 @@ export interface Student {
   name: string;
   id: string; // This MUST be the UUID for database queries
   admissionNumber?: string; // For display purposes (e.g. TEC1455)
+  verificationStatus?: 'unverified' | null;
   grade: string;
   balances: number;
   unpaidInvoicesCount: number;
@@ -38,6 +44,58 @@ export interface ParentData {
   primarySchool: string;
 }
 
+async function getCanonicalBalanceSnapshot(studentIds: string[]): Promise<{
+  balanceMap: Record<string, number>;
+  countMap: Record<string, number>;
+}> {
+  if (!studentIds.length) {
+    return { balanceMap: {}, countMap: {} };
+  }
+
+  const summaryResults = await Promise.all(
+    studentIds.map(async (studentId) => {
+      try {
+        const summary = await getStudentFinancialSummary(studentId);
+        const totalBalance = Number(summary?.totalBalance ?? 0);
+        const outstandingCount = Array.isArray(summary?.items)
+          ? summary.items.filter((item: any) => Number(item?.balance ?? 0) > 0).length
+          : 0;
+        return { studentId, totalBalance, outstandingCount, ok: true as const };
+      } catch {
+        return { studentId, totalBalance: 0, outstandingCount: 0, ok: false as const };
+      }
+    })
+  );
+
+  const failedIds = summaryResults.filter(r => !r.ok).map(r => r.studentId);
+  let fallbackBalanceMap: Record<string, number> = {};
+  let fallbackCountMap: Record<string, number> = {};
+
+  if (failedIds.length > 0) {
+    const [balances, counts] = await Promise.all([
+      getStudentsOutstandingBalances(failedIds),
+      getStudentsUnpaidInvoicesCount(failedIds)
+    ]);
+    fallbackBalanceMap = balances;
+    fallbackCountMap = counts;
+  }
+
+  const balanceMap: Record<string, number> = {};
+  const countMap: Record<string, number> = {};
+
+  for (const result of summaryResults) {
+    if (result.ok) {
+      balanceMap[result.studentId] = result.totalBalance;
+      countMap[result.studentId] = result.outstandingCount;
+      continue;
+    }
+    balanceMap[result.studentId] = fallbackBalanceMap[result.studentId] ?? 0;
+    countMap[result.studentId] = fallbackCountMap[result.studentId] ?? 0;
+  }
+
+  return { balanceMap, countMap };
+}
+
 /**
  * Convert Supabase student data to legacy format
  * Now fetches outstanding balance from payment_history table
@@ -50,6 +108,7 @@ async function convertToLegacyStudent(student: StudentWithSchool, balanceMap?: R
     name: student.name || 'Unknown Student',
     id: student.student_id || (student as any).id || '', // Always use UUID as the primary ID for logic/DB
     admissionNumber: (student as any).admission_number || '', // Store display ID separately
+    verificationStatus: ((student as any).verification_status === 'unverified' || (student as any)?.metadata?.verification_status === 'unverified') ? 'unverified' : null,
     grade: `${student.grade || ''}${(student as any).class ? ` ${(student as any).class}` : ''}`,
     // Use balance from payment_history invoices + any new pending transactions
     balances: (balanceMap?.[student.student_id] ?? 0),
@@ -87,11 +146,10 @@ export async function getStudentsByPhone(phone: string): Promise<Student[]> {
     }
 
     console.log(`[getStudentsByPhone] Found ${students.length} students, fetching balances...`);
-    // Fetch outstanding balances and counts from pending transactions and payment history
+    // Fetch canonical balances and counts so all fee pages stay in sync.
     const studentIds = students.map(s => s.student_id);
-    const [balanceMap, countMap, actualDebtMap] = await Promise.all([
-      getStudentsOutstandingBalances(studentIds),
-      getStudentsUnpaidInvoicesCount(studentIds),
+    const [{ balanceMap, countMap }, actualDebtMap] = await Promise.all([
+      getCanonicalBalanceSnapshot(studentIds),
       getStudentsActualDebt(studentIds)
     ]);
 
@@ -110,6 +168,32 @@ export async function getStudentsByPhone(phone: string): Promise<Student[]> {
 }
 
 /**
+ * Get students by parent_id.
+ */
+export async function getStudentsByParentId(parentId: string): Promise<Student[]> {
+  try {
+    const students = await getStudentsByParentIdApi(parentId);
+
+    if (!students || students.length === 0) {
+      return [];
+    }
+
+    const studentIds = students.map(s => s.student_id);
+    const [{ balanceMap, countMap }, actualDebtMap] = await Promise.all([
+      getCanonicalBalanceSnapshot(studentIds),
+      getStudentsActualDebt(studentIds)
+    ]);
+
+    return Promise.all(
+      students.map(student => convertToLegacyStudent(student, balanceMap, countMap, actualDebtMap))
+    );
+  } catch (error) {
+    console.error('[getStudentsByParentId] Error:', error);
+    return [];
+  }
+}
+
+/**
  * Get parent data by phone number
  * 
  * @param phone - Parent's phone number
@@ -123,11 +207,10 @@ export async function getParentDataByPhone(phone: string): Promise<ParentData | 
       return null;
     }
 
-    // Fetch outstanding balances and counts from pending transactions and payment history
+    // Fetch canonical balances and counts from the same source used in history.
     const studentIds = parentData.students.map((s: StudentWithSchool) => s.student_id);
-    const [balanceMap, countMap, actualDebtMap] = await Promise.all([
-      getStudentsOutstandingBalances(studentIds),
-      getStudentsUnpaidInvoicesCount(studentIds),
+    const [{ balanceMap, countMap }, actualDebtMap] = await Promise.all([
+      getCanonicalBalanceSnapshot(studentIds),
       getStudentsActualDebt(studentIds)
     ]);
 
@@ -138,7 +221,7 @@ export async function getParentDataByPhone(phone: string): Promise<ParentData | 
 
     return {
       name: parentData.name,
-      phone: parentData.phone_number,
+      phone: (parentData as any).phone_number || parentData.phone || '',
       students: convertedStudents,
       primarySchool: parentData.students[0]?.school.name || '',
     };

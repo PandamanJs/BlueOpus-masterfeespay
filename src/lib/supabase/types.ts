@@ -16,6 +16,7 @@ export interface StudentWithSchool {
     name: string;
     grade: string;
     class?: string;
+    verification_status?: 'unverified' | null;
     school: School;
 }
 
