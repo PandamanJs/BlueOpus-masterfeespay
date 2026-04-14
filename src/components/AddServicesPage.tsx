@@ -50,14 +50,7 @@ function ChildPill({ name, isActive, hasBalance, onClick }: { name: string; id: 
             <div className="flex flex-row items-center justify-center h-full">
                 <div className="flex gap-[10px] items-center justify-center px-[25px] py-[4px] relative h-full">
                     {isActive && (
-                        <div className="relative shrink-0 w-[10px] h-[10px]">
-                            <svg className="absolute block inset-0 w-full h-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10 10">
-                                <circle cx="5" cy="5" fill="#003630" fillOpacity="0.3" r="5" />
-                            </svg>
-                        </div>
-                    )}
-                    {!isActive && hasBalance && (
-                        <div className="w-[6px] h-[6px] rounded-full bg-[#95e36c] shadow-sm shrink-0" />
+                        <div className="w-[8px] h-[8px] rounded-full bg-[#95e36c] shrink-0 shadow-[0_0_8px_rgba(149,227,108,0.5)] animate-pulse" />
                     )}
                     <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[14px] whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold text-[#003630]" : "font-['Space_Grotesk',sans-serif] font-medium text-black"}`}>
                         <p className="m-0">{name}</p>
