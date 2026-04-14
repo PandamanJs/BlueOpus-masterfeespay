@@ -42,7 +42,6 @@ export default function LogoHeader({ onBack, showBackButton = false, className, 
 
     return (
         <div className={`h-[66px] w-full sticky top-0 z-[100] bg-white/95 backdrop-blur-[20px] flex items-center px-4 ${className}`}>
-            <div aria-hidden="true" className="absolute border-[#e5e7eb] border-[0px_0px_1px] border-solid inset-0 pointer-events-none" />
             
             {showBackButton && onBack && (
                <button 

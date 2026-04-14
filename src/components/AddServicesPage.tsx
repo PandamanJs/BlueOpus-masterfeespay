@@ -52,7 +52,7 @@ function ChildPill({ name, isActive, hasBalance, onClick }: { name: string; id: 
                     {isActive && (
                         <div className="w-[8px] h-[8px] rounded-full bg-[#95e36c] shrink-0 shadow-[0_0_8px_rgba(149,227,108,0.5)] animate-pulse" />
                     )}
-                    <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[14px] whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold text-[#003630]" : "font-['Space_Grotesk',sans-serif] font-medium text-black"}`}>
+                    <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[14px] whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold text-[#003630]" : "font-['Space_Grotesk',sans-serif] font-medium text-black/40"}`}>
                         <p className="m-0">{name}</p>
                     </div>
                 </div>
@@ -329,13 +329,17 @@ function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studen
                         <div className="relative flex items-start justify-between">
                             <div className="flex-1">
                                 <div className="flex items-center gap-[8px] mb-[4px]">
-                                    <div className="w-[3px] h-[18px] bg-gradient-to-b from-[#95e36c] to-[#7dd054] rounded-full" />
-                                    <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.5px] leading-[1.1]">
-                                        {isUniversity ? 'Add Tuition' : 'Add School Fees'}
+                                    <div className="flex items-center justify-center size-[22px] rounded-full border-[1.5px] border-black">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 5v14M5 12h14" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] tracking-[-0.5px] leading-[1.1]">
+                                        {isUniversity ? 'Add Products / Services' : 'Add Products / Services'}
                                     </h2>
                                 </div>
                                 <p className="font-['Inter:Regular',sans-serif] text-[11px] text-[#6b7280] tracking-[-0.1px] leading-[1.4] ml-[11px]">
-                                    {isUniversity ? 'Select program and payment options' : 'Select grade and payment options'}
+                                    {isUniversity ? '' : ''}
                                 </p>
                             </div>
                             <button
@@ -352,10 +356,10 @@ function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studen
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-[20px] py-[40px] space-y-[40px] min-h-[400px]">
+                    <div className="flex-1 overflow-y-auto px-[20px] pt-[12px] pb-[40px] space-y-[40px] min-h-[400px]">
                         <div>
                             <label className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] text-[#6b7280] tracking-[1px] uppercase mb-[16px] pl-[4px]">
-                                {isUniversity ? "Program/Year" : "Grade/Form"}
+                                {isUniversity ? "" : ""}
                             </label>
 
                             {(() => {
@@ -375,91 +379,32 @@ function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studen
                                     );
                                 }
 
-                                const showTabs = secondaryGrades.length > 0 && primaryGrades.length > 0 && !isUniversity;
-
-                                const displayedGrades = !showTabs ? gradeOptions : (gradeTab === 'primary' ? primaryGrades : secondaryGrades);
-
                                 return (
-                                    <div className="space-y-4">
-                                        {showTabs && (
-                                            <div className="relative flex p-[4px] bg-[#f1f3f5] items-center rounded-[14px] mx-[2px] mb-[12px]">
-                                                <button
-                                                    onClick={() => {
-                                                        haptics.selection();
-                                                        setGradeTab('primary');
-                                                    }}
-                                                    className="relative flex-1 py-[8px] px-[12px] text-center z-10"
-                                                >
-                                                    {gradeTab === 'primary' && (
-                                                        <motion.div
-                                                            layoutId="gradeTabIndicator"
-                                                            className="absolute inset-0 bg-white rounded-[10px] shadow-sm border-[1.5px] border-[#95e36c]"
-                                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                                        />
-                                                    )}
-                                                    <span className={`relative z-20 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] transition-colors duration-200 tracking-[-0.2px] ${gradeTab === 'primary' ? 'text-[#003630]' : 'text-[#6b7280]'
-                                                        }`}>
-                                                        Primary & Pre-School
-                                                    </span>
-                                                </button>
-
-                                                <button
-                                                    onClick={() => {
-                                                        haptics.selection();
-                                                        setGradeTab('secondary');
-                                                    }}
-                                                    className="relative flex-1 py-[8px] px-[12px] text-center z-10"
-                                                >
-                                                    {gradeTab === 'secondary' && (
-                                                        <motion.div
-                                                            layoutId="gradeTabIndicator"
-                                                            className="absolute inset-0 bg-white rounded-[10px] shadow-sm border-[1.5px] border-[#95e36c]"
-                                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                                        />
-                                                    )}
-                                                    <span className={`relative z-20 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] transition-colors duration-200 tracking-[-0.2px] ${gradeTab === 'secondary' ? 'text-[#003630]' : 'text-[#6b7280]'
-                                                        }`}>
-                                                        Secondary
-                                                    </span>
-                                                </button>
+                                    <div className="space-y-[10px]">
+                                        <label className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] tracking-[-0.2px] mb-[10px] pl-[4px]">
+                                            Select Grade
+                                        </label>
+                                        <div className="relative group">
+                                            <select
+                                                value={selectedGrade}
+                                                onChange={(e) => {
+                                                    haptics.selection();
+                                                    setSelectedGrade(e.target.value);
+                                                }}
+                                                className="w-full h-[78px] px-[24px] bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630] appearance-none cursor-pointer hover:border-[#d1d5db] focus:border-[#95e36c] focus:outline-none transition-all shadow-sm tracking-[-0.2px]"
+                                            >
+                                                <option value="" disabled>Select Grade</option>
+                                                {gradeOptions.map((opt) => (
+                                                    <option key={opt.value} value={opt.value}>
+                                                        {opt.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-[20px] top-1/2 -translate-y-1/2 pointer-events-none transition-transform group-hover:translate-y-[-calc(50%-1px)]">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M6 9l6 6 6-6" />
+                                                </svg>
                                             </div>
-                                        )}
-
-                                        <div className="grid grid-cols-2 gap-[12px]">
-                                            <AnimatePresence mode="popLayout">
-                                                {displayedGrades.map((option) => {
-                                                    const isActive = selectedGrade === option.value;
-                                                    const name = option.name || option.label.split(' - ')[0];
-
-                                                    return (
-                                                        <motion.button
-                                                            key={option.value}
-                                                            initial={{ opacity: 0, scale: 0.95 }}
-                                                            animate={{ opacity: 1, scale: 1 }}
-                                                            exit={{ opacity: 0, scale: 0.95 }}
-                                                            transition={{ duration: 0.15 }}
-                                                            onClick={() => {
-                                                                haptics.selection();
-                                                                setSelectedGrade(option.value);
-                                                            }}
-                                                            className={`relative h-[46px] flex items-center justify-center rounded-[12px] transition-all duration-200 border-[1.5px] active:scale-[0.96] ${isActive
-                                                                ? 'bg-[#95e36c] border-transparent shadow-[0px_4px_12px_rgba(149,227,108,0.25)]'
-                                                                : 'bg-white border-[#f1f3f5] text-[#4b5563]'
-                                                                }`}
-                                                        >
-                                                            <div className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] leading-tight text-center px-[8px] tracking-[0.1px] ${isActive ? 'text-[#003630]' : 'text-[#1f2937]'}`}>
-                                                                {name}
-                                                            </div>
-
-                                                            {isActive && (
-                                                                <div className="absolute top-[6px] right-[6px]">
-                                                                    <div className="w-[4px] h-[4px] rounded-full bg-[#003630]/30" />
-                                                                </div>
-                                                            )}
-                                                        </motion.button>
-                                                    );
-                                                })}
-                                            </AnimatePresence>
                                         </div>
                                     </div>
                                 );
@@ -468,37 +413,36 @@ function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studen
 
                         <div className="h-[1px] bg-[#e5e7eb]/10" />
 
-                        <div>
-                            <label className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] text-[#6b7280] tracking-[1px] uppercase mb-[16px] pl-[4px]">
-                                Session Details
-                            </label>
-
-                            <div className="flex flex-col gap-[20px] p-[20px] rounded-[24px] bg-[#f9fafb]/50 border border-[#f1f3f5]">
-                                <div className="space-y-[8px]">
-                                    <span className="text-[10px] font-bold text-[#9ca3af] uppercase tracking-wider ml-[2px]">Academic Year</span>
+                                <div className="space-y-[10px]">
+                                    <span className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] tracking-[-0.2px] mb-[10px] pl-[4px]">Academic Year</span>
                                     <div className="relative group">
                                         <select
                                             value={selectedYear}
-                                            onChange={(e) => setSelectedYear(e.target.value)}
-                                            className="w-full h-[50px] bg-white rounded-[14px] px-[16px] appearance-none font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] border-[1.5px] border-[#e5e7eb] focus:border-[#95e36c] outline-none shadow-sm transition-all"
+                                            onChange={(e) => {
+                                                haptics.selection();
+                                                setSelectedYear(e.target.value);
+                                            }}
+                                            className="w-full h-[78px] px-[24px] bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630] appearance-none cursor-pointer hover:border-[#d1d5db] focus:border-[#95e36c] focus:outline-none transition-all shadow-sm tracking-[-0.2px]"
                                         >
                                             {YEAR_OPTIONS.map(y => (
                                                 <option key={y} value={y}>{y}</option>
                                             ))}
                                         </select>
-                                        <div className="absolute right-[16px] top-1/2 -translate-y-1/2 pointer-events-none text-[#6b7280]">
-                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                        <div className="absolute right-[20px] top-1/2 -translate-y-1/2 pointer-events-none transition-transform group-hover:translate-y-[-calc(50%-1px)]">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M6 9l6 6 6-6" />
+                                            </svg>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="space-y-[12px]">
-                                    <span className="text-[10px] font-bold text-[#9ca3af] uppercase tracking-wider ml-[2px]">Payment Period</span>
+                                <div className="space-y-[10px]">
+                                    <span className="block font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] text-[#6b7280] tracking-[-0.2px] mb-[10px] pl-[4px]">Select Payment Period</span>
                                     <div className="grid grid-cols-3 gap-[10px]">
                                         {(isUniversity ? availableSemesters : availableTerms).map((term) => {
                                             const isActive = paymentPeriod === 'term' && selectedTerm === term;
                                             const isBlockedByInvoice = isTermBlocked(term);
-                                            const isBlockedByDebt = hasTuitionBalance && !isBlockedByInvoice; // Only show generic debt if not specifically invoiced
+                                            const isBlockedByDebt = hasTuitionBalance && !isBlockedByInvoice;
 
                                             return (
                                                 <button
@@ -509,62 +453,25 @@ function AddSchoolFeesForm({ onDone, onClose, schoolName, hasTuitionDebt, studen
                                                         setPaymentPeriod("term");
                                                         setSelectedTerm(term);
                                                     }}
-                                                    className={`h-[52px] rounded-[16px] flex flex-col items-center justify-center border-[1.5px] transition-all relative active:scale-95 ${isActive
-                                                        ? 'bg-[#95e36c] border-transparent text-[#003630] shadow-[0px_4px_12px_rgba(149,227,108,0.25)]'
+                                                    className={`h-[78px] rounded-[24px] flex flex-col items-center justify-center border-[1.5px] transition-all relative active:scale-95 ${isActive
+                                                        ? 'bg-[#95e36c] border-transparent shadow-[0px_4px_12px_rgba(149,227,108,0.25)]'
                                                         : (isBlockedByInvoice || isBlockedByDebt)
                                                             ? 'bg-[#FFF1F0]/40 border-[#FFCCC7]/30 cursor-not-allowed opacity-80'
                                                             : 'bg-white border-[#f1f3f5] text-[#4b5563] hover:border-[#d1d5db]'
                                                         }`}
                                                 >
-                                                    <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] tracking-[-0.1px] ${(isBlockedByInvoice || isBlockedByDebt) ? 'text-red-400' : ''}`}>
+                                                    <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] tracking-[-0.1px] ${isActive ? 'text-[#003630]' : (isBlockedByInvoice || isBlockedByDebt) ? 'text-red-400' : 'text-[#6b7280]'}`}>
                                                         {term.split(' ')[1] ? `Term ${term.split(' ')[1]}` : term}
                                                     </span>
                                                     {isBlockedByInvoice ? (
-                                                        <span className="text-[7.5px] text-red-500 font-black uppercase tracking-[0.5px] mt-[1px]">
-                                                            Already Invoiced
-                                                        </span>
+                                                        <span className="text-[7.5px] text-red-500 font-bold uppercase tracking-[0.5px] mt-[1px]">Invoiced</span>
                                                     ) : isBlockedByDebt ? (
-                                                        <span className="text-[7.5px] text-red-500 font-black uppercase tracking-[0.5px] mt-[1px]">
-                                                            Clear Balance
-                                                        </span>
+                                                        <span className="text-[7.5px] text-red-500 font-bold uppercase tracking-[0.5px] mt-[1px]">Unpaid</span>
                                                     ) : null}
                                                 </button>
                                             );
                                         })}
                                     </div>
-
-                                    <button
-                                        onClick={() => {
-                                            if (hasTuitionBalance) return;
-                                            haptics.selection();
-                                            setPaymentPeriod("year");
-                                        }}
-                                        disabled={hasTuitionBalance}
-                                        className={`w-full h-[52px] rounded-[14px] flex items-center justify-center border-[1.5px] transition-all relative active:scale-[0.98] mt-[8px] ${paymentPeriod === 'year'
-                                            ? 'bg-[#003630] border-transparent text-white shadow-[0px_6px_16px_rgba(0,54,48,0.2)]'
-                                            : hasTuitionBalance
-                                                ? 'bg-[#FFF1F0]/40 border-[#FFCCC7]/30 cursor-not-allowed opacity-80'
-                                                : 'bg-white border-[#e5e7eb] text-[#4b5563] hover:border-[#d1d5db]'
-                                            }`}
-                                    >
-                                        <div className="flex flex-col items-center gap-[1px]">
-                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] tracking-[-0.1px] ${hasTuitionBalance ? 'text-red-400' : ''}`}>
-                                                {isUniversity ? "Full Academic Year" : "Full Year (All 3 Terms)"}
-                                            </span>
-                                            {hasTuitionBalance && (
-                                                <span className="text-[8px] text-red-500 font-black uppercase tracking-[0.5px]">
-                                                    Please clear outstanding balance first
-                                                </span>
-                                            )}
-                                            {paymentPeriod === 'year' && (
-                                                <div className="absolute right-[16px] w-[18px] h-[18px] rounded-full bg-[#95e36c] flex items-center justify-center shadow-sm">
-                                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-                                                        <path d="M12 5L6.5 10.5L4 8" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                                                    </svg>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1030,7 +937,7 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                 <div className="flex-1 flex flex-col pt-[48px] pb-[280px] overflow-y-auto no-scrollbar gap-4">
                     {/* Header Card */}
                     <div className="px-[44px]">
-                        <div className="bg-[#f5f7f9] rounded-[22px] p-[20px] shadow-inner border border-gray-50/50 flex flex-col gap-4">
+                        <div className="bg-[#f9fafb] rounded-[22px] p-[20px] shadow-inner flex flex-col gap-4">
                             <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] font-bold leading-[34px] not-italic text-[24px] text-black tracking-[-0.18px] flex items-center gap-3">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
@@ -1094,51 +1001,51 @@ export default function AddServicesPage({ selectedStudentIds, userPhone, schoolN
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-[10px] w-full">
-                                {/* Add Fees */}
-                                <button
-                                    onClick={() => {
-                                        if (hasTuitionDebt) {
-                                            handleClearOutstandingDebt('tuition');
-                                            return;
-                                        }
-                                        handleAddSchoolFees();
-                                    }}
-                                    className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
-                                >
-                                    <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 5v14M5 12h14" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
-                                        {hasTuitionDebt ? 'Clear Debt' : (isUniversity ? 'Add Tuition' : 'Add Fees')}
-                                    </span>
-                                </button>
+                                    {/* Add Fees */}
+                                    <button
+                                        onClick={() => {
+                                            if (hasTuitionDebt) {
+                                                handleClearOutstandingDebt('tuition');
+                                                return;
+                                            }
+                                            handleAddSchoolFees();
+                                        }}
+                                        className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
+                                    >
+                                        <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M12 5v14M5 12h14" />
+                                            </svg>
+                                        </div>
+                                        <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
+                                            {hasTuitionDebt ? 'Clear Debt' : (isUniversity ? 'Add Tuition' : 'Add Fees')}
+                                        </span>
+                                    </button>
 
-                                {/* Other Services */}
-                                <button
-                                    onClick={() => {
-                                        if (hasOtherDebt) {
-                                            handleClearOutstandingDebt('other');
-                                            return;
-                                        }
-                                        haptics.buttonPress();
-                                        handleAddOtherServices();
-                                    }}
-                                    className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
-                                >
-                                    <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 5v14M5 12h14" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
-                                        {hasOtherDebt ? 'Clear Balance' : 'Other Services'}
-                                    </span>
-                                </button>
+                                    {/* Other Services */}
+                                    <button
+                                        onClick={() => {
+                                            if (hasOtherDebt) {
+                                                handleClearOutstandingDebt('other');
+                                                return;
+                                            }
+                                            haptics.buttonPress();
+                                            handleAddOtherServices();
+                                        }}
+                                        className="h-[48px] rounded-[16px] border border-gray-100 bg-[#f9fafb] flex items-center justify-center gap-2 active:scale-95 transition-all group"
+                                    >
+                                        <div className="bg-[#003630]/5 p-1 rounded-lg group-active:bg-[#003630]/10">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M12 5v14M5 12h14" />
+                                            </svg>
+                                        </div>
+                                        <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-[#003630] tracking-[-0.2px]">
+                                            {hasOtherDebt ? 'Clear Balance' : 'Other Services'}
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
                         {/* Unified Checkout Bar */}
                         <div className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] shadow-[0px_25px_60px_rgba(0,0,0,0.15)] h-[90px]">
