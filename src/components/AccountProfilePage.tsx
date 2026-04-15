@@ -18,7 +18,7 @@ import {
 import { useAppStore } from '../stores/useAppStore';
 import { hapticFeedback } from '../utils/haptics';
 import { toast } from 'sonner';
-import { updateParent, logDispute, markStudentAsVerified } from '../lib/supabase/api/parents';
+import { updateParent, logDispute } from '../lib/supabase/api/parents';
 import { getStudentsByParentId, getStudentsByPhone } from '../data/students';
 import type { Student } from '../data/students';
 import type { PageType } from '../stores/useAppStore';
@@ -87,7 +87,6 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [selectedDisputeStudent, setSelectedDisputeStudent] = useState<{ id: string, name: string } | null>(null);
-  const [verifyingStudentId, setVerifyingStudentId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -270,25 +269,9 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
                           
                           <div className="flex items-center gap-2">
                             {student.verificationStatus === 'unverified' && (
-                              <button
-                                onClick={async () => {
-                                  hapticFeedback('light');
-                                  setVerifyingStudentId(student.id);
-                                  try {
-                                    await markStudentAsVerified(student.id, userId);
-                                    await refreshStudents();
-                                    toast.success('Student profile marked as confirmed.');
-                                  } catch {
-                                    toast.error('Could not update school confirmation status.');
-                                  } finally {
-                                    setVerifyingStudentId(null);
-                                  }
-                                }}
-                                disabled={verifyingStudentId === student.id}
-                                className="h-[32px] px-4 rounded-full border border-[#95e36c]/40 bg-[#95e36c]/10 text-[#003630] text-[10px] font-black uppercase tracking-wider hover:bg-[#95e36c] hover:text-[#003630] transition-all active:scale-95 disabled:opacity-60"
-                              >
-                                {verifyingStudentId === student.id ? 'Updating...' : 'Mark Details as Updated'}
-                              </button>
+                              <span className="max-w-[160px] text-[10px] font-bold text-amber-700 leading-tight text-right">
+                                Awaiting school verification
+                              </span>
                             )}
                             <button 
                               onClick={() => {
@@ -354,6 +337,7 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
             student={selectedDisputeStudent}
             parentId={userId}
             onClose={() => setSelectedDisputeStudent(null)}
+            onSubmitted={refreshStudents}
           />
         )}
       </AnimatePresence>
@@ -361,7 +345,7 @@ export default function AccountProfilePage({ navigateToPage }: { navigateToPage:
   );
 }
 
-function DisputeDrawer({ student, parentId, onClose }: { student: { id: string, name: string }, parentId: string, onClose: () => void }) {
+function DisputeDrawer({ student, parentId, onClose, onSubmitted }: { student: { id: string, name: string }, parentId: string, onClose: () => void, onSubmitted: () => Promise<void> }) {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -376,7 +360,8 @@ function DisputeDrawer({ student, parentId, onClose }: { student: { id: string, 
 
     try {
       await logDispute(student.id, parentId, notes);
-      toast.success('Dispute logged successfully. School admin has been notified.');
+      await onSubmitted();
+      toast.success('Balance sent for school verification. Payments are paused until it is resolved.');
       hapticFeedback('success');
       onClose();
     } catch (e) {

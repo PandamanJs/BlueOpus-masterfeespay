@@ -73,6 +73,8 @@ function EmptyStudentState({ onAddManual }: { onAddManual: () => void }) {
 
 // StudentCard
 function StudentCard({ student, onEdit, onRemove }: { student: StudentData, onEdit: () => void, onRemove: () => void }) {
+  const isReviewRequest = Boolean(student.guardianReviewStudentId);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -100,21 +102,29 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData, onEd
             Guardian: {student.parentName || student.otherParentName}
           </p>
         )}
+        {isReviewRequest && (
+          <p className="text-[12px] text-amber-700 font-black uppercase tracking-wider mt-1">
+            School review request
+          </p>
+        )}
       </div>
 
       {/* Instruction Box */}
       <div className="bg-[#f9fafb] rounded-[8px] p-3 border border-[#e5e7eb] mb-4">
         <p className="text-[11px] text-gray-600 leading-relaxed text-left">
-          Make sure to confirm that the pupil's name and grade is correct. If any changes need to be made, please press the edit button below.
+          {isReviewRequest
+            ? 'This learner will not be linked until the school reviews the likely matching record.'
+            : "Make sure to confirm that the pupil's name and grade is correct. If any changes need to be made, please press the edit button below."}
         </p>
       </div>
 
       {/* Edit Button */}
       <button
         onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        disabled={isReviewRequest}
         className="w-full h-[40px] rounded-[8px] bg-white border border-[#e5e7eb] flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#000000] hover:bg-gray-50 transition-colors"
       >
-        Edit
+        {isReviewRequest ? 'Awaiting School' : 'Edit'}
       </button>
     </motion.div>
   );
@@ -137,9 +147,9 @@ function getBlockingReason(student: StudentData): { title: string; description: 
 
   if (student.requiresSchoolReview) {
     return {
-      title: 'Similar learner details were found.',
-      description: 'To avoid linking the wrong child, the school needs to confirm this match first.',
-      actionLabel: 'School Review',
+      title: 'High-risk duplicate match.',
+      description: 'There is more than one learner sharing this name in the same grade or class. You may choose the wrong child, so the school must confirm this request.',
+      actionLabel: 'Request Review',
     };
   }
 
@@ -335,6 +345,17 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const addStudent = (student: StudentData, options?: { forceMediumConfirm?: boolean }) => {
     console.log('[Registration] addStudent called:', student);
     haptics.selection();
+
+    if (student.guardianReviewStudentId) {
+      if (!students.find((s) => s.guardianReviewStudentId === student.guardianReviewStudentId)) {
+        setStudents([...students, student]);
+        setSearchQuery('');
+        setSearchResults([]);
+        console.log('[Registration] Student review request added to local state');
+      }
+      return;
+    }
+
     if (!student.id.startsWith('new-') && student.isGuardianLinkLocked) {
       import('sonner').then(({ toast }) => toast.error(
         'This learner already has two guardians linked.',
@@ -343,9 +364,17 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       return;
     }
     if (!student.id.startsWith('new-') && student.requiresSchoolReview) {
+      const reviewDraft = createSchoolReviewDraft({
+        id: `review-${Date.now()}`,
+        name: student.name,
+        grade: student.grade,
+        class: student.class,
+        studentId: 'School Review',
+      }, student);
+      addStudent(reviewDraft);
       import('sonner').then(({ toast }) => toast.info(
-        'Similar learner details were found.',
-        { description: 'To avoid linking the wrong child, the school needs to confirm this match first.' }
+        'School review request added.',
+        { description: 'The school must confirm this learner before payments are available.' }
       ));
       return;
     }
@@ -419,9 +448,31 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     studentId: 'New Registration',
   });
 
+  const createSchoolReviewDraft = (draft: StudentData, candidate: StudentData): StudentData => ({
+    ...draft,
+    id: `review-${Date.now()}`,
+    studentId: 'School Review',
+    requiresSchoolReview: false,
+    confidenceBand: undefined,
+    guardianReviewStudentId: candidate.id,
+    guardianReviewReason: 'duplicate_suspected',
+    guardianReviewEvidence: {
+      registrationSessionId: registrationSessionIdRef.current,
+      candidateStudentId: candidate.id,
+      candidateName: candidate.name,
+      candidateGrade: candidate.grade,
+      candidateClass: candidate.class,
+      confidenceScore: candidate.confidenceScore,
+      confidenceBand: candidate.confidenceBand,
+      parentChoseManualEntry: true,
+    },
+  });
+
   const finalizeManualStudentCreation = (studentToAdd: StudentData) => {
     addStudent(studentToAdd);
-    import('sonner').then(({ toast }) => toast.success('New record added to application'));
+    import('sonner').then(({ toast }) => toast.success(
+      studentToAdd.guardianReviewStudentId ? 'School review request added' : 'New record added to application'
+    ));
     handleCloseForm();
   };
 
@@ -440,7 +491,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       } else {
         const studentToAdd = createManualStudentDraft();
         const likelyDuplicates = smartMatchResults
-          .filter(candidate => !candidate.isGuardianLinkLocked && candidate.confidenceBand !== 'low')
+          .filter(candidate => !candidate.isGuardianLinkLocked && candidate.requiresSchoolReview)
           .slice(0, 3);
 
         if (likelyDuplicates.length > 0) {
@@ -505,7 +556,14 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   };
 
   const handleChooseExistingMatch = (candidate: StudentData) => {
-    addStudent(candidate);
+    if (candidate.requiresSchoolReview) {
+      const reviewDraft = createSchoolReviewDraft(pendingDuplicateReview?.draft || createManualStudentDraft(), candidate);
+      finalizeManualStudentCreation(reviewDraft);
+      setPendingDuplicateReview(null);
+      return;
+    }
+
+    addStudent(candidate, { forceMediumConfirm: true });
     setPendingDuplicateReview(null);
     handleCloseForm();
     import('sonner').then(({ toast }) => toast.success('Existing student added to your account list.'));
@@ -513,7 +571,9 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
   const handleCreateDuplicateAnyway = () => {
     if (!pendingDuplicateReview) return;
-    finalizeManualStudentCreation(pendingDuplicateReview.draft);
+    const primaryCandidate = pendingDuplicateReview.candidates[0];
+    const reviewDraft = createSchoolReviewDraft(pendingDuplicateReview.draft, primaryCandidate);
+    finalizeManualStudentCreation(reviewDraft);
     setPendingDuplicateReview(null);
   };
 
@@ -645,7 +705,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     Are you sure this is not your child?
                   </h3>
                   <p className="text-[12px] text-gray-500 mt-1">
-                    We found a likely match. Please confirm before creating a new learner record.
+                    We found a likely match. If this is the learner, choose the match. If not, we will ask the school to review before linking.
                   </p>
                 </div>
 
@@ -676,7 +736,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     onClick={handleCreateDuplicateAnyway}
                     className="flex-1 h-11 rounded-[12px] bg-[#003630] text-white text-[13px] font-semibold"
                   >
-                    Create New Anyway
+                    Request School Review
                   </button>
                 </div>
               </motion.div>
@@ -739,8 +799,8 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                       <button
                         key={student.id}
                         onClick={() => addStudent(student)}
-                        disabled={student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low'}
-                        className={`w-full p-3 text-left border-b border-gray-50 flex items-center justify-between group ${(student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low') ? 'opacity-60 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50'}`}
+                        disabled={student.isGuardianLinkLocked || student.confidenceBand === 'low'}
+                        className={`w-full p-3 text-left border-b border-gray-50 flex items-center justify-between group ${(student.isGuardianLinkLocked || student.confidenceBand === 'low') ? 'opacity-60 cursor-not-allowed bg-gray-50' : student.requiresSchoolReview ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-gray-50'}`}
                       >
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-[#003630] text-sm truncate">{student.name}</p>
@@ -763,21 +823,25 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                               </span>
                             )}
                             {getBlockingReason(student) && (
-                              <span className="text-[10px] text-amber-700 font-black uppercase tracking-wider">
-                                {getBlockingReason(student)?.title}
+                              <span className="text-[10px] text-amber-700 font-black uppercase tracking-wider leading-tight">
+                                {getBlockingReason(student)?.title} {student.requiresSchoolReview ? 'You may choose the wrong child.' : ''}
                               </span>
                             )}
                           </div>
                         </div>
                         <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold ml-2 flex-shrink-0 ${
-                          (student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low')
+                          (student.isGuardianLinkLocked || student.confidenceBand === 'low')
                             ? 'bg-gray-200 text-gray-500'
+                            : student.requiresSchoolReview
+                              ? 'bg-amber-100 text-amber-800'
                             : student.confidenceBand === 'medium'
                               ? 'bg-amber-100 text-amber-700'
                               : 'bg-emerald-100 text-emerald-700'
                         }`}>
-                          {(student.isGuardianLinkLocked || student.requiresSchoolReview || student.confidenceBand === 'low')
+                          {(student.isGuardianLinkLocked || student.confidenceBand === 'low')
                             ? (getBlockingReason(student)?.actionLabel || 'Review')
+                            : student.requiresSchoolReview
+                              ? 'Request Review'
                             : student.confidenceBand === 'medium'
                               ? 'Confirm'
                               : 'Add'}
@@ -888,14 +952,14 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                           {smartMatchResults.slice(0, 3).map(match => (
                             <button
                               key={match.id}
-                              disabled={match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low'}
+                              disabled={match.isGuardianLinkLocked || match.confidenceBand === 'low'}
                               onClick={(e) => {
                                 e.preventDefault();
                                 haptics.light();
                                 addStudent(match);
                                 handleCloseForm();
                               }}
-                              className={`w-full bg-white flex items-center justify-between p-3 rounded-[12px] border border-amber-100/50 transition-all text-left ${(match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low') ? 'opacity-60 cursor-not-allowed bg-gray-50' : 'hover:bg-amber-100/30 active:scale-[0.98]'}`}
+                              className={`w-full flex items-center justify-between p-3 rounded-[12px] border border-amber-100/50 transition-all text-left ${(match.isGuardianLinkLocked || match.confidenceBand === 'low') ? 'opacity-60 cursor-not-allowed bg-gray-50' : match.requiresSchoolReview ? 'bg-amber-100/50 hover:bg-amber-100 active:scale-[0.98]' : 'bg-white hover:bg-amber-100/30 active:scale-[0.98]'}`}
                             >
                               <div className="flex-1 min-w-0">
                                 <div className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate">
@@ -922,21 +986,25 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                                     </span>
                                   )}
                                   {getBlockingReason(match) && (
-                                    <span className="text-amber-700 uppercase text-[9px] font-black tracking-wider">
-                                      {getBlockingReason(match)?.title}
+                                    <span className="text-amber-700 uppercase text-[9px] font-black tracking-wider leading-tight">
+                                      {getBlockingReason(match)?.title} {match.requiresSchoolReview ? 'You may choose the wrong child.' : ''}
                                     </span>
                                   )}
                                 </div>
                               </div>
                               <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold ${
-                                (match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low')
+                                (match.isGuardianLinkLocked || match.confidenceBand === 'low')
                                   ? 'bg-gray-200 text-gray-500'
+                                  : match.requiresSchoolReview
+                                    ? 'bg-amber-100 text-amber-800'
                                   : match.confidenceBand === 'medium'
                                     ? 'bg-amber-100 text-amber-700'
                                     : 'bg-emerald-100 text-emerald-700'
                               }`}>
-                                {(match.isGuardianLinkLocked || match.requiresSchoolReview || match.confidenceBand === 'low')
+                                {(match.isGuardianLinkLocked || match.confidenceBand === 'low')
                                   ? (getBlockingReason(match)?.actionLabel || 'Review')
+                                  : match.requiresSchoolReview
+                                    ? 'Request Review'
                                   : match.confidenceBand === 'medium'
                                     ? 'Confirm'
                                     : 'Add'}

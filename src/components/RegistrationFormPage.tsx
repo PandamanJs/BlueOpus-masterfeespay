@@ -21,6 +21,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
   const [currentStep, setCurrentStep] = useState<RegistrationStep>('parent');
   const [parentData, setParentData] = useState<ParentData | null>(null);
   const [studentsData, setStudentsData] = useState<StudentData[]>([]);
+  const [studentBalanceDisputes, setStudentBalanceDisputes] = useState<Record<string, string>>({});
   const [schools, setSchools] = useState<School[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -114,7 +115,11 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         console.log('[Registration] Proceeding with parentId:', resolvedParentId);
 
         // 2. Link Students
-        await linkStudentsToParent(resolvedParentId, studentsData, parentData.schoolId);
+        const studentsWithDisputes = studentsData.map((student) => ({
+          ...student,
+          balanceDisputeNote: studentBalanceDisputes[student.id],
+        }));
+        await linkStudentsToParent(resolvedParentId, studentsWithDisputes, parentData.schoolId);
         console.log('[Registration] Students linked successfully');
 
         // Success!
@@ -274,6 +279,9 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
             students={studentsData}
             onBack={handleReviewBack}
             onConfirm={handleFinalConfirm}
+            onDisputeSubmit={(studentId, note) => {
+              setStudentBalanceDisputes(prev => ({ ...prev, [studentId]: note }));
+            }}
             isSubmitting={isSubmitting}
           />
         </motion.div>

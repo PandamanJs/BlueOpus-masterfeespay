@@ -18,6 +18,10 @@ export interface StudentData {
     confidenceScore?: number;
     requiresSchoolReview?: boolean;
     matchCandidateId?: string;
+    balanceDisputeNote?: string;
+    guardianReviewStudentId?: string;
+    guardianReviewReason?: 'duplicate_suspected' | 'manual_override';
+    guardianReviewEvidence?: Record<string, any>;
 }
 
 export type ConfidenceBand = 'high' | 'medium' | 'low';
@@ -346,30 +350,12 @@ export async function scoreStudentMatches(input: ScoreStudentMatchesInput): Prom
     const { data, error } = await query;
     if (error) throw new Error(`Failed to score student matches: ${error.message}`);
 
-    const queriedGrade = (input.queriedGrade || '').trim().toLowerCase();
-    const queriedClass = (input.queriedClass || '').trim().toLowerCase();
-
     // Enforce narrowing behavior: as users type more tokens, candidates must match all tokens.
     // Example: "banda" -> many rows, "banda tapiwa" -> only names containing both tokens.
     const narrowedRows = (data || []).filter((row: any) => {
         const displayName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
         return matchesAllQueryTokens(tokens, displayName);
     });
-
-    const duplicateByNameAndGrade = new Map<string, number>();
-    const duplicateByNameAndClass = new Map<string, number>();
-    for (const row of narrowedRows) {
-        const activeGrade = ((row as any).student_grade || []).find((sg: any) => sg.is_active) || (row as any).student_grade?.[0];
-        const studentGrade = (activeGrade?.grades?.grade_name || '').trim().toLowerCase();
-        const studentClass = (activeGrade?.class || '').trim().toLowerCase();
-        const fullName = normalizeName(`${row.first_name || ''} ${row.last_name || ''}`);
-
-        const gradeKey = `${fullName}::${studentGrade}`;
-        duplicateByNameAndGrade.set(gradeKey, (duplicateByNameAndGrade.get(gradeKey) || 0) + 1);
-
-        const classKey = `${fullName}::${studentClass}`;
-        duplicateByNameAndClass.set(classKey, (duplicateByNameAndClass.get(classKey) || 0) + 1);
-    }
 
     const candidates: MatchCandidate[] = narrowedRows.map((row: any) => {
         const displayName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
@@ -385,17 +371,23 @@ export async function scoreStudentMatches(input: ScoreStudentMatchesInput): Prom
         const overlap = tokenOverlapRatio(tokens, studentTokens);
         const tokenOverlap = Math.round(overlap * 30);
         const overlapSupport = overlap > 0 ? 40 : 0;
-        const gradeMatch = queriedGrade && gradeName.toLowerCase() === queriedGrade ? 10 : 0;
-        const classMatch = queriedClass && className.toLowerCase() === queriedClass ? 5 : 0;
+        const normalizedGrade = normalizeGradeLabel(gradeName);
+        const normalizedQueriedGrade = normalizeGradeLabel(input.queriedGrade || '');
+        const normalizedClass = normalizeClassLabel(className);
+        const normalizedQueriedClass = normalizeClassLabel(input.queriedClass || '');
+        const sameNameAsQuery = normalizedDisplay === normalizedQuery;
+        const sameQueriedGrade = Boolean(normalizedQueriedGrade) && normalizedGrade === normalizedQueriedGrade;
+        const sameQueriedClass = Boolean(normalizedQueriedClass)
+            && normalizedQueriedClass !== 'GENERAL'
+            && normalizedClass === normalizedQueriedClass;
+        const requiresSchoolReview = sameNameAsQuery && (sameQueriedGrade || sameQueriedClass);
 
-        const strictDuplicateByGrade = (duplicateByNameAndGrade.get(`${normalizedDisplay}::${gradeName.trim().toLowerCase()}`) || 0) > 1;
-        const strictDuplicateByClass = (duplicateByNameAndClass.get(`${normalizedDisplay}::${className.trim().toLowerCase()}`) || 0) > 1;
-        const strictDuplicate = strictDuplicateByGrade || strictDuplicateByClass;
+        const gradeMatch = sameQueriedGrade ? 10 : 0;
+        const classMatch = sameQueriedClass ? 5 : 0;
 
-        // Strong unique-name bonus: exact full-name matches that are not strict duplicates
-        // should be quick-path for parent UX.
-        const uniqueExactNameBonus = exactName > 0 && !strictDuplicate ? 25 : 0;
-        const duplicatePenalty = strictDuplicate ? -20 : 0;
+        // Same name is only risky when the entered grade or a real stream/class also matches.
+        const uniqueExactNameBonus = exactName > 0 && !requiresSchoolReview ? 25 : 0;
+        const duplicatePenalty = requiresSchoolReview ? -20 : 0;
 
         const rawScore = exactName + tokenOverlap + overlapSupport + gradeMatch + classMatch + uniqueExactNameBonus + duplicatePenalty;
         const confidenceScore = Math.max(0, Math.min(100, rawScore));
@@ -415,7 +407,7 @@ export async function scoreStudentMatches(input: ScoreStudentMatchesInput): Prom
                 classMatch,
                 duplicatePenalty
             },
-            requiresSchoolReview: strictDuplicate
+            requiresSchoolReview
         };
     }).sort((a, b) => b.confidenceScore - a.confidenceScore);
 
@@ -491,7 +483,23 @@ async function createGuardianLinkRequest(input: {
         .select('request_id')
         .single();
 
-    if (error) throw new Error(`Failed to create guardian link request: ${error.message}`);
+    if (error) {
+        if (error.code === '23505') {
+            const { data: existing, error: existingError } = await supabase
+                .from('guardian_link_requests')
+                .select('request_id')
+                .eq('parent_id', input.parentId)
+                .eq('requested_student_id', input.studentId)
+                .eq('status', 'pending')
+                .maybeSingle();
+
+            if (!existingError && existing?.request_id) {
+                return existing.request_id;
+            }
+        }
+
+        throw new Error(`Failed to create guardian link request: ${error.message}`);
+    }
     return data.request_id;
 }
 
@@ -749,12 +757,16 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
     }>();
     const createdStudentIds: string[] = [];
     const touchedExistingStudentIds = new Set<string>();
-    const existingIds = students.filter(s => !s.id.startsWith('new-')).map(s => s.id);
+    const existingIds = students
+        .filter(s => !s.id.startsWith('new-') && !s.guardianReviewStudentId)
+        .map(s => s.id);
     const previousStudentsMap = new Map<string, {
         parent_id: string | null;
         other_parent_id: string | null;
         first_name: string | null;
         last_name: string | null;
+        verification_status: string | null;
+        metadata: Record<string, any> | null;
     }>();
     const previousGradeMap = new Map<string, {
         student_id: string;
@@ -768,7 +780,7 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
 
     if (existingIds.length > 0) {
         const [{ data: previousStudents, error: prevStudentsError }, { data: previousGrades, error: prevGradesError }] = await Promise.all([
-            supabase.from('students').select('student_id, parent_id, other_parent_id, first_name, last_name').in('student_id', existingIds),
+            supabase.from('students').select('student_id, parent_id, other_parent_id, first_name, last_name, verification_status, metadata').in('student_id', existingIds),
             supabase.from('student_grade').select('student_id, grade_id, academic_year_id, class, is_active, school_id, stream_id')
                 .eq('academic_year_id', academicYear.academic_year_id)
                 .in('student_id', existingIds),
@@ -783,6 +795,8 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
                 other_parent_id: row.other_parent_id,
                 first_name: row.first_name,
                 last_name: row.last_name,
+                verification_status: row.verification_status,
+                metadata: row.metadata,
             });
         }
         for (const row of previousGrades || []) {
@@ -838,6 +852,43 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
 
     try {
         for (const student of students) {
+            if (student.guardianReviewStudentId) {
+                const requestId = await createGuardianLinkRequest({
+                    registrationSessionId: String(student.guardianReviewEvidence?.registrationSessionId || crypto.randomUUID()),
+                    parentId,
+                    schoolId,
+                    studentId: student.guardianReviewStudentId,
+                    requestReason: student.guardianReviewReason || 'duplicate_suspected',
+                    confidenceScore: typeof student.guardianReviewEvidence?.confidenceScore === 'number'
+                        ? student.guardianReviewEvidence.confidenceScore
+                        : undefined,
+                    confidenceBand: student.guardianReviewEvidence?.confidenceBand as ConfidenceBand | undefined,
+                    evidence: {
+                        ...student.guardianReviewEvidence,
+                        requestedName: student.name,
+                        requestedGrade: student.grade,
+                        requestedClass: student.class,
+                    },
+                });
+
+                await writeGuardianAudit({
+                    actorParentId: parentId,
+                    actorRole: 'parent',
+                    action: 'link_blocked',
+                    parentId,
+                    studentId: student.guardianReviewStudentId,
+                    requestId,
+                    payload: {
+                        reason: student.guardianReviewReason || 'duplicate_suspected',
+                        requestedName: student.name,
+                        requestedGrade: student.grade,
+                        requestedClass: student.class,
+                    },
+                });
+
+                continue;
+            }
+
             const desired = desiredByInputId.get(student.id);
             if (!desired) throw new Error(`Missing prepared registration data for ${student.name}.`);
 
@@ -884,6 +935,31 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
                 touchedExistingStudentIds.add(student.id);
             }
             await syncLegacyParentLinkIfAvailable(student_id, parentId);
+
+            if (student.balanceDisputeNote?.trim()) {
+                const { error: verificationError } = await supabase
+                    .from('students')
+                    .update({ verification_status: 'unverified' })
+                    .eq('student_id', student_id);
+                if (verificationError) throw new Error(`Failed to queue balance verification for ${student.name}: ${verificationError.message}`);
+
+                const { error: disputeError } = await supabase
+                    .from('refund_requests')
+                    .insert({
+                        student_id,
+                        parent_id: parentId,
+                        amount: 0,
+                        reason: student.balanceDisputeNote.trim(),
+                        status: 'pending',
+                        meta_data: {
+                            source: 'registration_review',
+                            type: 'student_account_dispute'
+                        },
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                    });
+                if (disputeError) throw new Error(`Failed to submit balance review request for ${student.name}: ${disputeError.message}`);
+            }
 
             const gradeEntry = {
                 student_id,
@@ -948,6 +1024,8 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
                         other_parent_id: previousStudent.other_parent_id,
                         first_name: previousStudent.first_name,
                         last_name: previousStudent.last_name,
+                        verification_status: previousStudent.verification_status,
+                        metadata: previousStudent.metadata,
                     })
                     .eq('student_id', studentId);
             }

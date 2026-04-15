@@ -12,10 +12,11 @@ interface ReviewPageProps {
   students: StudentData[];
   onBack: () => void;
   onConfirm: () => void;
+  onDisputeSubmit?: (studentId: string, note: string) => void;
   isSubmitting?: boolean;
 }
 
-export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }: ReviewPageProps) {
+export default function ReviewPage({ students, onBack, onConfirm, onDisputeSubmit, isSubmitting }: ReviewPageProps) {
   useEffect(() => {
     console.log('[Registration] ReviewPage mounted with students:', students.length);
   }, []);
@@ -24,6 +25,7 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
   const [isLoading, setIsLoading] = useState(true);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [disputedIds, setDisputedIds] = useState<Set<string>>(new Set());
+  const [submittedDisputeIds, setSubmittedDisputeIds] = useState<Set<string>>(new Set());
   const [disputeNotes, setDisputeNotes] = useState<Record<string, string>>({});
   const isTemporaryStudentId = (studentId: string) => studentId.startsWith('new-') || studentId.startsWith('review-');
 
@@ -69,8 +71,8 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
     }).format(Math.abs(amount)).replace('ZMW', 'K');
   };
 
-  // A student is considered "processed" if they are in confirmedIds
-  const allConfirmed = students.length > 0 && students.every(s => confirmedIds.has(s.id));
+  // A student is considered processed once the parent confirms the balance or submits it for school review.
+  const allConfirmed = students.length > 0 && students.every(s => confirmedIds.has(s.id) || submittedDisputeIds.has(s.id));
 
   return (
     <div className="bg-white min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
@@ -145,8 +147,8 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
                       Grade {(financialData?.student?.grade || activeStudent?.grade || '...')?.toString().replace(/^(grade\s+)/i, '')}
                     </p>
                   </div>
-                  <div className={`px-4 py-1.5 rounded-full ${(financialData?.totalBalance || 0) > 0 ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'} text-[11px] font-bold whitespace-nowrap border ${(financialData?.totalBalance || 0) > 0 ? 'border-red-100' : 'border-green-100'}`}>
-                    {(financialData?.totalBalance || 0) > 0 ? `${formatCurrency(financialData.totalBalance)} Balance` : 'CLEAN ACCOUNT'}
+                  <div className={`px-4 py-1.5 rounded-full ${disputedIds.has(activeStudentId) ? 'bg-amber-50 text-amber-700 border-amber-100' : (financialData?.totalBalance || 0) > 0 ? 'bg-red-50 text-red-500 border-red-100' : 'bg-green-50 text-green-600 border-green-100'} text-[11px] font-bold whitespace-nowrap border`}>
+                    {disputedIds.has(activeStudentId) ? 'SCHOOL REVIEW' : (financialData?.totalBalance || 0) > 0 ? `${formatCurrency(financialData.totalBalance)} Balance` : 'CLEAN ACCOUNT'}
                   </div>
                 </div>
 
@@ -193,7 +195,7 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
                           <textarea
                             value={disputeNotes[activeStudentId] || ''}
                             onChange={(e) => setDisputeNotes(prev => ({ ...prev, [activeStudentId]: e.target.value }))}
-                            placeholder="Please type in your actual total payment..."
+                            placeholder="Please share what looks incorrect and any payments the school should check..."
                             className="w-full min-h-[220px] p-5 rounded-[16px] border border-gray-200 bg-white text-[15px] outline-none focus:border-[#006e33] transition-all resize-none shadow-inner text-gray-700 placeholder:text-gray-300"
                           />
                         </div>
@@ -214,17 +216,25 @@ export default function ReviewPage({ students, onBack, onConfirm, isSubmitting }
                           </button>
                           <button 
                             onClick={() => {
+                              const note = (disputeNotes[activeStudentId] || '').trim();
+                              if (!note) return;
                               haptics.heavy();
-                              // In a real app we'd submit to DB. For now mark as processed
-                              setConfirmedIds(prev => {
+                              onDisputeSubmit?.(activeStudentId, note);
+                              setSubmittedDisputeIds(prev => {
                                 const next = new Set(prev);
                                 next.add(activeStudentId);
                                 return next;
                               });
+                              setConfirmedIds(prev => {
+                                const next = new Set(prev);
+                                next.delete(activeStudentId);
+                                return next;
+                              });
                             }}
+                            disabled={!(disputeNotes[activeStudentId] || '').trim()}
                             className="flex-1 h-[48px] rounded-[12px] border-[1px] border-gray-200 shadow-sm flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#000000] bg-white active:scale-95 transition-all"
                           >
-                            Submit
+                            Submit for review
                           </button>
                         </div>
                       </div>
