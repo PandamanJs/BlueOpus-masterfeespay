@@ -11,6 +11,7 @@ import {
   Check
 } from 'lucide-react';
 import { haptics } from '../utils/haptics';
+import { toast } from 'sonner';
 
 interface PolicyItem {
   id: string;
@@ -84,6 +85,7 @@ const CATEGORIES: PolicyCategory[] = [
 export default function PoliciesPage({ onBack }: PoliciesPageProps) {
   const [activeTab, setActiveTab] = useState<'policies' | 'refund'>('policies');
   const [expandedCategories, setExpandedCategories] = useState<string[]>(['payment', 'discounts', 'refunds']);
+  const [showRefundForm, setShowRefundForm] = useState(false);
 
   const toggleCategory = (id: string) => {
     haptics.light?.();
@@ -100,7 +102,11 @@ export default function PoliciesPage({ onBack }: PoliciesPageProps) {
           <button
             onClick={() => {
               haptics.medium?.();
-              onBack();
+              if (showRefundForm) {
+                setShowRefundForm(false);
+              } else {
+                onBack();
+              }
             }}
             className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-black active:scale-90 transition-transform"
           >
@@ -118,7 +124,7 @@ export default function PoliciesPage({ onBack }: PoliciesPageProps) {
         </div>
       </header>
 
-      <main className="w-full max-w-[600px] flex flex-col">
+      <main className="w-full max-w-[600px] flex flex-col pb-32">
         {/* ── Hero Section ── */}
         <section className="px-6 py-8 bg-[#f9fafb]">
           <div className="flex items-center gap-3 mb-4">
@@ -133,25 +139,27 @@ export default function PoliciesPage({ onBack }: PoliciesPageProps) {
         </section>
 
         {/* ── Tabs ── */}
-        <div className="px-6 py-6 flex items-center gap-4">
-          <button
-            onClick={() => { haptics.light?.(); setActiveTab('policies'); }}
-            className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'policies' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
-          >
-            {activeTab === 'policies' && <div className="w-1.5 h-3.5 bg-[#4FE501] rounded-full" />}
-            <span className={`text-xs font-bold font-['Space_Grotesk'] ${activeTab === 'policies' ? 'text-black' : ''}`}>Policies</span>
-          </button>
-          <button
-            onClick={() => { haptics.light?.(); setActiveTab('refund'); }}
-            className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'refund' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
-          >
-            {activeTab === 'refund' && <div className="w-1.5 h-4.5 bg-[#4FE501] rounded-full" />}
-            <span className={`text-xs font-bold font-['Space_Grotesk'] ${activeTab === 'refund' ? 'text-black' : ''}`}>Request a Refund</span>
-          </button>
-        </div>
+        {!showRefundForm && (
+          <div className="px-6 py-6 flex items-center gap-4">
+            <button
+              onClick={() => { haptics.light?.(); setActiveTab('policies'); }}
+              className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'policies' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
+            >
+              {activeTab === 'policies' && <div className="w-1.5 h-1.5 bg-[#4FE501] rounded-full" />}
+              <span className={`text-xs font-bold font-['Space_Grotesk'] ${activeTab === 'policies' ? 'text-black' : ''}`}>Policies</span>
+            </button>
+            <button
+              onClick={() => { haptics.light?.(); setActiveTab('refund'); }}
+              className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'refund' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
+            >
+              {activeTab === 'refund' && <div className="w-1.5 h-4.5 bg-[#4FE501] rounded-full" />}
+              <span className={`text-xs font-bold font-['Space_Grotesk'] ${activeTab === 'refund' ? 'text-black' : ''}`}>Refunds</span>
+            </button>
+          </div>
+        )}
 
         {/* ── Content ── */}
-        <div className="px-6 pb-12 space-y-4">
+        <div className="px-6 space-y-4 gap-4">
           {activeTab === 'policies' ? (
             <div className="space-y-4">
               {CATEGORIES.map((cat) => (
@@ -213,7 +221,7 @@ export default function PoliciesPage({ onBack }: PoliciesPageProps) {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : !showRefundForm ? (
             <div className="flex flex-col gap-4 h-full">
               {/* Info Banner */}
               <div className="p-4 bg-[#F7F7F7] rounded-xl flex items-center gap-4 border border-neutral-100 shadow-sm">
@@ -234,26 +242,103 @@ export default function PoliciesPage({ onBack }: PoliciesPageProps) {
                   The Requests you submit will appear here
                 </p>
               </div>
-
             </div>
+          ) : (
+            /* ── Refund Request Form ── */
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col gap-8 pt-4 pb-20"
+            >
+              <div className="flex-1 flex flex-col gap-2">
+                <h3 className="text-black text-base font-bold font-['Inter']">Please Fill in the Details</h3>
+              </div>
+
+              <div className="space-y-6">
+                {/* Select Account */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-zinc-500 text-xs font-normal font-['Inter']">Select Account(s)</label>
+                  <div className="w-full px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 flex items-center justify-between group active:bg-gray-50 transition-colors">
+                    <span className="text-black text-xs font-medium font-['Inter']">Shana Siwale</span>
+                    <ChevronDown size={16} className="text-neutral-600" />
+                  </div>
+                </div>
+
+                {/* Destination Details */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-zinc-500 text-xs font-normal font-['Inter']">Enter Destination Account Details</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 flex items-center justify-between">
+                      <span className="text-black text-xs font-medium font-['Inter']">Payment Method</span>
+                      <ChevronDown size={16} className="text-neutral-600" />
+                    </div>
+                    <div className="px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 flex items-center justify-end">
+                      <span className="text-zinc-400 text-xs font-medium font-['Inter']">Account Number</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-zinc-500 text-xs font-normal font-['Inter']">Enter the Amount you want to Request</label>
+                  <div className="w-full px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 flex items-center justify-end">
+                    <span className="text-zinc-400 text-xs font-medium font-['Inter']">K0.00</span>
+                  </div>
+                </div>
+
+                {/* Reason */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-zinc-500 text-xs font-normal font-['Inter']">Reason for Refund Request</label>
+                  <div className="w-full h-32 px-4 py-4 bg-white rounded-xl shadow-[inset_0px_4px_4px_0px_rgba(0,0,0,0.05)] outline outline-1 outline-offset-[-1px] outline-neutral-200">
+                    <span className="text-zinc-400 text-xs font-medium font-['Inter']">Please state the reason for your Refund Request</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           )}
         </div>
       </main>
 
       {/* ── Fixed Bottom Action Bar ── */}
       {activeTab === 'refund' && (
-        <div className="w-full fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-neutral-100 shadow-[0px_-10px_30px_rgba(0,0,0,0.03)] flex flex-col items-center">
+        <div className="w-full fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-neutral-100 shadow-[0px_-10px_30px_rgba(0,0,0,0.03)] flex flex-col items-center z-[60]">
           <div className="w-full max-w-[552px]">
-            <button
-              onClick={() => {
-                haptics.medium?.();
-                toast.info("Refund requests coming soon!");
-              }}
-              style={{ backgroundColor: '#003630' }}
-              className="w-full h-14 text-white rounded-xl flex items-center justify-center text-sm font-semibold font-['Inter'] shadow-xl shadow-teal-950/30 active:scale-[0.98] transition-all"
-            >
-              Request a Refund
-            </button>
+            {!showRefundForm ? (
+              <button
+                onClick={() => {
+                  haptics.medium?.();
+                  setShowRefundForm(true);
+                }}
+                style={{ backgroundColor: '#003630' }}
+                className="w-full h-14 text-white rounded-xl flex items-center justify-center text-sm font-semibold font-['Inter'] shadow-xl shadow-teal-950/30 active:scale-[0.98] transition-all"
+              >
+                Request a Refund
+              </button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    haptics.light?.();
+                    setShowRefundForm(false);
+                  }}
+                  className="flex-1 h-14 bg-transparent border border-neutral-200 text-black rounded-xl flex items-center justify-center gap-2 text-sm font-bold font-['Inter'] active:scale-[0.98] transition-all"
+                >
+                  <div className="w-3 h-3 flex items-center justify-center border border-neutral-400 rounded-sm scale-75 rotate-45" />
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    haptics.medium?.();
+                    toast.success("Refund request submitted!");
+                    setShowRefundForm(false);
+                  }}
+                  style={{ backgroundColor: '#003129' }}
+                  className="flex-1 h-14 text-white rounded-xl flex items-center justify-center text-sm font-medium font-['Inter'] shadow-lg active:scale-[0.98] transition-all"
+                >
+                  Submit
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
