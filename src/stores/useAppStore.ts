@@ -207,11 +207,6 @@ export const useAppStore = create<AppState>()(
           currentPage: page,
           navigationDirection: direction
         });
-
-        // Update browser history so the back button works
-        // We use hash routing (#search, #checkout, etc.)
-        const state = { page };
-        window.history.pushState(state, '', `#${page}`);
       },
 
       setNavigationDirection: (direction) => set({ navigationDirection: direction }),

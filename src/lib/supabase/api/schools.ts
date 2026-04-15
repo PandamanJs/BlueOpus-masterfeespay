@@ -165,6 +165,15 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                         category: (i.category as any)?.category || 'other'
                     }));
 
+                // Build category names map
+                const category_names: Record<string, string> = {};
+                items.forEach(i => {
+                    const cat = i.category as any;
+                    if (cat?.category && cat?.name && !category_names[cat.category]) {
+                        category_names[cat.category] = cat.name;
+                    }
+                });
+
                 console.log(`[API] Unified School details loaded. Grades: ${fetchedGradePricing.length}, Transport: ${fetchedBusRoutes.length}, Canteen: ${fetchedCanteen.length}`);
 
                 const school: School = {
@@ -181,6 +190,7 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                     bus_routes: fetchedBusRoutes,
                     boarding_rooms: fetchedBoarding,
                     canteen_plans: fetchedCanteen,
+                    category_names
                 };
                 return school;
             } // Close the 'else' block

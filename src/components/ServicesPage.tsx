@@ -1,7 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import svgPaths from "../imports/svg-o96q0cdj2h";
 import { useState, useEffect, useRef, useCallback } from "react";
-import LogoHeader from "./common/LogoHeader";
 import { getInstitutionType, getStudentsByPhone } from "../data/students";
 import { haptics } from "../utils/haptics";
 import { toast } from "sonner";
@@ -16,8 +14,9 @@ import {
   LogOut,
   X,
   Phone,
+  Check,
+  ShieldCheck,
 } from "lucide-react";
-import verifiedIcon from "../assets/button icons/verified.png";
 
 interface ServicesPageProps {
   userName: string;
@@ -53,6 +52,7 @@ function SettingsDrawer({
 }) {
   const items = [
     { icon: <User size={20} />, label: "Account Profile", disabled: true },
+    { icon: <ShieldCheck size={20} />, label: "Policies & Refunds", disabled: false },
     { icon: <Bell size={20} />, label: "Notifications", disabled: true },
     { icon: <HelpCircle size={20} />, label: "Help & Support", disabled: true },
   ];
@@ -153,6 +153,9 @@ function SettingsDrawer({
                         if (item.label === "Account Profile") {
                           onClose();
                           navigateToPage("account-profile");
+                        } else if (item.label === "Policies & Refunds") {
+                          onClose();
+                          navigateToPage("policies");
                         } else {
                           toast.info(`${item.label} coming soon!`);
                         }
@@ -210,132 +213,6 @@ function SettingsDrawer({
   );
 }
 
-function PageGroup1({ onBack, onShowSettings, schoolName }: { onBack: () => void; onShowSettings: () => void; schoolName?: string }) {
-  return (
-    <div className="absolute contents left-0 top-0">
-      {/* Welcome text moved to main greeting block for better alignment */}
-
-      <div className="absolute box-border h-[66px] left-1/2 top-0 translate-x-[-50%] w-full max-w-[600px]">
-        <LogoHeader onBack={onBack}>
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            <button
-              onClick={() => {
-                haptics.light?.();
-                onShowSettings();
-              }}
-              className="flex items-center justify-center text-[#003630] active:scale-90 transition-transform"
-            >
-              <Settings size={18} />
-            </button>
-          </div>
-        </LogoHeader>
-      </div>
-    </div>
-  );
-}
-
-function PageGroup2({ onBack, onShowSettings, schoolName }: { onBack: () => void; onShowSettings: () => void; schoolName?: string }) {
-  return (
-    <div className="absolute contents left-0 top-0">
-      <PageGroup1 onBack={onBack} onShowSettings={onShowSettings} schoolName={schoolName} />
-    </div>
-  );
-}
-
-function Frame2({ onPayFees, isUniversity }: { onPayFees?: () => void; isUniversity?: boolean }) {
-  return (
-    <div className="w-full animate-fade-in" style={{ animationDelay: '100ms' }}>
-      <button
-        onClick={() => {
-          haptics.medium?.();
-          onPayFees?.();
-        }}
-        className="w-full h-[60px] rounded-[18px] btn-dark btn-tactile flex items-center justify-between px-6 transition-all group shadow-[0_4px_0_0_#001a17,0_20px_40px_-10px_rgba(0,54,48,0.4)]"
-      >
-        <div className="flex items-center gap-4">
-          <div className="text-[#95e36c] group-active:scale-95 transition-transform">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="5" width="20" height="14" rx="2" />
-              <line x1="2" y1="10" x2="22" y2="10" />
-            </svg>
-          </div>
-          <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-white tracking-[-0.2px]">
-            {isUniversity ? 'Pay Tuition' : 'Pay for School Fees'}
-          </p>
-        </div>
-        <ChevronRight size={14} strokeWidth={3} className="text-white opacity-80" />
-      </button>
-    </div>
-  );
-}
-
-function Frame3({ onViewHistory, debtCount }: { onViewHistory: () => void; debtCount?: number }) {
-  return (
-    <div className="w-full animate-fade-in" style={{ animationDelay: '200ms' }}>
-      <button
-        onClick={() => {
-          haptics.light?.();
-          onViewHistory();
-        }}
-        className="w-full h-[60px] rounded-[18px] bg-white border border-gray-100 shadow-[0_4px_0_0_#f3f4f6,0_15px_30px_-10px_rgba(0,0,0,0.08)] active:translate-y-[2px] active:shadow-[0_2px_0_0_#f3f4f6,0_10px_20px_-5px_rgba(0,0,0,0.05)] transition-all flex items-center justify-between px-6 group"
-      >
-        <div className="flex items-center gap-4 text-[#003630]">
-          <div className="group-active:scale-95 transition-transform">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-          </div>
-          <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#003630] tracking-[-0.2px]">
-            Payment History
-          </p>
-        </div>
-        <ChevronRight size={14} strokeWidth={3} className="text-[#003630] opacity-40" />
-      </button>
-    </div>
-  );
-}
-
-function Frame4({ onSelectService }: { onSelectService: (service: string) => void }) {
-  return (
-    <div className="w-full animate-fade-in" style={{ animationDelay: '300ms' }}>
-      <button
-        onClick={() => {
-          haptics.light?.();
-          onSelectService("payment-plans");
-        }}
-        className="w-full h-[60px] rounded-[18px] bg-white border border-gray-100 shadow-[0_4px_0_0_#f3f4f6,0_15px_30px_-10px_rgba(0,0,0,0.08)] active:translate-y-[2px] active:shadow-[0_2px_0_0_#f3f4f6,0_10px_20px_-5px_rgba(0,0,0,0.05)] transition-all flex items-center justify-between px-6 group"
-      >
-        <div className="flex items-center gap-4 text-[#003630]">
-          <div className="group-active:scale-95 transition-transform">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-          </div>
-          <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#003630] tracking-[-0.2px]">
-            Policies & Refunds
-          </p>
-        </div>
-        <ChevronRight size={14} strokeWidth={3} className="text-[#003630] opacity-40" />
-      </button>
-    </div>
-  );
-}
-
-function Frame6({ onSelectService, onViewHistory, onPayFees, isUniversity, debtCount }: { onSelectService: (service: string) => void; onViewHistory: () => void; onPayFees?: () => void; isUniversity?: boolean; debtCount?: number }) {
-  return (
-    <div className="absolute flex flex-col gap-4 items-start left-1/2 translate-x-[-50%] top-[300px] w-full max-w-[600px] px-6">
-      <Frame2 onPayFees={onPayFees} isUniversity={isUniversity} />
-      <Frame3 onViewHistory={onViewHistory} debtCount={debtCount} />
-      <Frame4 onSelectService={onSelectService} />
-    </div>
-  );
-}
-
 export default function ServicesPage({ userName, userPhone, schoolName, onBack, onSelectService, onViewHistory, onPayFees, debtCount, onInactivityRefresh, navigateToPage }: ServicesPageProps) {
   const institutionType = schoolName ? getInstitutionType(schoolName) : undefined;
   const isUniversity = institutionType === 'university';
@@ -357,7 +234,7 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
   const [showSettings, setShowSettings] = useState(false);
 
   // ── Inactivity auto-refresh after 5 minutes ──────────────────────────────
-  const INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
+  const INACTIVITY_MS = 5 * 60 * 1000;
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetInactivityTimer = useCallback(() => {
@@ -367,7 +244,6 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
       if (onInactivityRefresh) {
         onInactivityRefresh();
       } else {
-        // Fallback: trigger a full page reload
         window.location.reload();
       }
     }, INACTIVITY_MS);
@@ -377,57 +253,144 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
     const events = ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'scroll'];
     const handler = () => resetInactivityTimer();
     events.forEach(e => window.addEventListener(e, handler, { passive: true }));
-    resetInactivityTimer(); // start the timer on mount
+    resetInactivityTimer();
     return () => {
       events.forEach(e => window.removeEventListener(e, handler));
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     };
   }, [resetInactivityTimer]);
-  // ────────────────────────────────────────────────────────────────────────
 
   const currentHour = new Date().getHours();
-  const greeting = currentHour >= 5 && currentHour < 12 ? "Good morning" : currentHour >= 12 && currentHour < 17 ? "Good Afternoon" : "Good Evening";
-
-  const handleViewPaymentPlans = (service: string) => {
-    if (service === "payment-plans") {
-      navigateToPage("policies");
-    } else {
-      onSelectService(service);
-    }
-  };
-
+  const greeting = currentHour >= 5 && currentHour < 12 ? "Good Morning" : currentHour >= 12 && currentHour < 17 ? "Good Afternoon" : "Good Evening";
 
   return (
-    <div className="bg-[#F9FAFB] min-h-screen w-full overflow-hidden flex items-center justify-center">
-      <div className="relative w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen mx-auto overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-[300px] bg-white shadow-[inset_0_-2px_10px_rgba(0,0,0,0.02)]">
-          <PageGroup2 onBack={onBack} onShowSettings={() => setShowSettings(true)} schoolName={displaySchoolName} />
+    <div className="bg-white min-h-screen w-full overflow-hidden flex flex-col items-center">
+      {/* ── Mobile Container ── */}
+      <div className="relative w-full max-w-[440px] h-screen bg-white shadow-2xl overflow-hidden flex flex-col">
+
+        {/* ── Header ── */}
+        <div className="w-full h-20 px-6 bg-white border-b border-neutral-200 flex items-center justify-between z-50">
+          <div className="flex items-center gap-3">
+            <div className="size-6 flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 12L12 22L22 12L12 2Z" />
+                <path d="M9 13L12 10L15 13" />
+              </svg>
+            </div>
+            <h1 className="text-black text-[22px] font-bold font-['Inter'] tracking-tight leading-none">masterfees</h1>
+          </div>
+
+          <button
+            onClick={() => {
+              haptics.light?.();
+              setShowSettings(true);
+            }}
+            className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-black active:scale-95 transition-all border border-gray-100"
+          >
+            <Settings size={20} strokeWidth={2} />
+          </button>
         </div>
-        <div className="absolute left-1/2 translate-x-[-50%] top-[110px] w-full max-w-[600px] px-[24px] flex flex-col gap-3">
-          <p className="font-['Inter:Light',sans-serif] text-[18px] text-[#003630]/60 leading-none">
-            {greeting},
-          </p>
-          <div className="flex items-center justify-between">
-            <p className="font-['Inter:Black',sans-serif] font-bold text-[34px] text-[#003630] leading-tight tracking-[1.5px]">
-              {userName}
-            </p>
-            <div className="flex items-center gap-2 translate-y-1">
-              <img
-                src="https://cdn-icons-png.flaticon.com/512/7595/7595571.png"
-                alt="Verified"
-                className="w-[16px] h-[16px] object-contain"
-              />
-              <span className="font-['Inter:SemiBold',sans-serif] text-[12px] text-[#003630]">Account Verified</span>
+
+        {/* ── Hero Greeting Block ── */}
+        <div className="w-full p-6 bg-gray-50 flex flex-col gap-4 animate-fade-in">
+          <div className="w-full flex justify-between items-start">
+            <div className="flex flex-col">
+              <span className="text-black/60 text-lg font-normal font-['Inter']">{greeting},</span>
+              <span className="text-black text-2xl font-bold font-['Inter'] leading-tight tracking-[-0.5px]">{userName}</span>
+            </div>
+
+            <div className="h-6 px-3 bg-[#95e36c]/10 rounded-full flex items-center gap-2 border border-[#95e36c]/30">
+              <div className="w-3.5 h-3.5 rounded-full bg-[#95e36c] flex items-center justify-center">
+                <Check size={10} strokeWidth={4} className="text-white gap-3" />
+              </div>
+              <span className="text-[#004d45] text-[10px] font-bold font-['Space_Grotesk'] uppercase tracking-wider">Account Verified</span>
             </div>
           </div>
-          <div className="mt-8 max-w-[340px]">
-            <p className="font-['Inter:Regular',sans-serif] text-[15px] text-[#003630]/70 leading-[1.6] tracking-[-0.2px]">
-              Welcome to the <span className="font-bold text-[#003630]">{displaySchoolName || 'school'}</span> payment portal. What would you like to do today?
+
+          <div className="py-2">
+            <p className="text-black/70 text-[13px] font-normal font-['Inter'] leading-relaxed">
+              Welcome to the <span className="font-semibold text-black">{displaySchoolName || 'Twalumbu Education Centre'}</span> payment portal. What would you like to do today?
             </p>
           </div>
         </div>
-        <Frame6 onSelectService={handleViewPaymentPlans} onViewHistory={onViewHistory} onPayFees={onPayFees} isUniversity={isUniversity} debtCount={debtCount} />
+
+        {/* ── Main Menu Actions ── */}
+        <div className="flex-1 px-6 py-8 flex flex-col gap-5 overflow-y-auto no-scrollbar scroll-smooth">
+
+          {/* Action: Pay Fees */}
+          <button
+            onClick={() => {
+              haptics.medium?.();
+              onPayFees?.();
+            }}
+            className="w-full h-[52px] px-6 bg-[#003630] rounded-xl flex items-center justify-between group active:scale-[0.98] transition-all shadow-lg shadow-teal-950/20"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 relative text-white group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <line x1="2" y1="7" x2="22" y2="7" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                </svg>
+              </div>
+              <span className="text-white text-[13px] font-bold font-['Inter'] tracking-tight">
+                {isUniversity ? 'Pay Tuition' : 'Pay for School Fees'}
+              </span>
+            </div>
+            <div className="w-5 h-5 flex items-center justify-center text-white transition-colors">
+              <ChevronRight size={16} strokeWidth={2.5} />
+            </div>
+          </button>
+
+          {/* Action: History */}
+          <button
+            onClick={() => {
+              haptics.light?.();
+              onViewHistory();
+            }}
+            className="w-full h-[52px] px-6 bg-white rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-between group active:scale-[0.98] transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 text-black group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <span className="text-black text-[13px] font-bold font-['Inter'] tracking-tight">Payment History</span>
+            </div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 group-hover:bg-gray-50 group-hover:text-black transition-all">
+              <ChevronRight size={16} strokeWidth={2.5} />
+            </div>
+          </button>
+
+          {/* Action: Policies */}
+          <button
+            onClick={() => {
+              haptics.light?.();
+              navigateToPage("policies");
+            }}
+            className="w-full h-[52px] px-6 bg-white rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-between group active:scale-[0.98] transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 text-black group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <span className="text-black text-[13px] font-bold font-['Inter'] tracking-tight">Policies & Refunds</span>
+            </div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 group-hover:bg-gray-50 group-hover:text-black transition-all">
+              <ChevronRight size={16} strokeWidth={2.5} />
+            </div>
+          </button>
+
+        </div>
+
       </div>
+
+
 
       <SettingsDrawer
         isOpen={showSettings}

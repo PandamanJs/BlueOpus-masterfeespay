@@ -129,6 +129,11 @@ const LazyViewPaymentPlansPage = lazyLoadWithTracking(
   { componentName: "ViewPaymentPlansPage" }
 );
 
+const LazyPoliciesPage = lazyLoadWithTracking(
+  () => import("./components/PoliciesPage"),
+  { componentName: "PoliciesPage" }
+);
+
 /**
  * ========================================
  * SCHOOLS DATA
@@ -1010,7 +1015,8 @@ export default function App() {
   /**
    * navigateToPage Utility
    * 
-   * Synchronizes browser history with the internal app state.
+   * Updates only the internal store. The synchronized effect below will 
+   * handle the side-effect of updating the browser history.
    */
   const navigateToPage = (page: PageType, direction: 'forward' | 'back' = 'forward', replaceHistory = false) => {
     // 1. Performance monitoring
@@ -1019,21 +1025,20 @@ export default function App() {
     // 2. Set direction for animations
     setNavigationDirection(direction);
 
-    // 3. Update Browser History (using Hash Routing)
-    const state = { page };
+    // 3. Update internal store (This will trigger the useEffect for history sync)
+    // We pass a custom flag to handle replacement vs pushing
     if (replaceHistory) {
-      window.history.replaceState(state, '', `#${page}`);
+      window.history.replaceState({ page }, '', `#${page}`);
     } else {
-      // Don't push if we're already on this page in history
       if (window.history.state?.page !== page) {
-        window.history.pushState(state, '', `#${page}`);
+        window.history.pushState({ page }, '', `#${page}`);
       }
     }
-
-    // 4. Update Internal Store
+    
+    // Update store state
     useAppStore.setState({ currentPage: page });
 
-    // 5. Cleanup monitoring
+    // 4. Cleanup monitoring
     setTimeout(() => endTracking(), 100);
   };
 
@@ -1077,32 +1082,19 @@ export default function App() {
       // Security: Prevent rapid navigation manipulation
       const now = Date.now();
       if (navigationLockRef.current || (now - lastNavigationRef.current) < 300) {
-        console.warn('[Security] Rapid navigation detected. Ignoring.');
         event.preventDefault();
         return;
       }
 
       navigationLockRef.current = true;
       lastNavigationRef.current = now;
+      setTimeout(() => { navigationLockRef.current = false; }, 300);
 
-      // Release lock after 300ms
-      setTimeout(() => {
-        navigationLockRef.current = false;
-      }, 300);
-
-      const targetPage = event.state?.page as PageType;
+      const targetPage = event.state?.page as PageType || (window.location.hash.slice(1) as PageType) || 'search';
       const currentPageValue = useAppStore.getState().currentPage;
-      const state = useAppStore.getState();
 
-      console.log(`[Navigation] Attempting navigation from ${currentPageValue} to ${targetPage}`);
-
-      // Security Level 1: Prevent backward navigation from success or download-receipt pages
-      // For security reasons, redirect to services page instead
+      // 1. Safety Checks (Redirection)
       if (currentPageValue === 'success' || currentPageValue === 'download-receipt') {
-        event.preventDefault();
-        console.warn('[Security] Blocked back navigation from payment completion page. Redirecting to services.');
-
-        // Clear payment flow and redirect to services
         clearPaymentSecurity();
         resetCheckoutFlow();
         window.history.replaceState({ page: 'services' }, '', '#services');
@@ -1110,59 +1102,21 @@ export default function App() {
         return;
       }
 
-      // Security Level 2: Prevent navigation TO processing page via back button
-      // Users should never be able to return to the processing page
       if (targetPage === 'processing') {
-        event.preventDefault();
-        console.warn('[Security] Blocked navigation to processing page. Moving forward.');
         window.history.forward();
         return;
       }
 
-      // Security Level 3: Prevent navigation TO success or download-receipt without proper context
-      if (targetPage === 'success' || targetPage === 'download-receipt') {
-        if (!canAccessPage(targetPage)) {
-          event.preventDefault();
-          console.warn(`[Security] Blocked unauthorized access to ${targetPage}. Redirecting to services.`);
-          window.history.replaceState({ page: 'services' }, '', '#services');
-          useAppStore.setState({ currentPage: 'services' });
-          return;
-        }
-      }
-
-      // Security Level 4: Validate access to target page
-      // If validation fails, always return to the safety of the search page (Home)
-      if (targetPage && !canAccessPage(targetPage)) {
-        event.preventDefault();
-        console.warn(`[Security] Access validation failed for page: ${targetPage}. Redirecting to Home.`);
+      // 2. Validate Access
+      if (!canAccessPage(targetPage)) {
         window.history.replaceState({ page: 'search' }, '', '#search');
         useAppStore.setState({ currentPage: 'search' });
         return;
       }
 
-      // Security Level 5: Check if payment was recently completed
-      // Prevent going back through payment flow after completion
-      if (state.lastCompletedPaymentTimestamp) {
-        const timeSincePayment = Date.now() - state.lastCompletedPaymentTimestamp;
-        const isRecentPayment = timeSincePayment < 5 * 60 * 1000; // 5 minutes
-
-        const paymentFlowPages: PageType[] = ['payment', 'checkout', 'add-services', 'pay-fees'];
-        if (isRecentPayment && paymentFlowPages.includes(targetPage)) {
-          event.preventDefault();
-          console.warn('[Security] Blocked navigation to payment flow after recent payment completion. Redirecting to services.');
-          window.history.replaceState({ page: 'services' }, '', '#services');
-          useAppStore.setState({ currentPage: 'services' });
-          return;
-        }
-      }
-
-      // Allow navigation
+      // 3. Apply Navigation
       setNavigationDirection('back');
-      if (targetPage) {
-        useAppStore.setState({ currentPage: targetPage });
-      } else {
-        useAppStore.setState({ currentPage: 'search' });
-      }
+      useAppStore.setState({ currentPage: targetPage });
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -1486,13 +1440,8 @@ export default function App() {
     // Show success notification in Dynamic Island
     dynamicIsland.success({ subtitle: 'Payment successful! Receipt generated' });
 
-    // Navigate directly to success page
-    navigateToPage("success");
-
-    // Update history to prevent back navigation loop
-    window.history.replaceState({ page: 'success' }, '', '#success');
-    useAppStore.setState({ currentPage: 'success' });
-    setNavigationDirection('forward');
+    // Navigate directly to success page (this handles state and history)
+    navigateToPage("success", "forward", true);
   };
 
   const handleProcessingComplete = (success: boolean) => {
@@ -1505,9 +1454,7 @@ export default function App() {
 
       // Replace processing page in history to prevent back navigation
       // Clear the entire history stack to prevent going back through payment flow
-      window.history.replaceState({ page: 'success' }, '', '#success');
-      useAppStore.setState({ currentPage: 'success' });
-      setNavigationDirection('forward');
+      navigateToPage('success', 'forward', true);
 
       console.log('[Security] Payment completed successfully. Navigation restricted.');
     } else {
@@ -1527,9 +1474,7 @@ export default function App() {
   const handleViewReceiptsFromSuccess = () => {
     // After successful payment, user can view receipts
     // This replaces the success page to prevent going back through payment flow
-    window.history.replaceState({ page: 'download-receipt' }, '', '#download-receipt');
-    useAppStore.setState({ currentPage: 'download-receipt' });
-    setNavigationDirection('forward');
+    navigateToPage('download-receipt', 'forward', true);
   };
 
   const handleDownloadReceipts = () => {
@@ -1538,16 +1483,10 @@ export default function App() {
 
   const handleGoHome = () => {
     // Navigate home and clear the payment flow from history
-    // This replaces the current page to prevent back navigation
     console.log('[Navigation] Returning to services. Clearing payment data.');
-
     clearPaymentSecurity();
     resetCheckoutFlow();
-
-    // Clear all payment-related history by replacing state
-    window.history.replaceState({ page: 'services' }, '', '#services');
-    useAppStore.setState({ currentPage: 'services' });
-    setNavigationDirection('forward');
+    navigateToPage('services', 'forward', true);
   };
 
   // Page transition animation variants - direction aware
@@ -1875,9 +1814,8 @@ export default function App() {
             animate="animate"
             exit="exit"
           >
-            <LazyViewPaymentPlansPage
+            <LazyPoliciesPage
               onBack={() => navigateToPage("services", "back")}
-              schoolName={selectedSchool || "International School"}
             />
           </motion.div>
         )}

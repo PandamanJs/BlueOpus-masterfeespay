@@ -364,84 +364,15 @@ export async function getStudentsOutstandingBalances(studentIds: string[]): Prom
     if (!studentIds.length) return {};
     
     try {
-        // 1. Fetch academic components
-        const [
-            studentsResp,
-            invoicesResp,
-            transactionsResp,
-            enrollmentsResp,
-            feeItemsResp
-        ] = await Promise.all([
-            // Use the correct relation names for current schema
-            supabase.from('students').select('student_id, school_id, student_grade(grade_id, grade:grades(grade_name, grade_id))').in('student_id', studentIds),
-            supabase.from('invoices').select('student_id, total_amount_cached, status').in('student_id', studentIds).neq('status', 'void'),
-            supabase.from('transactions').select('student_id, amount, service_fee, status').in('student_id', studentIds).in('status', ['success', 'successful', 'completed']),
-            supabase.from('student_fee_enrollments').select('student_id, fee_item_id, override_amount, is_active').in('student_id', studentIds).eq('is_active', true),
-            supabase.from('fee_items').select('id, school_id, amount, grade_id, category:fee_categories(category)').eq('is_active', true)
-        ]);
-
-        const studentsRaw = studentsResp.data || [];
-        const invoices = invoicesResp.data || [];
-        const transactions = transactionsResp.data || [];
-        const enrollments = enrollmentsResp.data || [];
-        const feeItems = feeItemsResp.data || [];
-
-        const map: Record<string, number> = {};
-
-        // Invoiced Debt (Source of Truth) + Uninvoiced Expected Debt
-        const allInvoicedData = await Promise.all(
-            studentIds.map(id => getInvoicesWithBalanceForStudent(id))
+        const results = await Promise.all(
+            studentIds.map(async (id) => {
+                const summary = await getStudentFinancialSummary(id);
+                return { id, balance: summary?.totalBalance || 0 };
+            })
         );
 
-        studentsRaw.forEach((student, idx) => {
-            const sId = student.student_id;
-            const schId = student.school_id;
-            const history = allInvoicedData[idx] || [];
-            
-            // A. Debt from actual formal invoices that have remaining balances
-            const invoicedDebt = history.reduce((sum, inv) => sum + (Number(inv.balance_remaining) || 0), 0);
-
-            // B. Resolve Virtual (Uninvoiced) Debt
-            const studentGrades = (student.student_grade as any[]) || [];
-            const activeGradeRef = studentGrades.find(sg => sg.is_active) || studentGrades[studentGrades.length - 1] || studentGrades[0];
-            const activeGradeId = activeGradeRef?.grade?.grade_id || activeGradeRef?.grade_id;
-
-            const existsInHistory = (keyword: string) => history.some(inv => 
-                inv.service_name?.toLowerCase().includes(keyword.toLowerCase())
-            );
-
-            let virtualDebt = 0;
-            if (!existsInHistory('tuition')) {
-                const tuitionItem = feeItems.find(fi => 
-                    fi.school_id === schId && 
-                    (fi.category as any)?.category === 'tuition' && 
-                    fi.grade_id === activeGradeId
-                );
-                virtualDebt += Number(tuitionItem?.amount || 0);
-            }
-
-            // Expected Active Subscriptions
-            const activeSubs = enrollments.filter(e => e.student_id === sId);
-            activeSubs.forEach(e => {
-                const item = feeItems.find(fi => fi.id === e.fee_item_id);
-                const category = (item?.category as any)?.category || 'general';
-                const price = e.override_amount !== null ? Number(e.override_amount) : Number(item?.amount || 0);
-
-                if (!existsInHistory(category)) {
-                    virtualDebt += price;
-                }
-            });
-
-            // C. Total Balance
-            map[sId] = invoicedDebt + virtualDebt;
-
-            console.log(`[Lifecycle Ledger] Student: ${sId}, Invoiced Balance: ${invoicedDebt}, Uninvoiced Expected: ${virtualDebt} => Total: ${map[sId]}`);
-        });
-
-
-        // Ensure all input IDs are represented
-        studentIds.forEach(id => { if (map[id] === undefined) map[id] = 0; });
-
+        const map: Record<string, number> = {};
+        results.forEach(r => { map[r.id] = r.balance; });
         return map;
     } catch (error) {
         console.error('Exception in getStudentsOutstandingBalances:', error);
@@ -455,33 +386,29 @@ export async function getStudentsActualDebt(studentIds: string[]): Promise<Recor
 
 export async function getInvoicesWithBalanceForStudent(studentId: string): Promise<PaymentHistoryRecord[]> {
     try {
-        // 1. Get records from payment_history view (usually handles partials)
-        const { data: historyData } = await supabase
-            .from('payment_history')
-            .select('*')
-            .eq('student_id', studentId)
-            .gt('balance_remaining', 0);
+        // 1. Get raw records and transactions in parallel for reconciliation
+        const [historyResp, freshResp, transactionsResp] = await Promise.all([
+            supabase.from('payment_history').select('*').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue']).gt('balance_remaining', 0),
+            supabase.from('invoices').select('*').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue']),
+            supabase.from('transactions').select('*').eq('student_id', studentId).in('status', ['success', 'successful', 'completed'])
+        ]);
 
-        // 2. Get fresh invoices from invoices table (handles new unpaid ones)
-        const { data: freshInvoices } = await supabase
-            .from('invoices')
-            .select('*')
-            .eq('student_id', studentId)
-            .neq('status', 'complete');
+        const historyData = historyResp.data || [];
+        const freshInvoices = freshResp.data || [];
+        const transactions = transactionsResp.data || [];
 
+        // 2. Build initial results set
         const results: PaymentHistoryRecord[] = [...(historyData || [])] as PaymentHistoryRecord[];
 
         // 3. Merge fresh invoices if they are not already in history
-        // Deduplicate using BOTH UUIDs and reference numbers
         const seenIds = new Set(results.map(r => r.id));
         const seenRefs = new Set(results.map(r => r.reference?.toLowerCase()));
 
         (freshInvoices || []).forEach(inv => {
-            const invId = inv.invoice_id;
-            const invRef = (inv.invoice_number || inv.invoice_id).toLowerCase();
+            const invId = inv.invoice_id || inv.id;
+            const invRef = (inv.invoice_number || invId).toLowerCase();
             
             if (!seenIds.has(invId) && !seenRefs.has(invRef)) {
-                // Try to extract name from invoice_items JSON
                 let serviceName = "School Fee Payment";
                 if (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
                     const firstItem = inv.invoice_items.items[0];
@@ -491,7 +418,7 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
                 results.push({
                     id: invId,
                     payment_date: inv.created_at,
-                    reference: inv.invoice_number || inv.invoice_id,
+                    reference: inv.invoice_number || invId,
                     total_amount: inv.total_amount_cached || 0,
                     base_amount: inv.total_amount_cached || 0,
                     service_fee: 0,
@@ -518,8 +445,24 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
             }
         });
 
-        return results;
-    } catch { return []; }
+        // 4. PERFORM RECONCILIATION: Subtract actual payments from balance_remaining
+        // This ensures the client-side totals are the source of truth if the view is stale.
+        return results.map(inv => {
+            const paymentsValue = transactions
+                .filter(tx => tx.invoice_id === inv.id || tx.meta_data?.invoice_no === inv.reference)
+                .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+            
+            const reconciledBalance = Math.max(0, (inv.total_amount || inv.base_amount || 0) - paymentsValue);
+            
+            return {
+                ...inv,
+                balance_remaining: reconciledBalance
+            };
+        }).filter(inv => (inv.balance_remaining || 0) > 0.01);
+    } catch (err) { 
+        console.error("[getInvoicesWithBalanceForStudent] Reconcile error:", err);
+        return []; 
+    }
 }
 
 export async function getStudentsUnpaidInvoicesCount(studentIds: string[]): Promise<Record<string, number>> {
@@ -587,6 +530,7 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         // Add Tuition Item
         items.push({
             type: 'tuition',
+            category: 'tuition',
             name: `${activeGradeName} Tuition Fees`,
             expected: tuitionPrice,
             collected: 0,
@@ -601,6 +545,7 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
             const price = en.override_amount !== null ? Number(en.override_amount) : Number(item?.amount || 0);
             items.push({
                 type: 'subscription',
+                category: ((item as any)?.category as any)?.category || item?.category || 'other',
                 id: en.id,
                 name: item?.name || 'Service',
                 expected: price,
@@ -626,6 +571,7 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
 
             return {
                 type: 'invoice',
+                category: (inv as any).category || 'fees',
                 invoice_id: (inv as any).invoice_id || inv.id,
                 invoice_number: inv.invoice_number,
                 name: name,

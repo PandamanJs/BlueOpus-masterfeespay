@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getStudentsByPhone, getInstitutionType } from "../data/students";
 import type { Student } from "../data/students";
 import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "../lib/supabase/api/transactions";
@@ -8,9 +8,13 @@ import type { PaymentHistoryRecord } from "../lib/supabase/types";
 
 
 import { haptics } from "../utils/haptics";
-import { Trash2 } from "lucide-react";
+import { Trash2, AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import LogoHeader from "./common/LogoHeader";
+import { getSchoolByName } from "../lib/supabase/api/schools";
+import type { School } from "../types";
+import { useAppStore } from "../stores/useAppStore";
+import type { CheckoutService } from "../stores/useAppStore";
 
 interface AddServicesPageProps {
     selectedStudentIds: string[];
@@ -43,16 +47,17 @@ function ChildPill({ name, isActive, hasBalance, onClick }: { name: string; id: 
                 haptics.selection();
                 onClick();
             }}
-            className={`h-[60px] relative rounded-[16px] shrink-0 transition-all ${isActive
-                ? 'bg-[#95e36c]/40 text-[#003630] border-[1.5px] border-[#95e36c]/50 shadow-sm z-10'
+            className={`h-[50px] w-[50px] relative rounded-[16px] shrink-0 transition-all ${isActive
+                ? 'bg-[#95e36c]/40 text-[#003630] border-[1.5px] border-[#95e36c]/50 z-10'
                 : 'bg-white border-[1.2px] border-gray-100 text-gray-500 hover:bg-gray-50'}`}
+            style={isActive ? { boxShadow: '0px 4px 12px rgba(0,0,0,0.1), 0px 2px 4px rgba(0,0,0,0.06)' } : {}}
         >
             <div className="flex flex-row items-center justify-center h-full">
                 <div className="flex gap-[10px] items-center justify-center px-[25px] py-[4px] relative h-full">
                     {isActive && (
                         <div className="w-[8px] h-[8px] rounded-full bg-[#95e36c] shrink-0 shadow-[0_0_8px_rgba(149,227,108,0.5)] animate-pulse" />
                     )}
-                    <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[14px] whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold text-[#003630]" : "font-['Space_Grotesk',sans-serif] font-medium text-black/40"}`}>
+                    <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[10px] whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold text-[#003630]" : "font-['Space_Grotesk',sans-serif] font-medium text-black/40"}`}>
                         <p className="m-0">{name}</p>
                     </div>
                 </div>
@@ -228,6 +233,17 @@ export default function AddServicesPage({
     const isUniversity = institutionType === 'university';
 
     const [activeStudentId, setActiveStudentId] = useState<string>("");
+    const [schoolData, setSchoolData] = useState<School | null>(null);
+
+    useEffect(() => {
+        const fetchSchool = async () => {
+            if (schoolName) {
+                const data = await getSchoolByName(schoolName);
+                if (data) setSchoolData(data);
+            }
+        };
+        fetchSchool();
+    }, [schoolName]);
 
     // Set initial active student when data loads
     useEffect(() => {
@@ -241,6 +257,7 @@ export default function AddServicesPage({
     const activeStudent = selectedStudents.find(s => s.id === activeStudentId);
     const [showAddFeesForm, setShowAddFeesForm] = useState(false);
     const [showOtherServicesPopup, setShowOtherServicesPopup] = useState(false);
+    const [showUnifiedPopup, setShowUnifiedPopup] = useState(false);
     const [studentServices, setStudentServices] = useState<Record<string, Service[]>>({});
 
     const [financialSummary, setFinancialSummary] = useState<any>(null);
@@ -282,6 +299,122 @@ export default function AddServicesPage({
         const desc = meta_data?.description?.toLowerCase() || '';
         return desc.includes('tuition') || desc.includes('school fees');
     }) || invoicesWithBalance.some(invoice => (invoice.balance_remaining || 0) > 0 && !activeCartRefs.has(invoice.reference)));
+
+    // Smart Debt Detection: Categorize outstanding balances by tab
+    const debtSummary = useMemo(() => {
+        const summary = {
+            'fees': [] as Service[],
+            'transport': [] as Service[],
+            'cafeteria': [] as Service[],
+            'uniforms': [] as Service[]
+        };
+
+        if (!activeStudentId) return summary;
+
+        const currentServices = studentServices[activeStudentId] || [];
+        const existingInvoices = new Set(currentServices.map(s => s.invoiceNo));
+
+        const categorize = (item: any) => {
+            // Priority 1: Explicit Category from data
+            const explicitCat = (item.category || item.service_category || '').toLowerCase();
+            if (explicitCat === 'transport' || explicitCat === 'bus') return 'transport';
+            if (explicitCat === 'cafeteria' || explicitCat === 'canteen' || explicitCat === 'meal' || explicitCat === 'lunch') return 'cafeteria';
+            if (explicitCat === 'uniforms' || explicitCat === 'uniform') return 'uniforms';
+
+            // Priority 2: Scan nested services (for invoices/aggregate items)
+            const services = item.services || (item.invoice_items?.items) || [];
+            if (Array.isArray(services) && services.length > 0) {
+                for (const svc of services) {
+                    const sCat = (svc.category || svc.service_category || '').toLowerCase();
+                    if (sCat === 'transport' || sCat === 'bus') return 'transport';
+                    if (sCat === 'cafeteria' || sCat === 'canteen' || sCat === 'meal' || sCat === 'lunch') return 'cafeteria';
+                    if (sCat === 'uniforms' || sCat === 'uniform') return 'uniforms';
+
+                    const sName = (svc.name || svc.description || '').toLowerCase();
+                    if (sName.includes('transport') || sName.includes('bus') || sName.includes('shuttle') || sName.includes('route') || sName.includes('zone') || sName.includes('fare')) return 'transport';
+                    if (sName.includes('canteen') || sName.includes('lunch') || sName.includes('cafeteria') || sName.includes('meal') || sName.includes('food')) return 'cafeteria';
+                    if (sName.includes('uniform') || sName.includes('crest') || sName.includes('blazer') || sName.includes('tracksuit') || sName.includes('tie') || sName.includes('badge')) return 'uniforms';
+                }
+            }
+
+            // Priority 3: Metadata / Service Name / Reference keywords fallback
+            const isTx = 'meta_data' in item;
+            const meta = isTx ? item.meta_data : null;
+            const desc = (meta?.description || item.service_name || item.name || '').toLowerCase();
+            const ref = (item.reference || item.invoice_number || '').toLowerCase();
+
+            if (desc.includes('transport') || desc.includes('bus') || desc.includes('shuttle') || desc.includes('route') || desc.includes('zone') || desc.includes('fare') || ref.startsWith('tr-')) return 'transport';
+            if (desc.includes('canteen') || desc.includes('lunch') || desc.includes('cafeteria') || desc.includes('meal') || desc.includes('food') || ref.startsWith('cn-')) return 'cafeteria';
+            if (desc.includes('uniform') || desc.includes('crest') || desc.includes('blazer') || desc.includes('tracksuit') || desc.includes('tie') || desc.includes('badge')) return 'uniforms';
+            return 'fees';
+        };
+
+        // Process Pending Transactions
+        pendingTransactions.forEach(tx => {
+            if (existingInvoices.has(tx.reference)) return;
+            const cat = categorize(tx);
+            const meta = tx.meta_data as any;
+            const term = meta?.term || (tx as any).term;
+            const year = meta?.academicYear || (tx as any).academicYear;
+            const baseName = meta?.description || (meta?.items && meta.items[0]?.description) || "Outstanding Balance";
+            const name = `${baseName}${term ? ` - Term ${term}` : ''}${year ? ` ${year}` : ''}`;
+
+            summary[cat].push({
+                id: tx.id || `tx-${tx.reference}`,
+                description: name,
+                amount: tx.total_amount,
+                invoiceNo: tx.reference,
+                invoice_id: tx.id || undefined,
+                term: typeof term === 'number' ? term : parseInt(term) || undefined,
+                academicYear: typeof year === 'number' ? year : parseInt(year) || undefined
+            });
+        });
+
+        // Process Invoices with Balance
+        invoicesWithBalance.forEach(inv => {
+            if (existingInvoices.has(inv.reference)) return;
+            const cat = categorize(inv);
+            const baseName = inv.service_name || "Fees Settlement";
+            const term = inv.term;
+            const year = inv.academic_year;
+            const name = `${baseName}${term ? ` - Term ${term}` : ''}${year ? ` ${year}` : ''} (Balance)`;
+
+            summary[cat].push({
+                id: inv.id || `inv-${inv.reference}`,
+                description: name,
+                amount: inv.balance_remaining || 0,
+                invoiceNo: inv.reference,
+                invoice_id: inv.id || undefined,
+                term: term,
+                academicYear: year
+            });
+        });
+
+        // Fallback: Check financial summary for un-invoiced items or aggregate balances
+        if (financialSummary?.items) {
+            financialSummary.items.forEach((item: any) => {
+                if (item.balance > 0) {
+                    // Avoid duplicating items already handled by invoices or Txs
+                    const isAlreadyHandled = [...summary.fees, ...summary.transport, ...summary.cafeteria, ...summary.uniforms]
+                        .some(d => d.invoiceNo === item.invoice_number || d.id === item.invoice_id);
+
+                    if (!isAlreadyHandled) {
+                        const cat = categorize(item);
+                        summary[cat].push({
+                            id: item.invoice_id || item.id || `sum-${item.name}-${item.type}`,
+                            description: `${item.name}${item.status === 'unpaid' ? ' (Outstanding)' : ''}`,
+                            amount: item.balance,
+                            invoiceNo: item.invoice_number || "Balance",
+                            term: item.term || financialSummary.student?.term, // Attempt to pull from summary context
+                            academicYear: item.academicYear || financialSummary.student?.year || new Date().getFullYear()
+                        });
+                    }
+                }
+            });
+        }
+
+        return summary;
+    }, [pendingTransactions, invoicesWithBalance, activeStudentId, studentServices, financialSummary]);
 
     // Calculate specific blocked services
     const { blockedServiceNames } = !hasNetDebt ? { blockedServiceNames: [] } : [...pendingTransactions, ...invoicesWithBalance].reduce((acc, item) => {
@@ -516,9 +649,16 @@ export default function AddServicesPage({
                 // Generate a unique ID for new service
                 const uniqueId = `${service.id}-${service.term.replace(/\s+/g, '-')}-${service.route ? service.route.replace(/\s+/g, '-') : 'no-route'}-${Date.now()}-${index}`;
 
+                const buildServiceDescriptionLocal = (s: any) => {
+                    let desc = s.name;
+                    if (s.term) desc += ` - ${s.term}`;
+                    if (s.route) desc += ` (${s.route})`;
+                    return desc;
+                };
+
                 const newSvc: Service = {
                     id: uniqueId,
-                    description: buildServiceDescription(service),
+                    description: buildServiceDescriptionLocal(service),
                     amount: service.amount,
                     invoiceNo: "202",
                     term: parseInt(service.term.replace(/\D/g, '')) || 1,
@@ -548,28 +688,80 @@ export default function AddServicesPage({
     // Check if any services have been added
     const hasServices = Object.values(studentServices).some(services => services.length > 0);
 
-    const handleNextOrCheckout = () => {
-        haptics.heavy();
-        if (totalAmount > 0 && onCheckout) {
-            // Flatten all services with student names
-            const allServicesWithStudents = Object.entries(studentServices).flatMap(([studentId, services]) => {
-                const student = selectedStudents.find(s => s.id === studentId);
-                const studentName = student?.name || 'Unknown Student';
-                return services.map(service => ({
-                    ...service,
-                    studentName,
-                    studentId,
-                    term: service.term,
-                    academicYear: service.academicYear,
-                    grade: student?.grade
-                }));
-            });
-            if (onCheckout) {
-                onCheckout(allServicesWithStudents);
-            }
-        } else {
-            onNext();
+    const navigateToPage = useAppStore(state => state.navigateToPage);
+    const setCheckoutServices = useAppStore(state => state.setCheckoutServices);
+    const setPaymentAmount = useAppStore(state => state.setPaymentAmount);
+
+    const handleAddService = (service: Service) => {
+        if (!activeStudentId) {
+            console.error("No active student selected");
+            toast.error("Please select a student first");
+            return;
         }
+
+        // Defensive check for service data
+        const safeService = {
+            ...service,
+            amount: typeof service.amount === 'number' && !isNaN(service.amount) ? service.amount : 0,
+            description: service.description || "Service Item",
+            id: service.id || `fallback-${Date.now()}`
+        };
+
+        console.log(`[AddServicesPage] Adding service for ${activeStudentId}:`, safeService);
+
+        setStudentServices(prev => {
+            const current = (prev[activeStudentId] || []).filter(s => s && s.id);
+
+            // Check for duplicates
+            if (current.some(s => s.id === safeService.id)) {
+                console.warn("Item already in cart:", safeService.id);
+                toast.error("Item already in cart");
+                return prev;
+            }
+
+            const updated = {
+                ...prev,
+                [activeStudentId]: [...current, safeService]
+            };
+
+            toast.success(`Added ${safeService.description}`);
+            return updated;
+        });
+    };
+
+    const handleNextOrCheckout = () => {
+        haptics.success();
+
+        // Final aggregation of all selected services for all students
+        const allCheckoutServices: CheckoutService[] = [];
+
+        Object.entries(studentServices).forEach(([studentId, services]) => {
+            const student = allStudents.find(s => s.id === studentId);
+            const studentName = student ? student.name : "Student";
+
+            services.forEach(s => {
+                allCheckoutServices.push({
+                    id: s.id,
+                    description: s.description,
+                    amount: s.amount,
+                    invoiceNo: s.invoiceNo,
+                    invoice_id: s.invoice_id,
+                    pricing_id: s.pricing_id,
+                    studentName: studentName,
+                    studentId: studentId,
+                    term: s.term,
+                    academicYear: s.academicYear,
+                    grade: s.grade || student?.grade
+                });
+            });
+        });
+
+        // Update global store
+        setCheckoutServices(allCheckoutServices);
+        setPaymentAmount(totalAmount);
+
+        // Navigate to checkout summary
+        navigateToPage('checkout');
     };
 
     return (
@@ -580,40 +772,44 @@ export default function AddServicesPage({
                     onBack();
                 }} />
 
-                <div className="flex-1 flex flex-col pt-[48px] pb-[280px] overflow-y-auto no-scrollbar gap-4">
+                {/* Sticky Header: Cart Info & Student Tabs */}
+                <div className="bg-white z-20 border-b border-gray-100/50 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.04)]">
                     {/* Header Card */}
-                    <div className="px-[44px]">
-                        <div className="bg-[#f9fafb] rounded-[22px] p-[20px] shadow-inner flex flex-col gap-4">
-                            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] font-bold leading-[34px] not-italic text-[24px] text-black tracking-[-0.18px] flex items-center gap-3">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <div className="px-[44px] pt-4 mb-2">
+                        <div className="bg-[#f9fafb] rounded-[22px] p-[16px] shadow-inner flex flex-col gap-2">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] font-bold leading-tight not-italic text-[20px] text-black tracking-[-0.18px] flex items-center gap-3">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
                                 </svg>
                                 Products/Services Cart
                             </p>
-                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-[1.5] not-italic text-[#4b5563] text-[14px] tracking-[-0.12px] ">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-relaxed not-italic text-[#6b7280] text-[13px] tracking-[-0.12px]">
                                 Add the products and services you would like to pay for and proceed to checkout.
                             </p>
                         </div>
                     </div>
 
-                    <div className="px-[24px] flex flex-col gap-4">
-                        {/* Child Selection Section */}
-                        <div className="mt-[12px] mb-[10px] flex flex-col items-center gap-4">
-                            <div className="flex gap-[10px] items-center relative w-full overflow-x-auto no-scrollbar pb-1 px-1">
-                                {selectedStudents.map(student => (
-                                    <ChildPill
-                                        key={student.id}
-                                        name={student.name}
-                                        id={student.id}
-                                        isActive={activeStudentId === student.id}
-                                        admissionNumber={student.admissionNumber}
-                                        hasBalance={student.balances > 0}
-                                        onClick={() => setActiveStudentId(student.id)}
-                                    />
-                                ))}
-                            </div>
+                    {/* Child Selection Section */}
+                    <div className="px-[24px] pb-4 overflow-x-auto no-scrollbar">
+                        <div className="flex gap-[10px] items-center relative w-max px-1">
+                            {selectedStudents.map(student => (
+                                <ChildPill
+                                    key={student.id}
+                                    name={student.name}
+                                    id={student.id}
+                                    isActive={activeStudentId === student.id}
+                                    admissionNumber={student.admissionNumber}
+                                    hasBalance={student.balances > 0}
+                                    onClick={() => setActiveStudentId(student.id)}
+                                />
+                            ))}
                         </div>
+                    </div>
+                </div>
 
+                {/* Scrollable Content Container */}
+                <div className="flex-1 flex flex-col pt-4 pb-[280px] overflow-y-auto no-scrollbar gap-4">
+                    <div className="px-[24px] flex flex-col gap-4">
                         <div className="flex flex-col gap-[18px]">
                             {/* Child Services Empty State (when no popup is open) */}
                             {!showAddFeesForm && !showOtherServicesPopup && activeStudentServices.length === 0 && (
@@ -643,17 +839,17 @@ export default function AddServicesPage({
                                 <div className="flex items-center justify-between px-2 py-2">
                                     <p className="font-['Inter',sans-serif] font-black text-[20px] text-black tracking-tight">Subtotal</p>
                                     <p className="font-['Inter',sans-serif] font-black text-[20px] text-black tracking-tight">
-                                        K{(studentServices[activeStudentId] || []).reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                        K{(studentServices[activeStudentId] || []).reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </p>
                                 </div>
                                 <div className="w-full">
                                     <button
                                         onClick={() => {
+                                            console.log("Add Products/Services clicked");
                                             haptics.buttonPress();
-                                            // Handle opening the new unified interface
-                                            toast.info("Opening Products & Services selection...");
+                                            setShowUnifiedPopup(true);
                                         }}
-                                        className="h-[80px] w-full rounded-[14px] border border-[#e5e7eb] bg-[#f9fafb] flex items-center justify-center gap-3 px-5 active:scale-[0.98] transition-all group hover:border-[#003630]/20 hover:bg-white shadow-sm"
+                                        className="h-[55px] w-full rounded-[14px] border border-[#e5e7eb] bg-[#f9fafb] flex items-center justify-center gap-3 px-5 active:scale-[0.98] transition-all group hover:border-[#003630]/20 hover:bg-white shadow-sm"
                                     >
                                         <div className="bg-[#003630]/5 p-1.5 rounded-xl group-active:bg-[#003630]/10 transition-colors">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -669,10 +865,13 @@ export default function AddServicesPage({
                         )}
 
                         {/* Unified Checkout Bar */}
-                        <div className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] shadow-[0px_25px_60px_rgba(0,0,0,0.15)] h-[80px]">
+                        <div
+                            className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] h-[70px]"
+                            style={{ boxShadow: '0px 25px 60px rgba(0,0,0,0.15), 0px 4px 12px rgba(0,0,0,0.08)' }}
+                        >
                             <div className="flex items-center gap-[14px] pl-[16px]">
                                 <div className="text-[#003630]">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
                                     </svg>
                                 </div>
@@ -693,13 +892,13 @@ export default function AddServicesPage({
                                         }
                                     }}
                                     disabled={!hasServices}
-                                    className={`h-[60px] w-[180px] relative rounded-[14px] transition-all duration-300 flex items-center justify-center gap-[16px] z-30 ${hasServices
+                                    className={`h-[50px] w-[155px] relative rounded-[14px] transition-all duration-300 flex items-center justify-center gap-[16px] z-30 ${hasServices
                                         ? 'bg-[#003630] touch-manipulation cursor-pointer active:scale-[0.97] drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)]'
                                         : 'bg-gray-50 cursor-not-allowed'
                                         }`}
                                 >
                                     <div className="relative z-10 flex items-center justify-center gap-[16px] h-full w-full">
-                                        <p className={`font-['Inter',sans-serif] font-extrabold text-[17px] ${hasServices ? 'text-white' : 'text-gray-300'}`}>
+                                        <p className={`font-['Inter',sans-serif] font-extrabold text-[13px] ${hasServices ? 'text-white' : 'text-gray-300'}`}>
                                             {totalAmount > 0 ? "Checkout" : "Next"}
                                         </p>
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={hasServices ? "text-[#95e36c]" : "text-gray-200"}>
@@ -716,7 +915,1601 @@ export default function AddServicesPage({
                 </div>
 
 
+
             </div>
+
+            {/* Unified Selection Popup - Rendered at top level to avoid clipping */}
+            <AnimatePresence mode="wait">
+                {showUnifiedPopup && (
+                    <UnifiedServicesPopup
+                        key="unified-popup"
+                        onClose={() => setShowUnifiedPopup(false)}
+                        onConfirm={(items) => {
+                            setStudentServices(prev => ({
+                                ...prev,
+                                [activeStudentId]: items
+                            }));
+                            setShowUnifiedPopup(false);
+                            toast.success(`Successfully updated ${items.length} items in cart`);
+                        }}
+                        schoolName={schoolName}
+                        activeStudent={activeStudent}
+                        schoolData={schoolData}
+                        invoices={invoicesWithBalance}
+                        initialItems={activeStudentServices}
+                        debtSummary={debtSummary}
+                        activeStudentId={activeStudentId}
+                        financialSummary={financialSummary}
+                    />
+                )}
+            </AnimatePresence>
         </div>
+    );
+}
+
+/**
+ * NEW Unified Services Popup
+ * A plain slide-up for now to be customized
+ */
+const POPUP_TABS = [
+    { id: 'fees', label: 'School Fees', icon: true },
+    { id: 'transport', label: 'Transport' },
+    { id: 'cafeteria', label: 'Cafeteria' },
+    { id: 'uniforms', label: 'Uniforms' }
+] as const;
+
+function UnifiedServicesPopup({
+    onClose,
+    onConfirm,
+    schoolName,
+    activeStudent,
+    invoices,
+    schoolData,
+    initialItems,
+    debtSummary,
+    activeStudentId,
+    financialSummary
+}: {
+    onClose: () => void;
+    onConfirm: (items: Service[]) => void;
+    schoolName: string;
+    activeStudent?: Student;
+    invoices: PaymentHistoryRecord[];
+    schoolData: School | null;
+    initialItems: Service[];
+    debtSummary: {
+        fees: Service[];
+        transport: Service[];
+        cafeteria: Service[];
+        uniforms: Service[];
+    };
+    activeStudentId: string;
+    financialSummary?: any;
+}) {
+    const [stagedItems, setStagedItems] = useState<Service[]>(initialItems);
+
+    const buildServiceDescription = (s: any) => {
+        let desc = s.name || s.description;
+        if (s.term) desc += ` - ${s.term}`;
+        if (s.route) desc += ` (${s.route})`;
+        if (s.paymentPeriod) desc += ` [${s.paymentPeriod}]`;
+        return desc;
+    };
+
+    const detectFrequency = (name: string): "monthly" | "termly" | "yearly" | "weekly" | "daily" => {
+        const low = name.toLowerCase();
+        if (low.includes('month')) return 'monthly';
+        if (low.includes('week')) return 'weekly';
+        if (low.includes('day')) return 'daily';
+        if (low.includes('year')) return 'yearly';
+        return 'termly';
+    };
+
+    const handleStageService = (service: Service) => {
+        setStagedItems(prev => {
+            const exists = prev.some(s => s.id === service.id);
+            if (exists) {
+                return prev.filter(s => s.id !== service.id);
+            }
+            return [...prev, service];
+        });
+        haptics.selection();
+    };
+
+    const isStaged = (id: string) => stagedItems.some(s => s.id === id);
+
+
+    // Dynamically build tabs based on non-empty services in schoolData
+    const tabs = useMemo(() => {
+        const t: { id: string; label: string; icon?: boolean; count?: number }[] = [
+            {
+                id: 'fees',
+                label: schoolData?.category_names?.tuition || 'School Fees',
+                icon: true,
+                count: stagedItems.filter(s => s.id.includes('fee') || invoices.some(inv => inv.id === s.id)).length
+            }
+        ];
+
+        if (schoolData?.bus_routes && schoolData.bus_routes.length > 0) {
+            t.push({
+                id: 'transport',
+                label: schoolData?.category_names?.transport || 'Transport',
+                count: stagedItems.filter(s => s.id.includes('route')).length
+            });
+        }
+        if (schoolData?.canteen_plans && schoolData.canteen_plans.length > 0) {
+            t.push({
+                id: 'cafeteria',
+                label: schoolData?.category_names?.canteen || 'Cafeteria',
+                count: stagedItems.filter(s => s.id.includes('canteen')).length
+            });
+        }
+
+        // Check for Uniforms specifically or a general 'Others'
+        const hasUniforms = schoolData?.other_services?.some(s => s.category?.toLowerCase() === 'uniforms');
+        const otherCount = stagedItems.filter(s => s.id.includes('other')).length;
+
+        if (hasUniforms) {
+            t.push({
+                id: 'uniforms',
+                label: schoolData?.category_names?.uniforms || schoolData?.category_names?.other || 'Uniforms',
+                count: otherCount
+            });
+        } else if (schoolData?.other_services && schoolData.other_services.length > 0) {
+            t.push({
+                id: 'uniforms',
+                label: 'Others',
+                count: otherCount
+            });
+        }
+
+        return t;
+    }, [schoolData, stagedItems, invoices]);
+
+    const [activeTab, setActiveTab] = useState<string>('fees');
+
+    // Ensure activeTab is valid if tabs change
+    useEffect(() => {
+        if (!tabs.find(t => t.id === activeTab)) {
+            setActiveTab('fees');
+        }
+    }, [tabs, activeTab]);
+
+    const [selectedGrade, setSelectedGrade] = useState<string>(activeStudent?.grade || "");
+    const [selectedAcademicYear, setSelectedAcademicYear] = useState<number>(new Date().getFullYear());
+    const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
+    const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+
+    // Transport specific state
+    const [selectedRouteId, setSelectedRouteId] = useState<string>("");
+    const [isRouteDropdownOpen, setIsRouteDropdownOpen] = useState(false);
+
+    const selectedRoute = schoolData?.bus_routes?.find(r => r.id === selectedRouteId);
+
+    // Cafeteria specific state
+    const [selectedCanteenPlanId, setSelectedCanteenPlanId] = useState<string>("");
+    const [isCanteenDropdownOpen, setIsCanteenDropdownOpen] = useState(false);
+
+    const selectedCanteenPlan = schoolData?.canteen_plans?.find(p => p.id === selectedCanteenPlanId);
+
+    // Subscription Frequency state
+    const [transportFrequency, setTransportFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
+    const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
+
+    // Uniforms/Other state
+    const [selectedOtherId, setSelectedOtherId] = useState<string>("");
+    const [isOtherDropdownOpen, setIsOtherDropdownOpen] = useState(false);
+    const selectedOther = schoolData?.other_services?.find(s => s.id === selectedOtherId);
+
+    // Auto-select the student's grade when data loads or changes
+    useEffect(() => {
+        if (activeStudent?.grade && !selectedGrade) {
+            setSelectedGrade(activeStudent.grade);
+        }
+    }, [activeStudent, selectedGrade]);
+
+    // SMART AUTO-SELECT: Last used Transport & Cafeteria from history
+    useEffect(() => {
+        if (!financialSummary?.transactions || !schoolData) return;
+
+        // 1. Auto-select last transport route
+        if (!selectedRouteId) {
+            const lastTransportTx = [...financialSummary.transactions]
+                .sort((a, b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime())
+                .find(tx => {
+                    const meta = tx.meta_data || tx.metadata;
+                    const services = meta?.services || meta?.items || [];
+                    return services.some(s =>
+                        s.category === 'transport' ||
+                        (s.name || s.description || '').toLowerCase().includes('transport') ||
+                        (s.name || s.description || '').toLowerCase().includes('bus')
+                    );
+                });
+
+            if (lastTransportTx) {
+                const meta = lastTransportTx.meta_data || lastTransportTx.metadata;
+                const services = meta?.services || meta?.items || [];
+                const transportSvc = services.find(s =>
+                    s.category === 'transport' ||
+                    (s.name || s.description || '').toLowerCase().includes('transport') ||
+                    (s.name || s.description || '').toLowerCase().includes('bus')
+                );
+
+                if (transportSvc) {
+                    const targetId = transportSvc.pricing_id || transportSvc.id;
+                    const matchedRoute = schoolData.bus_routes?.find(r => r.id === targetId) ||
+                        schoolData.bus_routes?.find(r => r.name === transportSvc.name);
+
+                    if (matchedRoute) {
+                        setSelectedRouteId(matchedRoute.id);
+                        console.log(`[AutoSelect] Restored last transport route: ${matchedRoute.name}`);
+                    }
+                }
+            }
+        }
+
+        // 2. Auto-select last cafeteria plan
+        if (!selectedCanteenPlanId) {
+            const lastCafeteriaTx = [...financialSummary.transactions]
+                .sort((a, b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime())
+                .find(tx => {
+                    const meta = tx.meta_data || tx.metadata;
+                    const services = meta?.services || meta?.items || [];
+                    return services.some(s =>
+                        s.category === 'canteen' ||
+                        s.category === 'cafeteria' ||
+                        (s.name || s.description || '').toLowerCase().includes('canteen') ||
+                        (s.name || s.description || '').toLowerCase().includes('meal')
+                    );
+                });
+
+            if (lastCafeteriaTx) {
+                const meta = lastCafeteriaTx.meta_data || lastCafeteriaTx.metadata;
+                const services = meta?.services || meta?.items || [];
+                const cafeteriaSvc = services.find(s =>
+                    s.category === 'canteen' ||
+                    s.category === 'cafeteria' ||
+                    (s.name || s.description || '').toLowerCase().includes('canteen') ||
+                    (s.name || s.description || '').toLowerCase().includes('meal')
+                );
+
+                if (cafeteriaSvc) {
+                    const targetId = cafeteriaSvc.pricing_id || cafeteriaSvc.id;
+                    const matchedPlan = schoolData.canteen_plans?.find(p => p.id === targetId) ||
+                        schoolData.canteen_plans?.find(p => p.name === cafeteriaSvc.name);
+
+                    if (matchedPlan) {
+                        setSelectedCanteenPlanId(matchedPlan.id);
+                        console.log(`[AutoSelect] Restored last cafeteria plan: ${matchedPlan.name}`);
+                    }
+                }
+            }
+        }
+    }, [financialSummary, schoolData, selectedRouteId, selectedCanteenPlanId]);
+
+    // Filter institutional fees by selected grade
+    const gradeFees = schoolData?.grade_pricing?.filter(gp =>
+        selectedGrade ? gp.name.toLowerCase().includes(selectedGrade.toLowerCase()) : true
+    ) || [];
+
+    const selectedFee = schoolData?.grade_pricing?.find(gp =>
+        gp.name.toLowerCase() === selectedGrade.toLowerCase()
+    );
+
+    // Debt Lock Logic: Hide new services if outstanding balance exists for current category
+    const activeTabDebts = debtSummary[activeTab as keyof typeof debtSummary] || [];
+    const isTabLocked = activeTabDebts.some(debt => !isStaged(debt.id));
+
+    return (
+        <>
+            <motion.div
+                className="fixed inset-0 z-[9999] bg-white flex flex-col overflow-hidden"
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 32, stiffness: 350, mass: 0.8 }}
+            >
+                {/* Scrollable Content Container */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Header Section */}
+                    <div className="relative px-6 pt-8 pb-4 bg-white">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center justify-center size-8 rounded-full border-[1.5px] border-black">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 5v14M5 12h14" />
+                                    </svg>
+                                </div>
+                                <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] font-bold text-black tracking-tight">
+                                    Add Products/Services
+                                </h2>
+                            </div>
+
+                            <button
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    haptics.selection();
+                                    onClose();
+                                }}
+                                className="w-[44px] h-[44px] flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-700 active:scale-90 transition-all z-50 pointer-events-auto cursor-pointer"
+                                style={{ boxShadow: '0px 4px 12px rgba(0,0,0,0.12), 0px 2px 4px rgba(0,0,0,0.08)' }}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Tab Selector */}
+                        <div
+                            className="bg-[#f5f7f9] p-2 h-[68px] rounded-full flex items-center justify-between border-[1.5px] border-gray-300 transform-gpu overflow-visible relative"
+                            style={{ boxShadow: 'inset 0px 8px 16px rgba(0,0,0,0.1), inset 0px 2px 4px rgba(0,0,0,0.06)' }}
+                        >
+                            {tabs.map((tab) => {
+                                const isActive = activeTab === tab.id;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            haptics.selection();
+                                            setActiveTab(tab.id);
+                                        }}
+                                        className={`relative flex items-center justify-center h-full flex-1 transition-all duration-300 cursor-pointer z-30 pointer-events-auto ${isActive ? 'text-[#003630]' : 'text-gray-400 hover:text-[#003630]'}`}
+                                    >
+                                        <div
+                                            className={`flex items-center justify-center gap-3 w-full transition-all duration-300 rounded-full transform-gpu z-20 ${isActive ? 'h-[52px]' : 'h-full'}`}
+                                        >
+                                            {isActive && (
+                                                <motion.div
+                                                    layoutId="activeTabPill"
+                                                    className="absolute inset-0 bg-white rounded-full border border-gray-200/60 shadow-[0px_4px_12px_rgba(0,0,0,0.15),0px_8px_16px_rgba(0,0,0,0.1)]"
+                                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                                />
+                                            )}
+                                            <div className="flex items-center gap-3 pointer-events-none z-10">
+                                                {(tab.count !== undefined && tab.count > 0) && (
+                                                    <div className={`size-[20px] rounded-full flex items-center justify-center border ${isActive ? 'bg-[#95e36c]/10 border-[#95e36c]/40' : 'bg-gray-100 border-gray-200'}`}>
+                                                        <span className={`text-[9px] font-black ${isActive ? 'text-[#003630]' : 'text-gray-400'}`}>
+                                                            {tab.count}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <span className={`font-['IBM_Plex_Sans_Devanagari',sans-serif] text-[10px] uppercase tracking-[0.14em] transition-all ${isActive ? 'text-[#003630] font-black' : 'text-gray-400 font-medium'}`}>
+                                                    {tab.label}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-6 pt-4 pb-[260px] bg-[#fdfdfd] scroll-smooth touch-pan-y">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeTab}
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -10 }}
+                                transition={{ duration: 0.2, ease: "easeOut" }}
+                            >
+                                {activeTab === 'fees' ? (
+                                    <div className="flex flex-col gap-6">
+                                        {/* Debt Alert Card (Unified) */}
+                                        {debtSummary.fees.some(d => !isStaged(d.id)) && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 5 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="bg-[#FFF1F0] rounded-[24px] p-5 flex flex-col gap-4 border border-[#FFCCC7]/60 mb-6"
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <AlertCircle className="text-[#FF4D4F] shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
+                                                    <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] text-[#262626] leading-relaxed">
+                                                        You have a balance for {schoolData?.category_names?.tuition?.toLowerCase() || 'school fees'} of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.fees.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        haptics.success();
+                                                        const itemsToAdd = debtSummary.fees;
+                                                        setStagedItems(prev => {
+                                                            const existingIds = new Set(prev.map(p => p.id));
+                                                            const newItems = itemsToAdd.filter(item => !existingIds.has(item.id));
+                                                            return [...prev, ...newItems];
+                                                        });
+                                                        toast.success(`Staged ${itemsToAdd.length} outstanding ${schoolData?.category_names?.tuition?.toLowerCase() || 'fee'} payments`);
+                                                    }}
+                                                    className="w-full h-[52px] bg-transparent border-[1.5px] border-[#FF4D4F]/80 text-[#FF4D4F] rounded-[16px] flex items-center justify-center gap-2.5 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[15px] active:scale-[0.98] transition-all hover:bg-[#FF4D4F]/5"
+                                                >
+                                                    <div className="size-[22px] rounded-full border border-[#FF4D4F]/40 flex items-center justify-center">
+                                                        <span className="text-[18px] leading-none mb-0.5">+</span>
+                                                    </div>
+                                                    <span>Add to Cart to Clear Balance</span>
+                                                </button>
+                                            </motion.div>
+                                        )}
+
+                                        {/* Available Fees for Selection - Gated */}
+                                        {!isTabLocked && (
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Grade</label>
+
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setIsGradeDropdownOpen(!isGradeDropdownOpen);
+                                                        }}
+                                                        className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                    >
+                                                        <div className="flex flex-col items-start overflow-hidden">
+                                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900 truncate">
+                                                                {selectedFee
+                                                                    ? `${selectedFee.name} Tuition - K${selectedFee.price.toLocaleString()}`
+                                                                    : "Choose a Grade..."
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isGradeDropdownOpen ? 'rotate-180' : ''}`}>
+                                                            <path d="m6 9 6 6 6-6" />
+                                                        </svg>
+                                                    </button>
+
+                                                    <AnimatePresence>
+                                                        {isGradeDropdownOpen && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: -10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
+                                                            >
+                                                                <div className="p-3 flex flex-col gap-1">
+                                                                    {schoolData?.grade_pricing?.map((gp) => (
+                                                                        <button
+                                                                            key={gp.value}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                setSelectedGrade(gp.name);
+                                                                                setIsGradeDropdownOpen(false);
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedGrade === gp.name ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] ${selectedGrade === gp.name ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                    {gp.name} Tuition
+                                                                                </span>
+                                                                                <span className={`text-[12px] ${selectedGrade === gp.name ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                                    Institutional Fee
+                                                                                </span>
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] ${selectedGrade === gp.name ? 'text-white' : 'text-[#003630]'}`}>
+                                                                                K{gp.price.toLocaleString()}
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+
+                                                {!isGradeDropdownOpen && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="flex flex-col"
+                                                    >
+                                                        <div className="mt-2 flex flex-col gap-3">
+                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Academic Year</label>
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        setIsYearDropdownOpen(!isYearDropdownOpen);
+                                                                    }}
+                                                                    className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                                >
+                                                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900">
+                                                                        {selectedAcademicYear}
+                                                                    </span>
+                                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isYearDropdownOpen ? 'rotate-180' : ''}`}>
+                                                                        <path d="m6 9 6 6 6-6" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                <AnimatePresence>
+                                                                    {isYearDropdownOpen && (
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: -10 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            exit={{ opacity: 0, y: -10 }}
+                                                                            className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
+                                                                        >
+                                                                            <div className="p-3 flex flex-col gap-1">
+                                                                                {[new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => (
+                                                                                    <button
+                                                                                        key={year}
+                                                                                        onClick={(e) => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedAcademicYear(year);
+                                                                                            setIsYearDropdownOpen(false);
+                                                                                            haptics.selection();
+                                                                                        }}
+                                                                                        className={`w-full px-5 py-4 text-left rounded-[18px] text-[13px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedAcademicYear === year ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                                    >
+                                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${selectedAcademicYear === year ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                            {year}
+                                                                                        </span>
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="h-8" aria-hidden="true" />
+
+                                                        <div className="mb-6">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Please Select the Periods to pay for</h3>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-3 gap-4 mb-8">
+                                                            {[1, 2, 3].map((term) => {
+                                                                const termId = selectedFee ? `fee-${selectedFee.value}-term-${term}` : `term-${term}`;
+                                                                const isTermStaged = isStaged(termId);
+
+                                                                return (
+                                                                    <button
+                                                                        key={term}
+                                                                        disabled={!selectedFee}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                            if (!selectedFee) return;
+
+                                                                            const newService = {
+                                                                                id: termId,
+                                                                                description: `${selectedGrade} Tuition - Term ${term}`,
+                                                                                amount: selectedFee.price,
+                                                                                invoiceNo: `T${term}-${selectedAcademicYear}`,
+                                                                                term: term,
+                                                                                academicYear: selectedAcademicYear,
+                                                                                pricing_id: selectedFee.value
+                                                                            };
+
+                                                                            setStagedItems(prev => {
+                                                                                const isAlreadyStaged = prev.some(s => s.id === termId);
+
+                                                                                // Keep everything that isn't a "fee-" item OR is a "fee-" item for the CURRENT grade
+                                                                                const filtered = prev.filter(s => {
+                                                                                    if (!s.id.startsWith("fee-")) return true;
+                                                                                    return s.id.startsWith(`fee-${selectedFee.value}-`);
+                                                                                });
+
+                                                                                if (isAlreadyStaged) {
+                                                                                    // Toggle off
+                                                                                    return filtered.filter(s => s.id !== termId);
+                                                                                } else {
+                                                                                    // Accumulate (Multi-select)
+                                                                                    return [...filtered, newService];
+                                                                                }
+                                                                            });
+                                                                            haptics.selection();
+                                                                        }}
+                                                                        className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
+                                                                            ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                            : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                            } ${!selectedFee ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                    >
+                                                                        <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'
+                                                                            }`}>
+                                                                            {isTermStaged && (
+                                                                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'
+                                                                            }`}>
+                                                                            Term {term}
+                                                                        </span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : activeTab === 'transport' ? (
+                                    <div className="flex flex-col gap-2">
+                                        {debtSummary.transport.some(d => !isStaged(d.id)) && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 5 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="rounded-[24px] p-5 flex flex-col gap-4 border mb-6"
+                                                style={{ backgroundColor: '#FFF1F0', borderColor: 'rgba(255, 204, 199, 0.6)' }}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <AlertTriangle style={{ color: '#FF4D4F' }} className="shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
+                                                    <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] leading-relaxed" style={{ color: '#262626' }}>
+                                                        You have an outstanding balance for {schoolData?.category_names?.transport?.toLowerCase() || 'transport'} of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.transport.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        haptics.success();
+                                                        const itemsToAdd = debtSummary.transport;
+                                                        setStagedItems(prev => {
+                                                            const existingIds = new Set(prev.map(p => p.id));
+                                                            const newItems = itemsToAdd.filter(item => !existingIds.has(item.id));
+                                                            return [...prev, ...newItems];
+                                                        });
+                                                        toast.success(`Staged ${itemsToAdd.length} ${schoolData?.category_names?.transport?.toLowerCase() || 'transport'} balance items`);
+                                                    }}
+                                                    className="w-full h-[52px] gap-2 bg-transparent border-[1.5px] rounded-[16px] flex items-center justify-center gap-2.5 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[15px] active:scale-[0.98] transition-all hover:bg-[#FF4D4F]/5"
+                                                    style={{ borderColor: 'rgba(255, 77, 79, 0.8)', color: '#FF4D4F' }}
+                                                >
+                                                    <div className="size-[20px] gap-3 rounded-full border flex items-center justify-center" style={{ borderColor: 'rgba(255, 77, 79, 0.4)' }}>
+                                                        <span className="text-[18px] leading-none mb-0.5">+</span>
+                                                    </div>
+                                                    <span>Add All Arrears to Cart</span>
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                        {!isTabLocked && (
+                                            <>
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Route</label>
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setIsRouteDropdownOpen(!isRouteDropdownOpen);
+                                                        }}
+                                                        className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                    >
+                                                        <div className="flex flex-col items-start overflow-hidden">
+                                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900 truncate">
+                                                                {selectedRoute
+                                                                    ? `${selectedRoute.name} - K${selectedRoute.price.toLocaleString()}`
+                                                                    : "Choose a Route..."
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isRouteDropdownOpen ? 'rotate-180' : ''}`}>
+                                                            <path d="m6 9 6 6 6-6" />
+                                                        </svg>
+                                                    </button>
+
+                                                    <AnimatePresence>
+                                                        {isRouteDropdownOpen && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: -10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
+                                                            >
+                                                                <div className="p-3 flex flex-col gap-1">
+                                                                    {schoolData?.bus_routes?.map((route) => (
+                                                                        <button
+                                                                            key={route.id}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                setSelectedRouteId(route.id);
+                                                                                setIsRouteDropdownOpen(false);
+
+                                                                                // Smart Detection: Update frequency based on route name
+                                                                                // Restricted to monthly/termly/yearly for transport
+                                                                                const detected = detectFrequency(route.name);
+                                                                                if (['monthly', 'termly', 'yearly'].includes(detected)) {
+                                                                                    setTransportFrequency(detected as any);
+                                                                                } else {
+                                                                                    setTransportFrequency('monthly');
+                                                                                }
+
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedRouteId === route.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] ${selectedRouteId === route.id ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                    {route.name}
+                                                                                </span>
+                                                                                <span className={`text-[12px] ${selectedRouteId === route.id ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                                    Transport Service
+                                                                                </span>
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] ${selectedRouteId === route.id ? 'text-white' : 'text-[#003630]'}`}>
+                                                                                K{route.price.toLocaleString()}
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+
+                                                {!isRouteDropdownOpen && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="flex flex-col"
+                                                    >
+                                                        <div className="mt-2 flex flex-col gap-3">
+                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Academic Year</label>
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        setIsYearDropdownOpen(!isYearDropdownOpen);
+                                                                    }}
+                                                                    className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                                >
+                                                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900">
+                                                                        {selectedAcademicYear}
+                                                                    </span>
+                                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isYearDropdownOpen ? 'rotate-180' : ''}`}>
+                                                                        <path d="m6 9 6 6 6-6" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                <AnimatePresence>
+                                                                    {isYearDropdownOpen && (
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: -10 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            exit={{ opacity: 0, y: -10 }}
+                                                                            className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden pointer-events-auto"
+                                                                        >
+                                                                            <div className="p-3 flex flex-col gap-1">
+                                                                                {[new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => (
+                                                                                    <button
+                                                                                        key={year}
+                                                                                        onClick={(e) => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedAcademicYear(year);
+                                                                                            setIsYearDropdownOpen(false);
+                                                                                            haptics.selection();
+                                                                                        }}
+                                                                                        className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedAcademicYear === year ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                                    >
+                                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${selectedAcademicYear === year ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                            {year}
+                                                                                        </span>
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-8 flex flex-col gap-3">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Subscription Frequency</h3>
+                                                            <div className="flex flex-wrap gap-3 mb-4">
+                                                                {['monthly', 'termly', 'yearly'].map((freq) => (
+                                                                    <button
+                                                                        key={freq}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            haptics.selection();
+                                                                            setTransportFrequency(freq as any);
+                                                                        }}
+                                                                        className={`h-[48px] px-5 rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center gap-3 ${transportFrequency === freq
+                                                                            ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                            : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                            }`}
+                                                                    >
+                                                                        <div className={`size-3.5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${transportFrequency === freq ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                            {transportFrequency === freq && (
+                                                                                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] capitalize ${transportFrequency === freq ? 'text-white' : 'text-gray-900'}`}>
+                                                                            {freq}
+                                                                        </span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="h-8" aria-hidden="true" />
+
+                                                        <div className="mb-6">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">
+                                                                {transportFrequency === 'monthly' ? 'Select Month' :
+                                                                    transportFrequency === 'yearly' ? 'Confirm Academic Year' :
+                                                                        transportFrequency === 'weekly' ? 'Select Week' :
+                                                                            transportFrequency === 'daily' ? 'Select Day' :
+                                                                                'Please Select the Periods to pay for'}
+                                                            </h3>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-3 gap-4 mb-8">
+                                                            {transportFrequency === 'termly' ? (
+                                                                [1, 2, 3].map((term) => {
+                                                                    const termId = selectedRoute ? `route-${selectedRouteId}-term-${term}` : `route-term-${term}`;
+                                                                    const isTermStaged = isStaged(termId);
+
+                                                                    return (
+                                                                        <button
+                                                                            key={term}
+                                                                            disabled={!selectedRoute}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                if (!selectedRoute) return;
+
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedRoute.name} - Term ${term}`,
+                                                                                    amount: selectedRoute.price * 3, // 3 months per term
+                                                                                    invoiceNo: "203",
+                                                                                    term: term,
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedRouteId
+                                                                                };
+
+                                                                                setStagedItems(prev => {
+                                                                                    const isAlreadyStaged = prev.some(s => s.id === termId);
+                                                                                    const filtered = prev.filter(s => {
+                                                                                        if (!s.id.startsWith("route-")) return true;
+                                                                                        return s.id.startsWith(`route-${selectedRouteId}-`);
+                                                                                    });
+
+                                                                                    if (isAlreadyStaged) {
+                                                                                        return filtered.filter(s => s.id !== termId);
+                                                                                    } else {
+                                                                                        return [...filtered, newService];
+                                                                                    }
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
+                                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                                } ${!selectedRoute ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'
+                                                                                }`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'
+                                                                                }`}>
+                                                                                Term {term}
+                                                                            </span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : transportFrequency === 'monthly' ? (
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                    const termId = selectedRoute ? `route-${selectedRouteId}-month-${month}` : `route-month-${month}`;
+                                                                    const isTermStaged = isStaged(termId);
+
+                                                                    // Map month to term for invoice metadata
+                                                                    const monthMap: Record<string, number> = {
+                                                                        'Jan': 1, 'Feb': 1, 'Mar': 1,
+                                                                        'May': 2, 'Jun': 2, 'Jul': 2,
+                                                                        'Sep': 3, 'Oct': 3, 'Nov': 3
+                                                                    };
+
+                                                                    return (
+                                                                        <button
+                                                                            key={month}
+                                                                            disabled={!selectedRoute}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (!selectedRoute) return;
+
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedRoute.name} - ${month} ${selectedAcademicYear}`,
+                                                                                    amount: selectedRoute.price, // Base monthly price
+                                                                                    invoiceNo: "203",
+                                                                                    term: monthMap[month],
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedRouteId
+                                                                                };
+
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
+                                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                                } ${!selectedRoute ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <button
+                                                                    disabled={!selectedRoute}
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        if (!selectedRoute) return;
+                                                                        const termId = `route-${selectedRouteId}-yearly-${selectedAcademicYear}`;
+                                                                        const newService = {
+                                                                            id: termId,
+                                                                            description: `${selectedRoute.name} - Full Year ${selectedAcademicYear}`,
+                                                                            amount: selectedRoute.price * 9, // 9 months per year
+                                                                            invoiceNo: "203",
+                                                                            academicYear: selectedAcademicYear,
+                                                                            pricing_id: selectedRouteId
+                                                                        };
+                                                                        setStagedItems(prev => {
+                                                                            const exists = prev.some(s => s.id === termId);
+                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                        });
+                                                                        haptics.selection();
+                                                                    }}
+                                                                    className={`h-[60px] col-span-3 rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isStaged(`route-${selectedRouteId}-yearly-${selectedAcademicYear}`)
+                                                                        ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                        : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                        } ${!selectedRoute ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                >
+                                                                    <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isStaged(`route-${selectedRouteId}-yearly-${selectedAcademicYear}`) ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                        {isStaged(`route-${selectedRouteId}-yearly-${selectedAcademicYear}`) && (
+                                                                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <polyline points="20 6 9 17 4 12" />
+                                                                            </svg>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] ${isStaged(`route-${selectedRouteId}-yearly-${selectedAcademicYear}`) ? 'text-white' : 'text-gray-900'}`}>
+                                                                        Pay Full Year ({selectedAcademicYear})
+                                                                    </span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                ) : activeTab === 'cafeteria' ? (
+                                    <div className="flex flex-col gap-2">
+                                        {debtSummary.cafeteria.some(d => !isStaged(d.id)) && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 5 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="bg-[#FFF1F0] rounded-[24px] p-5 flex flex-col gap-4 border border-[#FFCCC7]/60 mb-6"
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <AlertCircle className="text-[#FF4D4F] shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
+                                                    <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] text-[#262626] leading-relaxed">
+                                                        You have an outstanding balance for cafeteria of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.cafeteria.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        haptics.success();
+                                                        const itemsToAdd = debtSummary.cafeteria;
+                                                        setStagedItems(prev => {
+                                                            const existingIds = new Set(prev.map(p => p.id));
+                                                            const newItems = itemsToAdd.filter(item => !existingIds.has(item.id));
+                                                            return [...prev, ...newItems];
+                                                        });
+                                                        toast.success(`Staged ${itemsToAdd.length} meal balance items`);
+                                                    }}
+                                                    className="w-full h-[52px] bg-transparent border-[1.5px] border-[#FF4D4F]/80 text-[#FF4D4F] rounded-[16px] flex items-center justify-center gap-2.5 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[15px] active:scale-[0.98] transition-all hover:bg-[#FF4D4F]/5"
+                                                >
+                                                    <div className="size-[22px] rounded-full border border-[#FF4D4F]/40 flex items-center justify-center">
+                                                        <span className="text-[18px] leading-none mb-0.5">+</span>
+                                                    </div>
+                                                    <span>Add All Arrears to Cart</span>
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                        {!isTabLocked && (
+                                            <>
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Meal Plan</label>
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setIsCanteenDropdownOpen(!isCanteenDropdownOpen);
+                                                        }}
+                                                        className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                    >
+                                                        <div className="flex flex-col items-start overflow-hidden">
+                                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900 truncate">
+                                                                {selectedCanteenPlan
+                                                                    ? `${selectedCanteenPlan.name} - K${selectedCanteenPlan.price.toLocaleString()}`
+                                                                    : "Choose a Plan..."
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isCanteenDropdownOpen ? 'rotate-180' : ''}`}>
+                                                            <path d="m6 9 6 6 6-6" />
+                                                        </svg>
+                                                    </button>
+
+                                                    <AnimatePresence>
+                                                        {isCanteenDropdownOpen && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: -10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
+                                                            >
+                                                                <div className="p-3 flex flex-col gap-1">
+                                                                    {schoolData?.canteen_plans?.map((plan) => (
+                                                                        <button
+                                                                            key={plan.id}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                setSelectedCanteenPlanId(plan.id);
+                                                                                setIsCanteenDropdownOpen(false);
+
+                                                                                // Smart Detection: Update frequency based on plan name
+                                                                                // Restricted to daily/weekly/monthly/termly for canteen
+                                                                                const detected = detectFrequency(plan.name);
+                                                                                if (['daily', 'weekly', 'monthly', 'termly'].includes(detected)) {
+                                                                                    setCafeteriaFrequency(detected as any);
+                                                                                } else {
+                                                                                    setCafeteriaFrequency('monthly');
+                                                                                }
+
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedCanteenPlanId === plan.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] ${selectedCanteenPlanId === plan.id ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                    {plan.name}
+                                                                                </span>
+                                                                                <span className={`text-[12px] ${selectedCanteenPlanId === plan.id ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                                    Cafeteria Service
+                                                                                </span>
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] ${selectedCanteenPlanId === plan.id ? 'text-white' : 'text-[#003630]'}`}>
+                                                                                K{plan.price.toLocaleString()}
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+
+                                                {!isCanteenDropdownOpen && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="flex flex-col"
+                                                    >
+                                                        <div className="mt-2 flex flex-col gap-3">
+                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Academic Year</label>
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        setIsYearDropdownOpen(!isYearDropdownOpen);
+                                                                    }}
+                                                                    className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                                >
+                                                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900">
+                                                                        {selectedAcademicYear}
+                                                                    </span>
+                                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isYearDropdownOpen ? 'rotate-180' : ''}`}>
+                                                                        <path d="m6 9 6 6 6-6" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                <AnimatePresence>
+                                                                    {isYearDropdownOpen && (
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: -10 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            exit={{ opacity: 0, y: -10 }}
+                                                                            className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden pointer-events-auto"
+                                                                        >
+                                                                            <div className="p-3 flex flex-col gap-1">
+                                                                                {[new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => (
+                                                                                    <button
+                                                                                        key={year}
+                                                                                        onClick={(e) => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedAcademicYear(year);
+                                                                                            setIsYearDropdownOpen(false);
+                                                                                            haptics.selection();
+                                                                                        }}
+                                                                                        className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedAcademicYear === year ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                                    >
+                                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${selectedAcademicYear === year ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                            {year}
+                                                                                        </span>
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-8 flex flex-col gap-3">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Subscription Frequency</h3>
+                                                            <div className="flex flex-wrap gap-3 mb-4">
+                                                                {['daily', 'weekly', 'monthly', 'termly'].map((freq) => (
+                                                                    <button
+                                                                        key={freq}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            haptics.selection();
+                                                                            setCafeteriaFrequency(freq as any);
+                                                                        }}
+                                                                        className={`h-[48px] px-5 rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center gap-3 ${cafeteriaFrequency === freq
+                                                                            ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                            : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                            }`}
+                                                                    >
+                                                                        <div className={`size-3.5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${cafeteriaFrequency === freq ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                            {cafeteriaFrequency === freq && (
+                                                                                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] capitalize ${cafeteriaFrequency === freq ? 'text-white' : 'text-gray-900'}`}>
+                                                                            {freq}
+                                                                        </span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="h-4" aria-hidden="true" />
+
+                                                        <div className="mb-6">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">
+                                                                {cafeteriaFrequency === 'monthly' ? 'Select Month' :
+                                                                    cafeteriaFrequency === 'weekly' ? 'Select Week' :
+                                                                        cafeteriaFrequency === 'daily' ? 'Select Day' :
+                                                                            'Please Select the Periods to pay for'}
+                                                            </h3>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-3 gap-4 mb-8">
+                                                            {cafeteriaFrequency === 'termly' ? (
+                                                                [1, 2, 3].map((term) => {
+                                                                    const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-term-${term}` : `canteen-term-${term}`;
+                                                                    const isTermStaged = isStaged(termId);
+
+                                                                    return (
+                                                                        <button
+                                                                            key={term}
+                                                                            disabled={!selectedCanteenPlan}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                if (!selectedCanteenPlan) return;
+
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedCanteenPlan.name} - Term ${term}`,
+                                                                                    amount: selectedCanteenPlan.price * 3, // 3 months per term
+                                                                                    invoiceNo: "204",
+                                                                                    term: term,
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                };
+
+                                                                                setStagedItems(prev => {
+                                                                                    const isAlreadyStaged = prev.some(s => s.id === termId);
+                                                                                    const filtered = prev.filter(s => {
+                                                                                        if (!s.id.startsWith("canteen-")) return true;
+                                                                                        return s.id.startsWith(`canteen-${selectedCanteenPlanId}-`);
+                                                                                    });
+
+                                                                                    if (isAlreadyStaged) {
+                                                                                        return filtered.filter(s => s.id !== termId);
+                                                                                    } else {
+                                                                                        return [...filtered, newService];
+                                                                                    }
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
+                                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                                } ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'
+                                                                                }`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'
+                                                                                }`}>
+                                                                                Term {term}
+                                                                            </span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : cafeteriaFrequency === 'weekly' ? (
+                                                                ['Week 1', 'Week 2', 'Week 3', 'Week 4'].map((week) => {
+                                                                    const termId = `canteen-${selectedCanteenPlanId}-week-${week}`;
+                                                                    const isTermStaged = isStaged(termId);
+                                                                    return (
+                                                                        <button
+                                                                            key={week}
+                                                                            disabled={!selectedCanteenPlan}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (!selectedCanteenPlan) return;
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedCanteenPlan.name} - ${week}`,
+                                                                                    amount: selectedCanteenPlan.price / 4,
+                                                                                    invoiceNo: "204",
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                };
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{week}</span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : cafeteriaFrequency === 'daily' ? (
+                                                                ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day) => {
+                                                                    const termId = `canteen-${selectedCanteenPlanId}-day-${day}`;
+                                                                    const isTermStaged = isStaged(termId);
+                                                                    return (
+                                                                        <button
+                                                                            key={day}
+                                                                            disabled={!selectedCanteenPlan}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (!selectedCanteenPlan) return;
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedCanteenPlan.name} - ${day}`,
+                                                                                    amount: selectedCanteenPlan.price / 20,
+                                                                                    invoiceNo: "204",
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                };
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{day}</span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : cafeteriaFrequency === 'monthly' ? (
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                    const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-month-${month}` : `canteen-month-${month}`;
+                                                                    const isTermStaged = isStaged(termId);
+
+                                                                    // Map month to term for invoice metadata
+                                                                    const monthMap: Record<string, number> = {
+                                                                        'Jan': 1, 'Feb': 1, 'Mar': 1,
+                                                                        'May': 2, 'Jun': 2, 'Jul': 2,
+                                                                        'Sep': 3, 'Oct': 3, 'Nov': 3
+                                                                    };
+
+                                                                    return (
+                                                                        <button
+                                                                            key={month}
+                                                                            disabled={!selectedCanteenPlan}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (!selectedCanteenPlan) return;
+
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedCanteenPlan.name} - ${month} ${selectedAcademicYear}`,
+                                                                                    amount: selectedCanteenPlan.price, // Base monthly price
+                                                                                    invoiceNo: "204",
+                                                                                    term: monthMap[month],
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                };
+
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
+                                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                                } ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : null}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                ) : activeTab === 'uniforms' ? (
+                                    <div className="flex flex-col gap-2">
+                                        {debtSummary.uniforms.some(d => !isStaged(d.id)) && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 5 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="bg-[#FFF1F0] rounded-[24px] p-5 flex flex-col gap-4 border border-[#FFCCC7]/60 mb-6"
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <AlertCircle className="text-[#FF4D4F] shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
+                                                    <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] text-[#262626] leading-relaxed">
+                                                        You have an outstanding balance for uniforms of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.uniforms.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        haptics.success();
+                                                        const itemsToAdd = debtSummary.uniforms;
+                                                        setStagedItems(prev => {
+                                                            const existingIds = new Set(prev.map(p => p.id));
+                                                            const newItems = itemsToAdd.filter(item => !existingIds.has(item.id));
+                                                            return [...prev, ...newItems];
+                                                        });
+                                                        toast.success(`Staged ${itemsToAdd.length} uniform items`);
+                                                    }}
+                                                    className="w-full h-[52px] bg-transparent border-[1.5px] border-[#FF4D4F]/80 text-[#FF4D4F] rounded-[16px] flex items-center justify-center gap-2.5 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[15px] active:scale-[0.98] transition-all hover:bg-[#FF4D4F]/5"
+                                                >
+                                                    <div className="size-[22px] rounded-full border border-[#FF4D4F]/40 flex items-center justify-center">
+                                                        <span className="text-[18px] leading-none mb-0.5">+</span>
+                                                    </div>
+                                                    <span>Add All Arrears to Cart</span>
+                                                </button>
+                                            </motion.div>
+                                        )}
+
+                                        {!isTabLocked && (
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Product/Service</label>
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setIsOtherDropdownOpen(!isOtherDropdownOpen);
+                                                        }}
+                                                        className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                    >
+                                                        <div className="flex flex-col items-start overflow-hidden">
+                                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900 truncate">
+                                                                {selectedOther
+                                                                    ? `${selectedOther.name} - K${selectedOther.price.toLocaleString()}`
+                                                                    : "Choose an Item..."
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isOtherDropdownOpen ? 'rotate-180' : ''}`}>
+                                                            <path d="m6 9 6 6 6-6" />
+                                                        </svg>
+                                                    </button>
+
+                                                    <AnimatePresence>
+                                                        {isOtherDropdownOpen && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: -10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
+                                                            >
+                                                                <div className="p-3 flex flex-col gap-1">
+                                                                    {schoolData?.other_services?.map((svc) => (
+                                                                        <button
+                                                                            key={svc.id}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                setSelectedOtherId(svc.id);
+                                                                                setIsOtherDropdownOpen(false);
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedOtherId === svc.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] ${selectedOtherId === svc.id ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                    {svc.name}
+                                                                                </span>
+                                                                                <span className={`text-[12px] ${selectedOtherId === svc.id ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                                    {svc.category || 'Institutional Product'}
+                                                                                </span>
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] ${selectedOtherId === svc.id ? 'text-white' : 'text-[#003630]'}`}>
+                                                                                K{svc.price.toLocaleString()}
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+
+                                                {!isOtherDropdownOpen && selectedOther && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="flex flex-col mt-4"
+                                                    >
+                                                        <div className="h-4" aria-hidden="true" />
+                                                        <div className="mb-6">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Price Confirmation</h3>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                const itemId = `other-${selectedOtherId}`;
+                                                                const newService = {
+                                                                    id: itemId,
+                                                                    description: selectedOther.name,
+                                                                    amount: selectedOther.price,
+                                                                    invoiceNo: "205",
+                                                                    pricing_id: selectedOtherId
+                                                                };
+                                                                setStagedItems(prev => {
+                                                                    const exists = prev.some(s => s.id === itemId);
+                                                                    return exists ? prev.filter(s => s.id !== itemId) : [...prev, newService];
+                                                                });
+                                                                haptics.selection();
+                                                            }}
+                                                            className={`h-[60px] rounded-[24px] border-[1.5px] px-8 flex items-center justify-between transition-all active:scale-[0.98] ${isStaged(`other-${selectedOtherId}`)
+                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_30px_rgba(0,54,48,0.2)]'
+                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.04)]'
+                                                                }`}
+                                                        >
+                                                            <div className="flex flex-col items-start">
+                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${isStaged(`other-${selectedOtherId}`) ? 'text-white' : 'text-gray-900'}`}>
+                                                                    Add to Staging
+                                                                </span>
+                                                                <span className={`text-[12px] ${isStaged(`other-${selectedOtherId}`) ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                    Unit Price
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-4">
+                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] ${isStaged(`other-${selectedOtherId}`) ? 'text-[#95e36c]' : 'text-[#003630]'}`}>
+                                                                    K{selectedOther.price.toLocaleString()}
+                                                                </span>
+                                                                <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all ${isStaged(`other-${selectedOtherId}`) ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                    {isStaged(`other-${selectedOtherId}`) && (
+                                                                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <polyline points="20 6 9 17 4 12" />
+                                                                        </svg>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    </motion.div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : null}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Fixed Sidebar/Drawer Footer - High Fidelity Design */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-white px-6 pt-6 pb-12 border-t border-gray-100 shadow-[0px_-20px_50px_rgba(0,0,0,0.05)] z-[80]">
+                        <div className="flex items-center justify-between mb-6 px-2">
+                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] font-bold text-black tracking-tight">Subtotal</span>
+                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] font-bold text-black tracking-tight uppercase">
+                                K{stagedItems.reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                console.log("[UnifiedServicesPopup] Confirming staged selection of", stagedItems.length, "items");
+                                haptics.success();
+                                onConfirm(stagedItems);
+                            }}
+                            className="w-full h-[60px] bg-[#003630] text-white rounded-[12px] flex items-center justify-between px-6 active:scale-[0.97] transition-all shadow-[0px_20px_40px_rgba(0,54,48,0.2)] group pointer-events-auto"
+                        >
+                            <div className="size-6 text-white/90">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
+                                </svg>
+                            </div>
+
+                            <div className="flex flex-col items-center">
+                                <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-white h-6">
+                                    Confirm & Add {stagedItems.length === 1 ? '1 Item' : `${stagedItems.length} Items`}
+                                </span>
+                                <span className="text-[10px] text-white/50 uppercase tracking-widest font-bold"></span>
+                            </div>
+
+                            <div className="size-6 text-[#95e36c]">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        </>
     );
 }

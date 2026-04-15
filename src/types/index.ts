@@ -163,6 +163,7 @@ export interface School {
   bus_routes?: Array<{ id: string; name: string; price: number; description?: string }>;
   boarding_rooms?: Array<{ id: string; name: string; price: number; capacity?: number }>;
   canteen_plans?: Array<{ id: string; name: string; price: number; description?: string }>;
+  category_names?: Record<string, string>;
 }
 
 /**
