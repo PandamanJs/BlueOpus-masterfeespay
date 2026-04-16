@@ -164,6 +164,7 @@ export interface School {
   boarding_rooms?: Array<{ id: string; name: string; price: number; capacity?: number }>;
   canteen_plans?: Array<{ id: string; name: string; price: number; description?: string }>;
   category_names?: Record<string, string>;
+  vat_enabled?: boolean;
 }
 
 /**
@@ -238,5 +239,19 @@ export interface Transaction {
   meta_data?: Record<string, any>;
   initiated_at: string;
   completed_at?: string;
+  created_at: string;
+}
+
+/**
+ * Discount Definition entity
+ */
+export interface DiscountDefinition {
+  discount_id: string;
+  school_id: string;
+  name: string;
+  description: string | null;
+  discount_type: 'percentage' | 'fixed';
+  amount: number;
+  is_active: boolean;
   created_at: string;
 }

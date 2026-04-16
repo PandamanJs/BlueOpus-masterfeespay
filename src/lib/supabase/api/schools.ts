@@ -14,7 +14,7 @@ export async function getSchools(): Promise<School[]> {
             console.log('[API] Fetching schools from Supabase...');
             const { data, error } = await supabase
                 .from('schools')
-                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms')
+                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms, vat')
                 .eq('is_active', true)
                 .order('school_name');
 
@@ -32,6 +32,7 @@ export async function getSchools(): Promise<School[]> {
                     lenco_public_key: s.lenco_public_key || null,
                     access_code: s.access_code || null,
                     uses_forms: s.uses_forms || false,
+                    vat_enabled: s.vat || false,
                 }));
                 await offlineDB.putAll('schools', schools);
                 return schools;
@@ -56,7 +57,7 @@ export async function getSchoolByName(name: string): Promise<School | null> {
         try {
             const { data, error } = await supabase
                 .from('schools')
-                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms')
+                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms, vat')
                 .eq('school_name', name)
                 .maybeSingle();
 
@@ -190,7 +191,8 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                     bus_routes: fetchedBusRoutes,
                     boarding_rooms: fetchedBoarding,
                     canteen_plans: fetchedCanteen,
-                    category_names
+                    category_names,
+                    vat_enabled: data.vat || false,
                 };
                 return school;
             } // Close the 'else' block

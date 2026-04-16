@@ -85,7 +85,9 @@ interface AppState {
 
   // User State
   selectedSchool: string | null;
+  selectedSchoolId: string | null;
   selectedSchoolLogo: string | null;
+  vatEnabled: boolean;
   userName: string;
   userPhone: string;
   userEmail: string;
@@ -122,7 +124,7 @@ interface AppState {
   setNavigationDirection: (direction: 'forward' | 'back') => void;
 
   // User Actions
-  setSelectedSchool: (school: string | null, logo?: string | null) => void;
+  setSelectedSchool: (school: string | null, logo?: string | null, schoolId?: string | null, vatEnabled?: boolean) => void;
   setUserName: (name: string) => void;
   setUserPhone: (phone: string) => void;
   setUserEmail: (email: string) => void;
@@ -183,7 +185,9 @@ export const useAppStore = create<AppState>()(
       hasHydrated: false,
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       selectedSchool: null,
+      selectedSchoolId: null,
       selectedSchoolLogo: null,
+      vatEnabled: false,
       userName: '',
       userPhone: '',
       userEmail: '',
@@ -213,7 +217,12 @@ export const useAppStore = create<AppState>()(
       setNavigationDirection: (direction) => set({ navigationDirection: direction }),
 
       // User Actions
-      setSelectedSchool: (school, logo = null) => set({ selectedSchool: school, selectedSchoolLogo: logo }),
+      setSelectedSchool: (school, logo = null, schoolId = null, vatEnabled = false) => set({ 
+        selectedSchool: school, 
+        selectedSchoolLogo: logo,
+        selectedSchoolId: schoolId,
+        vatEnabled: vatEnabled
+      }),
 
       setUserName: (name) => set({ userName: name }),
 
@@ -326,7 +335,9 @@ export const useAppStore = create<AppState>()(
       // always start at search or services, never mid-payment or mid-checkout.
       partialize: (state) => ({
         selectedSchool: state.selectedSchool,
+        selectedSchoolId: state.selectedSchoolId,
         selectedSchoolLogo: state.selectedSchoolLogo,
+        vatEnabled: state.vatEnabled,
         userName: state.userName,
         userPhone: state.userPhone,
         userEmail: state.userEmail,
@@ -376,7 +387,9 @@ export const useUserInfo = () => useAppStore((state) => ({
   userEmail: state.userEmail,
   userId: state.userId,
   selectedSchool: state.selectedSchool,
+  selectedSchoolId: state.selectedSchoolId,
   selectedSchoolLogo: state.selectedSchoolLogo,
+  vatEnabled: state.vatEnabled,
 }));
 
 // Checkout Selectors

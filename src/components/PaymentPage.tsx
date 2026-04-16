@@ -7,14 +7,15 @@
  */
 
 import { motion, AnimatePresence } from "motion/react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ChevronDown, ShieldCheck, CreditCard, Wallet } from "lucide-react";
 import { useLenco } from "../hooks/useLenco";
 import { useOfflineManager } from "../hooks/useOfflineManager";
 import { createTransaction, syncTransactionToQuickBooks } from "../lib/supabase/api/transactions";
-import { getSchools } from "../lib/supabase/api/schools";
+import { getSchools, getDiscountDefinitions } from "../lib/supabase/api/schools";
 import { getParentByPhone } from "../lib/supabase/api/parents";
 import { useAppStore } from "../stores/useAppStore";
+import { DiscountDefinition } from "../types";
 import { toast } from "sonner";
 import RollingNumber from "./ui/RollingNumber";
 import LogoHeader from "./common/LogoHeader";
@@ -23,6 +24,29 @@ interface PaymentPageProps {
   onBack: () => void;
   onPay: () => void;
   totalAmount: number;
+}
+
+/* ── Custom Icons from Design Spec ── */
+function ReceiptItemIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8.66671 10.667H5.33337" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.33337 5.33301H5.33337" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10.6667 8H5.33337" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2.66663 1.99978C2.66663 1.82297 2.73686 1.6534 2.86189 1.52838C2.98691 1.40335 3.15648 1.33311 3.33329 1.33311C3.49837 1.33221 3.66028 1.37847 3.79996 1.46645L4.42196 1.86645C4.56132 1.9555 4.72325 2.00282 4.88863 2.00282C5.05401 2.00282 5.21593 1.9555 5.35529 1.86645L5.97796 1.46645C6.11732 1.3774 6.27925 1.33008 6.44463 1.33008C6.61001 1.33008 6.77193 1.3774 6.91129 1.46645L7.53329 1.86645C7.67265 1.9555 7.83458 2.00282 7.99996 2.00282C8.16534 2.00282 8.32727 1.9555 8.46663 1.86645L9.08863 1.46645C9.22798 1.3774 9.38991 1.33008 9.55529 1.33008C9.72067 1.33008 9.8826 1.3774 10.022 1.46645L10.6446 1.86645C10.784 1.9555 10.9459 2.00282 11.1113 2.00282C11.2767 2.00282 11.4386 1.9555 11.578 1.86645L12.2 1.46645C12.3396 1.37847 12.5015 1.33221 12.6666 1.33311C12.8434 1.33311 13.013 1.40335 13.138 1.52838C13.2631 1.6534 13.3333 1.82297 13.3333 1.99978V13.9998C13.3333 14.1766 13.2631 14.3462 13.138 14.4712C13.013 14.5962 12.8434 14.6664 12.6666 14.6664C12.5015 14.6674 12.3396 14.6211 12.2 14.5331L11.578 14.1331C11.4386 14.0441 11.2767 13.9967 11.1113 13.9967C10.9459 13.9967 10.784 14.0441 10.6446 14.1331L10.022 14.5331C9.8826 14.6222 9.72067 14.6695 9.55529 14.6695C9.38991 14.6695 9.22798 14.6222 9.08863 14.5331L8.46663 14.1331C8.32727 14.0441 8.16534 13.9967 7.99996 13.9967C7.83458 13.9967 7.67265 14.0441 7.53329 14.1331L6.91129 14.5331C6.77193 14.6222 6.61001 14.6695 6.44463 14.6695C6.27925 14.6695 6.11732 14.6222 5.97796 14.5331L5.35529 14.1331C5.21593 14.0441 5.05401 13.9967 4.88863 13.9967C4.72325 13.9967 4.56132 14.0441 4.42196 14.1331L3.79996 14.5331C3.66028 14.6211 3.49837 14.6674 3.33329 14.6664C3.15648 14.6664 2.98691 14.5962 2.86189 14.4712C2.73686 14.3462 2.66663 14.1766 2.66663 13.9998V1.99978Z" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function DiscountIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M1.33337 5.99967C1.86381 5.99967 2.37251 6.21039 2.74759 6.58546C3.12266 6.96053 3.33337 7.46924 3.33337 7.99967C3.33337 8.53011 3.12266 9.03882 2.74759 9.41389C2.37251 9.78896 1.86381 9.99967 1.33337 9.99967V11.333C1.33337 11.6866 1.47385 12.0258 1.7239 12.2758C1.97395 12.5259 2.31309 12.6663 2.66671 12.6663H13.3334C13.687 12.6663 14.0261 12.5259 14.2762 12.2758C14.5262 12.0258 14.6667 11.6866 14.6667 11.333V9.99967C14.1363 9.99967 13.6276 9.78896 13.2525 9.41389C12.8774 9.03882 12.6667 8.53011 12.6667 7.99967C12.6667 7.46924 12.8774 6.96053 13.2525 6.58546C13.6276 6.21039 14.1363 5.99967 14.6667 5.99967V4.66634C14.6667 4.31272 14.5262 3.97358 14.2762 3.72353C14.0261 3.47348 13.687 3.33301 13.3334 3.33301H2.66671C2.31309 3.33301 1.97395 3.47348 1.7239 3.72353C1.47385 3.97358 1.33337 4.31272 1.33337 4.66634V5.99967Z" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 6H6.00667" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 6L6 10" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 10H10.0067" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 
@@ -55,7 +79,7 @@ function CollapsibleSection({
       >
         <div className="flex items-center gap-3">
           {icon && <div className="text-[#003630]">{icon}</div>}
-          <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#003630]">
+          <span className="font-semibold text-[14px] text-[#003630]">
             {title}
           </span>
         </div>
@@ -91,6 +115,10 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   const [showServicesBreakdown, setShowServicesBreakdown] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAllStudents, setShowAllStudents] = useState(false);
+  const [showDiscounts, setShowDiscounts] = useState(false);
+  const [availableDiscounts, setAvailableDiscounts] = useState<DiscountDefinition[]>([]);
+  const [selectedDiscountIds, setSelectedDiscountIds] = useState<string[]>([]);
+  const [isFetchingDiscounts, setIsFetchingDiscounts] = useState(false);
 
   // Get data from store
   const checkoutServices = useAppStore((state) => state.checkoutServices);
@@ -98,10 +126,60 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   // Store instance for setting reference
   const store = useAppStore();
 
-  // Calculate totals
-  const serviceFee = totalAmount * 0.03; // 3% service fee
-  const finalAmount = totalAmount + serviceFee;
+  // Get user info from store
+  const userPhone = useAppStore((state) => state.userPhone);
+  const userName = useAppStore((state) => state.userName);
+  const selectedSchoolId = useAppStore((state) => state.selectedSchoolId);
+  const selectedSchoolLogo = useAppStore((state) => state.selectedSchoolLogo);
+  const selectedSchoolName = useAppStore((state) => state.selectedSchool);
+  const vatEnabled = useAppStore((state) => state.vatEnabled);
+
+  // Fetch discounts from DB
+  useEffect(() => {
+    async function loadDiscounts() {
+      if (!selectedSchoolId) return;
+      
+      setIsFetchingDiscounts(true);
+      try {
+        const discounts = await getDiscountDefinitions([selectedSchoolId]);
+        setAvailableDiscounts(discounts.filter(d => d.is_active));
+      } catch (err) {
+        console.error("Error loading discounts:", err);
+      } finally {
+        setIsFetchingDiscounts(false);
+      }
+    }
+    
+    loadDiscounts();
+  }, [selectedSchoolId]);
+
+  // Calculate discount total
+  const calculatedDiscountAmount = selectedDiscountIds.reduce((total, id) => {
+    const discount = availableDiscounts.find(d => d.discount_id === id);
+    if (!discount) return total;
+    
+    if (discount.discount_type === 'percentage') {
+      return total + (totalAmount * (discount.amount / 100));
+    } else {
+      return total + Number(discount.amount);
+    }
+  }, 0);
+
+  const discountedTotal = Math.max(0, totalAmount - calculatedDiscountAmount);
+
+  // Calculate VAT and fees based on discounted total
+  const vatRate = 0.16;
+  // If VAT is inclusive, we extract it from the total for display: Base = Total / (1 + Rate)
+  const vatAmount = vatEnabled ? (discountedTotal - (discountedTotal / (1 + vatRate))) : 0; 
+  const serviceFee = discountedTotal * 0.02; // 2% service fee
+  const finalAmount = discountedTotal + serviceFee; // VAT is already inclusive
   const serviceCount = checkoutServices.length;
+
+  const toggleDiscount = (id: string) => {
+    setSelectedDiscountIds(prev => 
+      prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
+    );
+  };
 
   // Get unique student names from checkout services
   const studentNames = Array.from(new Set(checkoutServices.map(service => service.studentName)));
@@ -109,11 +187,6 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   // Lenco Hook
   const { isScriptLoaded, initiatePayment } = useLenco();
   const { isOnline } = useOfflineManager();
-
-  // Get user info from store
-  const userPhone = useAppStore((state) => state.userPhone);
-  const userName = useAppStore((state) => state.userName);
-  const selectedSchool = useAppStore((state) => state.selectedSchool);
 
   // Helper to split full name
   const getNames = (fullName: string) => {
@@ -332,222 +405,226 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
     }
   };
 
+  const totalWithVat = finalAmount;
+
   return (
-    <div
-      className="min-h-screen w-full flex flex-col"
-      style={{
-        backgroundImage: "linear-gradient(114.686deg, rgb(255, 255, 255) 0%, rgb(249, 250, 251) 50%, rgba(240, 253, 244, 0.3) 100%)"
-      }}
-    >
-      <LogoHeader showBackButton onBack={onBack} />
+    <div className="h-[100dvh] w-full flex justify-center overflow-hidden fixed inset-0 font-sans" style={{ background: "#FFFFFF" }}>
+      <div className="flex flex-col w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-full relative overflow-hidden">
 
-      {/* Scrollable Area */}
-      <div className="flex-1 w-full overflow-y-auto no-scrollbar pt-[24px] px-6 space-y-6">
-        <div className="max-w-lg mx-auto space-y-6">
+        {/* ── 1. Header ── */}
+        <LogoHeader showBackButton={false} className="shadow-md" />
 
+        {/* ── Scrollable Body ── */}
+        <div className="flex-1 overflow-y-auto no-scrollbar relative">
 
-
-          {/* Clean Redesigned Payment Summary Card - iOS Inspired */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full bg-white rounded-xl overflow-hidden border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-          >
-            {/* 1. Premium Design Hero Section (Inspired by Part Payment Design) */}
-            <div className="relative w-full overflow-hidden bg-white border-b border-gray-100 min-h-[220px]">
-
-              {/* Background Decorative Chevrons (Animated) */}
-              <div className="absolute top-[-20px] right-[-40px] w-[300px] h-[260px] opacity-100 pointer-events-none z-0">
-                <svg viewBox="0 0 100 100" fill="none" className="w-full h-full">
-                  {/* First Chevron (Lightest) */}
-                  <motion.path
-                    d="M20 10L60 50L20 90"
-                    stroke="#95e36c" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round"
-                    className="opacity-20"
-                    animate={{ x: [0, 8, 0], y: [0, -5, 0] }}
-                    transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-                  />
-                  {/* Second Chevron (Medium) */}
-                  <motion.path
-                    d="M40 10L80 50L40 90"
-                    stroke="#95e36c" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round"
-                    className="opacity-40"
-                    animate={{ x: [0, -8, 0], y: [0, 5, 0] }}
-                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                  />
-                  {/* Third Chevron (Dark Green) */}
-                  <motion.path
-                    d="M60 10L100 50L60 90"
-                    stroke="#003630" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round"
-                    animate={{ x: [0, 5, 0], y: [0, -8, 0] }}
-                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                  />
-                </svg>
+          {/* ── 2. Payment Total Hero Section ── */}
+          <div style={{ backgroundColor: '#F9FAFB' }} className="relative w-full h-[140px] border-b border-[#F2F2F2] flex items-center px-6 overflow-hidden">
+            <div className="w-[392px] flex flex-col justify-start items-start">
+              <div className="flex justify-center items-center gap-2 mb-1">
+                <div className="relative">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2.5 7.49967C2.5 7.05765 2.67559 6.63372 2.98816 6.32116C3.30072 6.0086 3.72464 5.83301 4.16667 5.83301H15.8333C16.2754 5.83301 16.6993 6.0086 17.0118 6.32116C17.3244 6.63372 17.5 7.05765 17.5 7.49967" stroke="#95E36C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M15.8333 2.5H4.16667C3.24619 2.5 2.5 3.24619 2.5 4.16667V15.8333C2.5 16.7538 3.24619 17.5 4.16667 17.5H15.8333C16.7538 17.5 17.5 16.7538 17.5 15.8333V4.16667C17.5 3.24619 16.7538 2.5 15.8333 2.5Z" stroke="#003630" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M2.5 9.16699H5C5.66667 9.16699 6.33333 9.41699 6.75 9.91699L7.66667 10.667C9 12.0003 11.0833 12.0003 12.4167 10.667L13.3333 9.91699C13.75 9.50033 14.4167 9.16699 15.0833 9.16699H17.5" stroke="#003630" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div className="text-[#003129] text-[12px] font-normal">Payment Total</div>
               </div>
-
-              {/* Foreground Content */}
-              <div className="relative z-10 p-8 flex flex-col gap-6">
-                {/* Title */}
-                <h2 className="text-[32px] font-black text-[#003630] tracking-[-1px] leading-tight mt-4">
-                  Payment Sum<span className="text-white">mary</span>
-                </h2>
-
-                {/* Amount Pod */}
-                <div className="flex items-center justify-between w-full mt-2">
-                  <span className="text-[12px] font-bold text-[#64748b] uppercase tracking-widest">Total</span>
-                  <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-[14px] px-5 py-3 shadow-[0_10px_25px_rgba(0,0,0,0.03)] flex items-baseline gap-2 translate-x-4">
-                    <span className="text-[16px] font-bold text-[#003630]/60">K</span>
-                    <RollingNumber
-                      value={finalAmount}
-                      className="text-[32px] font-black text-[#003630] tracking-[-1.2px] leading-none"
-                    />
+              <div className="self-stretch inline-flex justify-start items-center">
+                <div className="flex-1 flex justify-start items-end">
+                  <div style={{ color: '#003129' }} className="text-[40px] font-black">
+                    K{Number(totalAmount).toFixed(1)}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* 3. Detailed Breakdown: Row-based (Pay in Part Style) */}
-            <div className="p-2">
-              <div className="bg-[#f9fafb] rounded-[14px] p-4 space-y-4 border border-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#64748b]">
-                      <Wallet size={17} />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-bold text-[#334155]">Tuition & Services</span>
-                      <span className="text-[10px] text-gray-400">{serviceCount} selected items</span>
-                    </div>
+            {/* Removed decorations */}
+          </div>
+
+          {/* ── 3. Main Breakdown Card ── */}
+          <div className="p-4 flex flex-col gap-4">
+            <div className="w-full bg-white rounded-2xl p-6 flex flex-col gap-9 shadow-lg outline outline-1 outline-offset-[-1px] outline-gray-200">
+
+              {/* Breakdown Section */}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ReceiptItemIcon />
+                  <span className="text-black text-[12px] font-bold">Breakdown</span>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex justify-between items-center text-[#585858] text-[12px]">
+                    <span>Cart Total</span>
+                    <span>K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                   </div>
-                  <span className="text-[15px] font-bold text-[#003630]">
-                    K {totalAmount.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="h-px bg-gray-100/60 w-full" />
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#64748b]">
-                      <CreditCard size={17} />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-bold text-[#334155]">Transaction Fee</span>
-                      <span className="text-[10px] text-gray-400">Standard 3.0% fee</span>
-                    </div>
+                  <div className="flex justify-between items-center text-[#585858] text-[12px]">
+                    <span>Transaction Fee</span>
+                    <span>K{serviceFee.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                   </div>
-                  <span className="text-[14px] font-semibold text-gray-400">
-                    K {serviceFee.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. Student Footer: Shared Pills */}
-            {studentNames.length > 0 && (
-              <div className="px-6 py-6 pb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Paying for</span>
-                  <div className="h-px bg-gray-50 flex-1" />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(showAllStudents ? studentNames : studentNames.slice(0, 3)).map((name, index) => (
-                    <div
-                      key={index}
-                      className="px-3 py-1.5 rounded-[10px] bg-white border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex items-center gap-2 transition-all hover:border-[#95e36c]/30"
-                    >
-                      <div className="w-5 h-5 rounded-[5px] bg-gradient-to-tr from-[#003630] to-[#004d45] flex items-center justify-center text-[10px] font-bold text-[#95e36c] shrink-0">
-                        {name.charAt(0)}
-                      </div>
-                      <span className="text-[12px] font-bold text-[#334155] whitespace-nowrap">{name}</span>
+                  {vatEnabled && (
+                    <div className="flex justify-between items-center text-[#585858] text-[12px]">
+                      <span>VAT</span>
+                      <span>K{vatAmount.toFixed(1)}</span>
                     </div>
-                  ))}
-
-                  {studentNames.length > 3 && !showAllStudents && (
-                    <button
-                      onClick={() => setShowAllStudents(true)}
-                      className="px-3 py-1.5 rounded-[10px] bg-[#f8fafc] border border-dashed border-gray-200 flex items-center gap-2 hover:border-[#95e36c]/40 hover:bg-white transition-all group"
-                    >
-                      <div className="w-5 h-5 rounded-[5px] bg-gray-100 group-hover:bg-[#95e36c]/10 flex items-center justify-center text-[10px] font-bold text-[#64748b] group-hover:text-[#003630]">
-                        +
-                      </div>
-                      <span className="text-[11px] font-bold text-[#64748b] group-hover:text-[#003630]">
-                        {studentNames.length - 3} more students
-                      </span>
-                    </button>
                   )}
+
+                  <div className="w-full h-0 border-t border-[#E0E0E0] my-1" />
+
+                  <div className="flex justify-between items-center text-black text-[12px] font-bold">
+                    <span>Total</span>
+                    <span>K{totalWithVat.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                  </div>
                 </div>
               </div>
-            )}
-          </motion.div>
 
-          {/* Collapsible Sections */}
-          <div className="space-y-3">
+              {/* Discounts Section */}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <DiscountIcon />
+                  <span className="text-black text-[12px] font-bold">Discounts</span>
+                </div>
 
-            {/* Services Breakdown - Collapsible */}
-            <CollapsibleSection
-              title={`Services Breakdown (${serviceCount})`}
-              isExpanded={showServicesBreakdown}
-              onToggle={() => setShowServicesBreakdown(!showServicesBreakdown)}
-            >
-              <div className="space-y-2">
-                {checkoutServices.map((service, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-white/80">
-                    <div className="flex-1">
-                      <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[13px] text-[#003630]">
-                        {service.description}
-                      </p>
-                      <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] text-gray-500">
-                        {service.studentName}
-                      </p>
-                    </div>
-                    <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#003630]">
-                      K {service.amount.toLocaleString('en-ZM', { maximumFractionDigits: 0 })}
-                    </p>
+                <div className="w-full px-3 py-1.5 bg-[#F9FAFB] rounded-lg flex items-center gap-4">
+                  <div className="w-4 h-4 shrink-0">
+                    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="6.66667" stroke="#BABABA" strokeWidth="1.2" />
+                      <path d="M8 10.6667V8" stroke="#BABABA" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="8" cy="5.33333" r="0.666667" fill="#BABABA" />
+                    </svg>
                   </div>
-                ))}
+                  <span className="text-black text-[8px] font-normal leading-tight">
+                    You can check which discounts you can get for and apply them.
+                  </span>
+                </div>
+
+                {!showDiscounts ? (
+                  <button
+                    onClick={() => setShowDiscounts(true)}
+                    className="w-full px-4 py-3 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-[#F2F2F2] flex items-center justify-between transition-all active:scale-[0.98]"
+                  >
+                    <div className="flex items-center gap-4">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M3.33337 8H12.6667" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M8 3.33301V12.6663" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="text-black text-[12px] font-medium">Add Discounts (0 Selected)</span>
+                    </div>
+                    <ChevronDown size={14} className="text-[#445552]" />
+                  </button>
+                ) : (
+                  <div className="self-stretch shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] flex flex-col justify-start items-start gap-3">
+                    <div className="self-stretch px-4 py-3 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-100 flex flex-col justify-center items-start gap-2.5">
+                      <button
+                        onClick={() => setShowDiscounts(false)}
+                        className="self-stretch inline-flex justify-start items-center gap-4 w-full text-left"
+                      >
+                        <div className="flex-1 py-px inline-flex flex-col justify-start items-start gap-1">
+                          <div className="self-stretch inline-flex justify-start items-center gap-1">
+                            <div className="relative">
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3.33337 8H12.6667" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M8 3.33301V12.6663" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </div>
+                            <div className="text-black text-xs font-medium font-['Inter']">Add Discounts ({selectedDiscountIds.length} Selected)</div>
+                          </div>
+                        </div>
+                        <div className="relative">
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 10L8 6L12 10" stroke="#445552" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                      </button>
+
+
+
+                      {isFetchingDiscounts ? (
+                        <div className="self-stretch py-4 text-center text-zinc-400 text-xs">Loading discounts...</div>
+                      ) : availableDiscounts.length === 0 ? (
+                        <div className="self-stretch py-4 text-center text-zinc-400 text-xs">No discounts available</div>
+                      ) : (
+                        availableDiscounts.map(discount => (
+                          <button 
+                            key={discount.discount_id}
+                            onClick={() => toggleDiscount(discount.discount_id)}
+                            className="self-stretch p-3 bg-white rounded-2xl flex flex-col justify-start items-start gap-2.5 hover:bg-zinc-50 transition-colors text-left"
+                          >
+                            <div className="self-stretch inline-flex justify-end items-start gap-2.5">
+                              <div className="flex-1 py-px inline-flex flex-col justify-start items-start gap-1">
+                                <div className="text-black text-xs font-normal font-['Inter']">{discount.name}</div>
+                                {discount.description && (
+                                  <div className="text-zinc-600 text-[8px] font-normal font-['Inter'] leading-tight">
+                                    {discount.description}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex justify-end items-center gap-4">
+                                <div className="text-black text-xs font-normal font-['Inter']">
+                                  {discount.discount_type === 'percentage' ? `-${discount.amount}%` : `-K${discount.amount}`} Off
+                                </div>
+                                <div className="w-6 h-6 flex justify-center items-center">
+                                  {selectedDiscountIds.includes(discount.discount_id) ? (
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                      <rect width="24" height="24" rx="12" fill="#003129"/>
+                                      <path d="M17 9.5L10.5 16L7.5 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                  ) : (
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                      <rect width="16" height="16" rx="6" fill="white"/>
+                                      <rect x="0.5" y="0.5" width="15" height="15" rx="5.5" stroke="#C1BEBE"/>
+                                    </svg>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            </CollapsibleSection>
-          </div>
 
+            </div>
+          </div>
         </div>
-      </div >
 
-      {/* Fixed Bottom Section - Payment Button */}
-      < div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-200 p-5 shadow-2xl z-50" >
-        <div className="max-w-lg mx-auto space-y-4">
-
-          {/* Security Badge */}
-          <div className="flex items-center justify-center gap-2 text-[#4a5565]">
-            <ShieldCheck size={16} />
-            <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[12px] tracking-[-0.176px]">
-              Secure payment powered by Lenco
-            </span>
+        {/* ── 4. Fixed Bottom Bar ── */}
+        <div className="bg-white border-t border-neutral-200 px-6 pt-6 pb-8 flex flex-col gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center justify-center gap-2.5">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M16.6667 10.8331C16.6667 14.9997 13.75 17.0831 10.2834 18.2914C10.1018 18.3529 9.90466 18.35 9.72504 18.2831C6.25004 17.0831 3.33337 14.9997 3.33337 10.8331V4.99972C3.33337 4.77871 3.42117 4.56675 3.57745 4.41047C3.73373 4.25419 3.94569 4.16639 4.16671 4.16639C5.83337 4.16639 7.91671 3.16639 9.36671 1.89972C9.54325 1.74889 9.76784 1.66602 10 1.66602C10.2322 1.66602 10.4568 1.74889 10.6334 1.89972C12.0917 3.17472 14.1667 4.16639 15.8334 4.16639C16.0544 4.16639 16.2663 4.25419 16.4226 4.41047C16.5789 4.56675 16.6667 4.77871 16.6667 4.99972V10.8331Z" stroke="#003129" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7.5 9.99967L9.16667 11.6663L12.5 8.33301" stroke="#003129" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-[#003630] text-[12px] font-normal">Secure payments powered by Lenco</span>
           </div>
 
-          {/* Pay Button */}
           <button
             onClick={handlePay}
             disabled={isProcessing || !isOnline}
-            className={`w-full h-14 rounded-[16px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[16px] shadow-lg hover:shadow-xl btn-tactile transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3`}
+            style={{ backgroundColor: '#003630' }}
+            className="w-full h-14 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-[0.97] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed group"
           >
             {isProcessing ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                />
-                <span>Opening Payment...</span>
-              </>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+              />
             ) : (
-              <span>{isOnline ? 'Pay' : 'Go Online to Pay'}</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="transition-transform group-hover:translate-x-0.5">
+                <path d="M13.3334 3.33301H2.66671C1.93033 3.33301 1.33337 3.92996 1.33337 4.66634V11.333C1.33337 12.0694 1.93033 12.6663 2.66671 12.6663H13.3334C14.0698 12.6663 14.6667 12.0694 14.6667 11.333V4.66634C14.6667 3.92996 14.0698 3.33301 13.3334 3.33301Z" stroke="white" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M1.33337 6.66699H14.6667" stroke="white" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             )}
+            <span className="text-white text-[12px] font-bold">
+              {isProcessing ? 'Opening Payment...' : isOnline ? 'Pay' : 'Go Online to Pay'}
+            </span>
           </button>
-
-
         </div>
-      </div >
-    </div >
+
+      </div>
+    </div>
   );
 }

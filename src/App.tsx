@@ -1430,7 +1430,12 @@ export default function App() {
   };
 
   const handleSchoolSelection = (school: School | null) => {
-    setSelectedSchool(school ? school.name : null, school ? school.logo : null);
+    setSelectedSchool(
+      school ? school.name : null, 
+      school ? school.logo : null, 
+      school ? school.id as string : null,
+      school ? !!school.vat_enabled : false
+    );
   };
 
   const handlePaymentComplete = () => {
