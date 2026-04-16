@@ -666,7 +666,7 @@ function SearchPage({ onProceed, selectedSchool, onSchoolSelect }: { onProceed: 
   return (
     <div className="bg-white min-h-screen w-full flex justify-center">
       <div className="bg-white w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen overflow-hidden flex flex-col relative" data-name="Page 3">
-        <DecorativeShapes />
+        {/* Background shapes removed for cleaner UI */}
         <Frame4 />
 
         {/* Main Scrollable Content */}
@@ -1816,6 +1816,9 @@ export default function App() {
           >
             <LazyPoliciesPage
               onBack={() => navigateToPage("services", "back")}
+              students={students}
+              userPhone={userPhone}
+              userName={userName}
             />
           </motion.div>
         )}

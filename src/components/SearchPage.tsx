@@ -62,7 +62,7 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
   };
 
   return (
-    <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col">
+    <div className="bg-white min-h-screen flex flex-col">
       {/* Header - Premium */}
       <div className="px-6 pt-10 pb-6">
         <motion.div
@@ -70,8 +70,7 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <div className="inline-flex items-center gap-[8px] mb-[12px]">
-            <div className="w-[3px] h-[32px] bg-gradient-to-b from-[#95e36c] to-[#003630] rounded-full" />
+          <div className="flex flex-col mb-[12px]">
             <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.5px]">Select Your School</h1>
           </div>
           <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[14px] text-[#6b7280] tracking-[-0.2px]">
@@ -201,11 +200,11 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
                       {/* School Logo/Initials - Premium Badge */}
                       <div
                         className={`
-                          flex-shrink-0 rounded-[14px] flex items-center justify-center border-[2px]
+                          flex-shrink-0 rounded-[14px] flex items-center justify-center border
                           transition-all duration-300
                           ${isSelected
-                            ? 'bg-gradient-to-br from-[#95e36c] to-[#7dd054] border-white text-white shadow-[0px_4px_12px_rgba(149,227,108,0.3)]'
-                            : 'bg-gradient-to-br from-[#003630] to-[#004d45] border-[#e5e7eb] text-white shadow-sm'
+                            ? 'bg-[#95e36c] border-white text-white shadow-sm'
+                            : 'bg-neutral-100 border-[#e5e7eb] text-neutral-400'
                           }
                         `}
                         style={{
@@ -298,8 +297,8 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
             >
               <div
                 className="
-                  w-20 h-20 rounded-full bg-[#003630]/5
-                  flex items-center justify-center mb-4
+                  w-20 h-20 rounded-full bg-neutral-50
+                  flex items-center justify-center mb-4 border border-neutral-100
                 "
               >
                 <Search size={32} className="text-[#003630]/40" />
@@ -342,13 +341,10 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
               }}
             >
               {/* Background */}
-              <div className="absolute inset-0 bg-[#003630] group-hover:bg-[#004d45] transition-colors" />
-
-              {/* Shine Effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+              <div className="absolute inset-0 bg-[#003630] group-hover:bg-[#00251f] transition-colors" />
 
               {/* Shadow */}
-              <div className="absolute inset-0 shadow-[0px_6px_20px_rgba(0,54,48,0.25)] group-active:shadow-[0px_2px_8px_rgba(0,54,48,0.2)] transition-shadow" />
+              <div className="absolute inset-0 shadow-lg group-active:shadow-sm transition-shadow" />
 
               {/* Content */}
               <div className="relative z-10 flex items-center justify-center gap-[10px] h-full group-active:scale-[0.97] transition-transform">

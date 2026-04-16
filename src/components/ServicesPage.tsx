@@ -296,7 +296,7 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
           <div className="w-full flex justify-between items-start">
             <div className="flex flex-col">
               <span className="text-black/60 text-lg font-normal font-['Inter']">{greeting},</span>
-              <span className="text-black text-2xl font-bold font-['Inter'] leading-tight tracking-[-0.5px]">{userName}</span>
+              <span className="text-black text-2xl font-extrabold font-['Inter'] leading-tight tracking-[-0.5px]">{userName}</span>
             </div>
 
             <div className="h-6 px-3 bg-[#95e36c]/10 rounded-full flex items-center gap-2 border border-[#95e36c]/30">
@@ -333,7 +333,7 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
                   <line x1="2" y1="12" x2="22" y2="12" />
                 </svg>
               </div>
-              <span className="text-white text-[13px] font-bold font-['Inter'] tracking-tight">
+              <span className="text-white text-[13px] font-medium font-['Inter'] tracking-tight">
                 {isUniversity ? 'Pay Tuition' : 'Pay for School Fees'}
               </span>
             </div>
@@ -356,7 +356,7 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
                   <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <span className="text-black text-[13px] font-bold font-['Inter'] tracking-tight">Payment History</span>
+              <span className="text-black text-[13px] font-medium font-['Inter'] tracking-tight">Payment History</span>
             </div>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 group-hover:bg-gray-50 group-hover:text-black transition-all">
               <ChevronRight size={16} strokeWidth={2.5} />
@@ -379,7 +379,7 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
               </div>
-              <span className="text-black text-[13px] font-bold font-['Inter'] tracking-tight">Policies & Refunds</span>
+              <span className="text-black text-[13px] font-medium font-['Inter'] tracking-tight">Policies & Refunds</span>
             </div>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 group-hover:bg-gray-50 group-hover:text-black transition-all">
               <ChevronRight size={16} strokeWidth={2.5} />

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { hapticFeedback } from "../utils/haptics";
 import LogoHeader from "./common/LogoHeader";
+import { CreditCard, ChevronRight } from "lucide-react";
 
 import type { CheckoutService as Service } from "../stores/useAppStore";
 
@@ -376,37 +377,25 @@ function Group1({
             onProceed(total);
           }}
           disabled={total <= 0}
-          className={`relative h-[56px] w-full max-w-[327px] mx-auto rounded-[16px] overflow-hidden touch-manipulation block ${total <= 0 ? 'cursor-not-allowed' : 'group'
-            }`}
+          className={`relative h-[60px] w-full max-w-[240px] mx-auto rounded-[16px] overflow-hidden touch-manipulation flex items-center justify-between px-6 transition-all duration-300 ${
+            total <= 0 
+              ? 'bg-gray-100 cursor-not-allowed opacity-50' 
+              : 'bg-[#003630] active:scale-[0.97] shadow-[0px_20px_40px_rgba(0,54,48,0.2)]'
+          }`}
           data-name="Button"
         >
-          {/* Background */}
-          <div className={`absolute inset-0 transition-colors ${total <= 0
-            ? 'bg-[#d1d5db]'
-            : 'bg-[#003630] group-hover:bg-[#004d45]'
-            }`} />
+          <div className="size-6 text-white/90">
+            <CreditCard size={20} strokeWidth={2.5} />
+          </div>
 
-          {/* Shine Effect */}
-          {total > 0 && (
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-          )}
+          <div className="flex flex-col items-center">
+            <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[16px] text-white">
+              Proceed
+            </span>
+          </div>
 
-          {/* Shadow */}
-          <div className={`absolute inset-0 transition-shadow ${total <= 0
-            ? 'shadow-sm'
-            : 'shadow-[0px_6px_20px_rgba(0,54,48,0.25)] group-active:shadow-[0px_2px_8px_rgba(0,54,48,0.2)]'
-            }`} />
-
-          {/* Content */}
-          <div className={`relative z-10 flex items-center justify-center gap-[10px] h-full transition-transform ${total > 0 && 'group-active:scale-[0.97]'
-            }`}>
-            <p className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] tracking-[-0.3px] ${total <= 0 ? 'text-white/60' : 'text-white'
-              }`}>Proceed</p>
-            {total > 0 && (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M7.5 15L12.5 10L7.5 5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
+          <div className="size-6 text-[#95e36c]">
+            <ChevronRight size={24} strokeWidth={3} />
           </div>
         </button>
       </div>

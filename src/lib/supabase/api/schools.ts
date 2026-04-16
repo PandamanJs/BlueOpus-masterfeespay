@@ -204,3 +204,41 @@ export async function getSchoolByName(name: string): Promise<School | null> {
     const school = (cachedSchools as School[]).find(s => s.name === name);
     return school || null;
 }
+
+/**
+ * Fetch fee policies for one or more schools.
+ */
+export async function getFeePolicies(schoolIds: string[]) {
+    try {
+        const { data, error } = await supabase
+            .from('fee_policies')
+            .select('*')
+            .in('school_id', schoolIds)
+            .eq('is_active', true);
+
+        if (error) throw error;
+        return data || [];
+    } catch (err) {
+        console.error('[API] Error fetching fee policies:', err);
+        return [];
+    }
+}
+
+/**
+ * Fetch discount definitions for one or more schools.
+ */
+export async function getDiscountDefinitions(schoolIds: string[]) {
+    try {
+        const { data, error } = await supabase
+            .from('discount_definitions')
+            .select('*')
+            .in('school_id', schoolIds)
+            .eq('is_active', true);
+
+        if (error) throw error;
+        return data || [];
+    } catch (err) {
+        console.error('[API] Error fetching discounts:', err);
+        return [];
+    }
+}
