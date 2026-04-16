@@ -79,14 +79,14 @@ function StudentCard({
 
           {/* Info Section */}
           <div className="flex flex-col min-w-0">
-            <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[13px] text-black tracking-[-0.3px] truncate">
+            <h3 className="font-['Space_Grotesk',sans-serif] font-medium text-[10px] text-black tracking-[-0.3px] truncate">
               {student.name}
             </h3>
             <div className="flex items-center gap-2">
-              <span className="font-['Inter',sans-serif] font-medium text-[10px] text-[#4b5563]">
+              <span className="font-['Inter',sans-serif] font-medium text-[8px] text-[#4b5563]">
                 {student.grade}
               </span>
-              <span className="font-['Inter',sans-serif] font-normal text-[10px] text-[#9ca3af]">
+              <span className="font-['Inter',sans-serif] font-normal text-[8px] text-[#9ca3af]">
                 {student.admissionNumber || student.id.substring(0, 8)}
               </span>
             </div>
@@ -200,7 +200,7 @@ export default function PayForSchoolFees({
                 transition={{ duration: 0.4 }}
                 className="flex flex-col gap-0.5"
               >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
                   <BadgeCheck className="w-[22px] h-[22px] text-[#003630]" strokeWidth={2.5} />
                   <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[28px] text-[#003630] tracking-tight[1.5px]">
                     Select Accounts

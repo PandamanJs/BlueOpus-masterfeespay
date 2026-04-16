@@ -8143,9 +8143,8 @@ button:focus-visible, a:focus-visible {
 .bg-brand-green   { background-color: #95E36C; }
 .bg-brand-dark    { background-color: #003630; }
 
-/* ── Global Button Reset: remove any forced text colors or sizes ── */
+/* ── Global Button Reset: remove any forced font sizes ── */
 button {
-  color: inherit;
   font-size: inherit;
 }
 

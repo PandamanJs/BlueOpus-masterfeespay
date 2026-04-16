@@ -837,8 +837,8 @@ export default function AddServicesPage({
                             <div className="flex flex-col gap-[16px] w-full pt-4">
                                 <div className="w-full h-[1.5px] bg-gray-200" />
                                 <div className="flex items-center justify-between px-2 py-2">
-                                    <p className="font-['Inter',sans-serif] font-black text-[20px] text-black tracking-tight">Subtotal</p>
-                                    <p className="font-['Inter',sans-serif] font-black text-[20px] text-black tracking-tight">
+                                    <p className="font-['Inter',sans-serif] font-black text-[20px] text-bold tracking-tight">Subtotal</p>
+                                    <p className="font-['Inter',sans-serif] font-black text-[20px] text-bold tracking-tight">
                                         K{(studentServices[activeStudentId] || []).reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </p>
                                 </div>
@@ -876,7 +876,7 @@ export default function AddServicesPage({
                                     </svg>
                                 </div>
                                 <div className="flex flex-col">
-                                    <p className="font-['Inter',sans-serif] font-bold text-[24px] text-black leading-none tracking-tight">
+                                    <p className="font-['Inter',sans-serif] font-bold text-[18px] text-black leading-none tracking-tight">
                                         K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                                     </p>
                                     <p className="font-['Inter',sans-serif] text-[10px] text-[#a1a1a1] font-light uppercase tracking-[0.8px] mt-1">GRAND TOTAL</p>

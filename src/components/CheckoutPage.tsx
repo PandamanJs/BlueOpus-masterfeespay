@@ -184,7 +184,7 @@ export default function CheckoutPage({ services, onProceed }: CheckoutPageProps)
 
                 {/* Divider between rows */}
                 {index < activeServices.length - 1 && (
-                  <div className="self-stretch h-0 outline outline-1 outline-[#E0E0E0]" />
+                  <div style={{ borderBottom: '1px dashed #95E36C' }} className="self-stretch" />
                 )}
               </div>
             ))}

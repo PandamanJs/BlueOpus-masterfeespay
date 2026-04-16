@@ -82,7 +82,7 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
           setParentId(parent.id);
           fetchHistory(parent.id);
         }
-        
+
         // Fetch Policies
         if (students.length > 0) {
           const schoolIds = Array.from(new Set(students.map(s => s.schoolId).filter(Boolean))) as string[];
@@ -280,7 +280,7 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center">
       {/* ── Fixed Header ── */}
-      <header className="w-full h-24 px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
+      <header className="w-full h-20 px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -293,7 +293,7 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
             }}
             className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-black active:scale-90 transition-transform"
           >
-            <ChevronRight className="rotate-180" size={20} strokeWidth={2.5} />
+
           </button>
           <div className="flex items-center gap-3">
             <div className="size-6 flex items-center justify-center">
@@ -437,11 +437,10 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
                       <div key={req.id} className="p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                           <span className="text-black text-[13px] font-bold font-['Inter']">{req.student_name}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            req.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${req.status === 'approved' ? 'bg-green-100 text-green-700' :
                             req.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                            'bg-amber-100 text-amber-700'
-                          }`}>
+                              'bg-amber-100 text-amber-700'
+                            }`}>
                             {req.status}
                           </span>
                         </div>

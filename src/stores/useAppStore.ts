@@ -62,6 +62,7 @@ export interface CheckoutService {
   term?: number;        // Optional: The term this service is for
   academicYear?: number; // Optional: The academic year this service is for
   grade?: string;       // Optional: The grade of the student
+  schoolId?: string;    // Optional: The UUID of the school
 }
 
 

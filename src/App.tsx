@@ -1234,7 +1234,8 @@ export default function App() {
           studentId: student.id,
           term: inv.term,
           academicYear: inv.academic_year,
-          grade: student.grade
+          grade: student.grade,
+          schoolId: student.schoolId
         }));
         balanceServices = [...balanceServices, ...servicesValue];
 
@@ -1265,7 +1266,8 @@ export default function App() {
               studentId: student.id,
               term: tx.meta_data?.['term'],
               academicYear: tx.meta_data?.['year'] || tx.meta_data?.['academicYear'],
-              grade: student.grade
+              grade: student.grade,
+              schoolId: student.schoolId
             };
           });
 
@@ -1283,7 +1285,8 @@ export default function App() {
           studentId: student.id,
           term: undefined,
           academicYear: undefined,
-          grade: student.grade
+          grade: student.grade,
+          schoolId: student.schoolId
         });
       }
     }
