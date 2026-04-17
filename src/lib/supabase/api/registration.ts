@@ -12,6 +12,11 @@ export interface StudentData {
     otherParentName?: string;
 }
 
+export interface SchoolGrade {
+    grade_id: string;
+    grade_name: string;
+}
+
 /**
  * Search for students by name or admission number.
  */
