@@ -14,10 +14,18 @@ interface ReviewPageProps {
   students: StudentData[];
   onBack: () => void;
   onConfirm: () => void;
+  onDisputeSubmit?: (studentId: string, note: string, details: BalanceDisputeDetails) => void;
   isSubmitting?: boolean;
 }
 
-export default function ReviewPage({ parentData, students, onBack, onConfirm, isSubmitting }: ReviewPageProps) {
+export interface BalanceDisputeDetails {
+  claimedBalance: number;
+  recordedBalance: number;
+  recordedChargedAmount: number;
+  recordedPaidAmount: number;
+}
+
+export default function ReviewPage({ parentData, students, onBack, onConfirm, onDisputeSubmit, isSubmitting }: ReviewPageProps) {
   useEffect(() => {
     console.log('[Registration] ReviewPage mounted with students:', students.length);
   }, []);
@@ -26,11 +34,19 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
   const [isLoading, setIsLoading] = useState(true);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [disputedIds, setDisputedIds] = useState<Set<string>>(new Set());
+  const [submittedDisputeIds, setSubmittedDisputeIds] = useState<Set<string>>(new Set());
   const [disputeNotes, setDisputeNotes] = useState<Record<string, string>>({});
+  const [disputeClaimedBalances, setDisputeClaimedBalances] = useState<Record<string, string>>({});
+  const isTemporaryStudentId = (studentId: string) => studentId.startsWith('new-') || studentId.startsWith('review-');
 
   useEffect(() => {
     async function fetchData() {
       if (!activeStudentId) return;
+      if (isTemporaryStudentId(activeStudentId)) {
+        setFinancialData(null);
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       try {
         const data = await getStudentFinancialSummary(activeStudentId);
@@ -88,8 +104,8 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
     }).format(Math.abs(amount)).replace('ZMW', 'K');
   };
 
-  // A student is considered "processed" if they are in confirmedIds
-  const allConfirmed = students.length > 0 && students.every(s => confirmedIds.has(s.id));
+  // A student is processed once the parent confirms the balance or submits it for school review.
+  const allConfirmed = students.length > 0 && students.every(s => confirmedIds.has(s.id) || submittedDisputeIds.has(s.id));
 
   return (
     <div className="bg-white min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
@@ -211,6 +227,23 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
                   {/* Dynamic Content: Table or Dispute Form */}
                   {disputedIds.has(activeStudentId) ? (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div>
+                        <label className="block text-[11px] text-gray-500 font-bold mb-2">
+                          What balance do you believe is correct?
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={disputeClaimedBalances[activeStudentId] || ''}
+                          onChange={(e) => setDisputeClaimedBalances(prev => ({ ...prev, [activeStudentId]: e.target.value }))}
+                          placeholder="Example: 1200"
+                          className="w-full h-[54px] px-5 rounded-[16px] border border-gray-200 bg-white text-[16px] outline-none focus:border-[#006e33] transition-all text-gray-700 placeholder:text-gray-300"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-2">
+                          This is the amount the school will compare against the current recorded balance.
+                        </p>
+                      </div>
                       <div className="relative">
                         <textarea
                           value={disputeNotes[activeStudentId] || ''}
@@ -237,25 +270,43 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
                         <button
                           onClick={async () => {
                             if (!activeStudentId || !activeStudent) return;
+                            const note = (disputeNotes[activeStudentId] || '').trim();
+                            const claimedBalanceText = (disputeClaimedBalances[activeStudentId] || '').trim();
+                            const claimedBalance = Number(claimedBalanceText);
+                            if (!note || !claimedBalanceText || !Number.isFinite(claimedBalance) || claimedBalance < 0) return;
+                            const recordedChargedAmount = Number(financialData?.totalInvoiced ?? financialData?.items?.[0]?.expected ?? 0);
+                            const recordedPaidAmount = Number(financialData?.totalPaid ?? financialData?.items?.[0]?.collected ?? 0);
                             haptics.heavy();
 
                             try {
                               setIsLoading(true); // Small UX feedback
+                              onDisputeSubmit?.(activeStudentId, note, {
+                                claimedBalance,
+                                recordedBalance: Number(financialData?.totalBalance || 0),
+                                recordedChargedAmount,
+                                recordedPaidAmount,
+                              });
                               await saveLedgerVerification({
                                 studentId: activeStudentId,
                                 parentId: parentData.parentId,
                                 schoolId: parentData.schoolId,
                                 status: 'disputed',
-                                notes: disputeNotes[activeStudentId] || '',
+                                notes: note,
                                 metadata: {
                                   balance: financialData?.totalBalance || 0,
+                                  parent_claimed_balance: claimedBalance,
                                   disputed_at: new Date().toISOString()
                                 }
                               });
 
-                              setConfirmedIds(prev => {
+                              setSubmittedDisputeIds(prev => {
                                 const next = new Set(prev);
                                 next.add(activeStudentId);
+                                return next;
+                              });
+                              setConfirmedIds(prev => {
+                                const next = new Set(prev);
+                                next.delete(activeStudentId);
                                 return next;
                               });
 
@@ -273,7 +324,13 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
                               setIsLoading(false);
                             }
                           }}
-                          className="flex-1 h-[48px] rounded-[12px] border-[1px] border-gray-200 shadow-sm flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-[#000000] bg-white active:scale-95 transition-all"
+                          disabled={
+                            !(disputeNotes[activeStudentId] || '').trim()
+                            || !(disputeClaimedBalances[activeStudentId] || '').trim()
+                            || !Number.isFinite(Number(disputeClaimedBalances[activeStudentId]))
+                            || Number(disputeClaimedBalances[activeStudentId]) < 0
+                          }
+                          className="flex-1 h-[48px] rounded-[12px] border-[1px] border-gray-200 shadow-sm flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-[#000000] bg-white active:scale-95 transition-all disabled:opacity-40"
                         >
                           Submit
                         </button>

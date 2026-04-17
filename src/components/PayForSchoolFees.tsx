@@ -14,6 +14,8 @@ interface Student {
   balances: number;
   admissionNumber?: string;
   verificationStatus?: 'unverified' | null;
+  verificationReason?: 'new_student_review' | 'balance_dispute' | 'school_review' | null;
+  pendingReviewStatus?: string | null;
 }
 
 interface PayForSchoolFeesProps {
@@ -26,6 +28,38 @@ interface PayForSchoolFeesProps {
 
 
 
+function getVerificationCopy(student: Student): {
+  badgeTitle: string;
+  badgeDetail: string;
+  toastTitle: string;
+  toastDescription: string;
+} {
+  if (student.verificationReason === 'balance_dispute') {
+    return {
+      badgeTitle: 'Balance review pending',
+      badgeDetail: 'The school is checking the disputed balance before payments unlock.',
+      toastTitle: 'Balance review is pending',
+      toastDescription: 'The school is checking the disputed balance for this student. Payments unlock when the review is resolved.',
+    };
+  }
+
+  if (student.verificationReason === 'new_student_review') {
+    return {
+      badgeTitle: 'New student added',
+      badgeDetail: 'Before you continue, the new student you added needs to be verified by the school. After review, payments will unlock.',
+      toastTitle: 'New student is awaiting school verification',
+      toastDescription: 'Before you continue, the new student you added needs to be verified by the school. After review, payments will unlock.',
+    };
+  }
+
+  return {
+    badgeTitle: 'School verification needed',
+    badgeDetail: 'Payments unlock after the school confirms this profile.',
+    toastTitle: 'This profile is pending school confirmation',
+    toastDescription: 'The student details are saved. Please wait for the school to confirm the profile before payment.',
+  };
+}
+
 function StudentCard({
   student,
   isSelected,
@@ -37,6 +71,7 @@ function StudentCard({
 }) {
   const isCleared = student.balances <= 0;
   const isUnverified = student.verificationStatus === 'unverified';
+  const verificationCopy = getVerificationCopy(student);
 
   return (
     <motion.div
@@ -59,10 +94,13 @@ function StudentCard({
       }}
     >
       {isUnverified && (
-        <div className="mb-3 inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-3 py-1">
-          <span className="font-['Inter',sans-serif] text-[10px] font-bold text-amber-700 uppercase tracking-wide">
-            Pending School Confirmation • Payments unlock after school confirms details
-          </span>
+        <div className="mb-3 rounded-[8px] bg-amber-50 border border-amber-200 px-3 py-2">
+          <p className="font-['Inter',sans-serif] text-[10px] font-bold text-amber-800 uppercase tracking-wide">
+            {verificationCopy.badgeTitle}
+          </p>
+          <p className="font-['Inter',sans-serif] text-[11px] font-medium text-amber-700 leading-snug mt-0.5">
+            {verificationCopy.badgeDetail}
+          </p>
         </div>
       )}
 
@@ -168,12 +206,23 @@ export default function PayForSchoolFees({
   );
   const { isOnline } = useOfflineManager();
   const hasUnverifiedStudents = students.some(student => student.verificationStatus === 'unverified');
+  const unverifiedBreakdown = students.reduce(
+    (acc, student) => {
+      if (student.verificationStatus !== 'unverified') return acc;
+      if (student.verificationReason === 'balance_dispute') acc.balanceDisputes += 1;
+      else if (student.verificationReason === 'new_student_review') acc.newStudents += 1;
+      else acc.otherReviews += 1;
+      return acc;
+    },
+    { balanceDisputes: 0, newStudents: 0, otherReviews: 0 }
+  );
 
   const toggleStudent = (studentId: string) => {
     const student = students.find(s => s.id === studentId);
     if (student?.verificationStatus === 'unverified') {
-      toast.info("This profile is pending school confirmation", {
-        description: "Your child details were saved. Payments unlock once the school confirms the profile.",
+      const verificationCopy = getVerificationCopy(student);
+      toast.info(verificationCopy.toastTitle, {
+        description: verificationCopy.toastDescription,
       });
       return;
     }
@@ -244,10 +293,13 @@ export default function PayForSchoolFees({
             {hasUnverifiedStudents && (
               <div className="rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="font-['Inter',sans-serif] text-[12px] text-amber-800 font-semibold">
-                  Some profiles are pending school confirmation.
+                  Some student accounts need school review before payment.
                 </p>
                 <p className="font-['Inter',sans-serif] text-[11px] text-amber-700 mt-1">
-                  Your child details are safely saved. Please contact the school to confirm the profile before payment.
+                  {unverifiedBreakdown.newStudents > 0 && `${unverifiedBreakdown.newStudents} new student profile${unverifiedBreakdown.newStudents === 1 ? '' : 's'} must be verified by the school before payments unlock. `}
+                  {unverifiedBreakdown.balanceDisputes > 0 && `${unverifiedBreakdown.balanceDisputes} balance review${unverifiedBreakdown.balanceDisputes === 1 ? ' is' : 's are'} awaiting school resolution. `}
+                  {unverifiedBreakdown.otherReviews > 0 && `${unverifiedBreakdown.otherReviews} profile${unverifiedBreakdown.otherReviews === 1 ? ' is' : 's are'} awaiting school confirmation. `}
+                  Payments unlock after the relevant review is completed.
                 </p>
               </div>
             )}
@@ -335,3 +387,4 @@ export default function PayForSchoolFees({
     </div>
   );
 }
+
