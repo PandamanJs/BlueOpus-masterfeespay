@@ -14,7 +14,7 @@ export async function getSchools(): Promise<School[]> {
             console.log('[API] Fetching schools from Supabase...');
             const { data, error } = await supabase
                 .from('schools')
-                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms')
+                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms, vat')
                 .eq('is_active', true)
                 .order('school_name');
 
@@ -32,6 +32,7 @@ export async function getSchools(): Promise<School[]> {
                     lenco_public_key: s.lenco_public_key || null,
                     access_code: s.access_code || null,
                     uses_forms: s.uses_forms || false,
+                    vat_enabled: s.vat || false,
                 }));
                 await offlineDB.putAll('schools', schools);
                 return schools;
@@ -46,17 +47,25 @@ export async function getSchools(): Promise<School[]> {
     return (cachedSchools as School[]) || [];
 }
 
+const sessionSchoolCache = new Map<string, { data: School; timestamp: number }>();
+
 /**
  * Fetch a specific school by name.
  */
 export async function getSchoolByName(name: string): Promise<School | null> {
+    const cached = sessionSchoolCache.get(name);
+    // Cache remains valid for 5 minutes of session lifetime to ensure instant popups
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+        return cached.data;
+    }
+
     const isOnline = navigator.onLine;
 
     if (isOnline) {
         try {
             const { data, error } = await supabase
                 .from('schools')
-                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms')
+                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms, vat')
                 .eq('school_name', name)
                 .maybeSingle();
 
@@ -155,15 +164,25 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                 const fetchedOtherServices = items
                     .filter(i => {
                         const cat = (i.category as any)?.category;
-                        return cat === 'other' || !['tuition', 'transport', 'canteen', 'boarding'].includes(cat);
+                        return cat === 'other' || !['tuition', 'transport', 'canteen'].includes(cat);
                     })
                     .map(i => ({
                         id: i.id,
                         name: i.name,
                         description: i.billing_cycle || '',
                         price: Number(i.amount),
-                        category: (i.category as any)?.category || 'other'
+                        category: (i.category as any)?.category || 'other',
+                        category_name: (i.category as any)?.name || 'Other'
                     }));
+
+                // Build category names map
+                const category_names: Record<string, string> = {};
+                items.forEach(i => {
+                    const cat = i.category as any;
+                    if (cat?.category && cat?.name && !category_names[cat.category]) {
+                        category_names[cat.category] = cat.name;
+                    }
+                });
 
                 console.log(`[API] Unified School details loaded. Grades: ${fetchedGradePricing.length}, Transport: ${fetchedBusRoutes.length}, Canteen: ${fetchedCanteen.length}`);
 
@@ -181,7 +200,10 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                     bus_routes: fetchedBusRoutes,
                     boarding_rooms: fetchedBoarding,
                     canteen_plans: fetchedCanteen,
+                    category_names,
+                    vat_enabled: data.vat || false,
                 };
+                sessionSchoolCache.set(name, { data: school, timestamp: Date.now() });
                 return school;
             } // Close the 'else' block
         } catch (e) {
@@ -192,5 +214,44 @@ export async function getSchoolByName(name: string): Promise<School | null> {
     // Offline fallback
     const cachedSchools = await offlineDB.getAll('schools');
     const school = (cachedSchools as School[]).find(s => s.name === name);
+    if (school) sessionSchoolCache.set(name, { data: school, timestamp: Date.now() });
     return school || null;
+}
+
+/**
+ * Fetch fee policies for one or more schools.
+ */
+export async function getFeePolicies(schoolIds: string[]) {
+    try {
+        const { data, error } = await supabase
+            .from('fee_policies')
+            .select('*')
+            .in('school_id', schoolIds)
+            .eq('is_active', true);
+
+        if (error) throw error;
+        return data || [];
+    } catch (err) {
+        console.error('[API] Error fetching fee policies:', err);
+        return [];
+    }
+}
+
+/**
+ * Fetch discount definitions for one or more schools.
+ */
+export async function getDiscountDefinitions(schoolIds: string[]) {
+    try {
+        const { data, error } = await supabase
+            .from('discount_definitions')
+            .select('*')
+            .in('school_id', schoolIds)
+            .eq('is_active', true);
+
+        if (error) throw error;
+        return data || [];
+    } catch (err) {
+        console.error('[API] Error fetching discounts:', err);
+        return [];
+    }
 }

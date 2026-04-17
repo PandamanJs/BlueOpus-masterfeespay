@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { LogIn } from "lucide-react";
+import { LogIn, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { saveLastPhone, getLastPhone } from "../utils/preferences";
 import { hapticFeedback } from "../utils/haptics";
@@ -10,7 +10,7 @@ import LogoHeader from "./common/LogoHeader";
 interface SchoolDetailsPageProps {
   schoolName: string;
   schoolLogo?: string | null;
-  onProceed: (userName: string, userPhone: string) => Promise<void> | void;
+  onProceed: (userName: string, userPhone: string, userId: string) => void;
   onBack: () => void;
   onRegistration: () => void;
 }
@@ -73,9 +73,20 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
       }
       saveLastPhone(phoneNumber);
       hapticFeedback('medium');
-      await Promise.resolve(onProceed(parentData.name, phoneNumber));
-    } catch (error) {
-      toast.error("Validation failed");
+      onProceed(parentData.name, phoneNumber, parentData.id);
+    } catch (error: any) {
+      console.error('[validateAndProceed] Error:', error);
+      const isNetworkError = !navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Network');
+      
+      if (isNetworkError) {
+        toast.error("Network Error", { 
+          description: "Unable to reach the server. Please check your internet connection and try again." 
+        });
+      } else {
+        toast.error("Validation failed", {
+          description: "There was a problem checking your account. Please try again later."
+        });
+      }
     } finally {
       setIsValidating(false);
     }
@@ -106,13 +117,19 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
         </p>
 
         <div className="w-full space-y-4">
-          <div className="relative">
+          <div className="relative group">
+            <div 
+              className="absolute top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-black transition-colors pointer-events-none"
+              style={{ left: '10px' }}
+            >
+              <Phone size={18} strokeWidth={2.5} />
+            </div>
             <input
               type="tel"
               value={phoneNumber}
               onChange={handlePhoneChange}
               placeholder="09x-xxx-xxxx"
-              className={`w-full h-[54px] px-5 rounded-[12px] border transition-all outline-none text-[16px] font-medium tracking-wide placeholder:text-gray-200 ${hasInputError ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-100 focus:border-black'
+              className={`w-full h-[54px] px-5 text-center rounded-[12px] border transition-all outline-none text-[16px] font-medium tracking-wide placeholder:text-gray-200 ${hasInputError ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-100 focus:border-black'
                 }`}
             />
           </div>
@@ -120,13 +137,10 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
           <button
             onClick={validateAndProceed}
             disabled={isValidating || !isOnline}
-            className={`w-full h-[60px] rounded-[18px] btn-dark btn-tactile transition-all flex items-center justify-center gap-2 text-white font-semibold text-[16px] ${isValidating ? 'opacity-90 cursor-wait' : ''}`}
+            className="w-full h-[60px] rounded-[18px] btn-dark btn-tactile transition-all flex items-center justify-center gap-2 text-white font-semibold text-[16px]"
           >
             {isValidating ? (
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Signing In...</span>
-              </div>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <div className="flex items-center justify-center gap-2 h-full">
                 <span>Sign In</span>

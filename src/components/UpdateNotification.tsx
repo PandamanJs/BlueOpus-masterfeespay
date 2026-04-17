@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
  * 4. Forcing a hard reload to bypass PWA cache
  */
 
-const CURRENT_VERSION = '1.0.0'; // Update this with each deployment
+const CURRENT_VERSION = '1.1.0'; // Bumped for update logic fix
 const VERSION_CHECK_INTERVAL = 60000; // Check every 60 seconds
 
 export function UpdateNotification() {
@@ -65,29 +65,29 @@ export function UpdateNotification() {
         setIsUpdating(true);
 
         try {
-            // Clear all caches
+            // 1. Clear caches first
             if ('caches' in window) {
                 const cacheNames = await caches.keys();
                 await Promise.all(cacheNames.map(name => caches.delete(name)));
             }
 
-            // Clear service worker and reload
+            // 2. Trigger skipWaiting on the waiting service worker
             if ('serviceWorker' in navigator) {
                 const registration = await navigator.serviceWorker.getRegistration();
                 if (registration?.waiting) {
                     registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    // Give it a moment to take over
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
-                await registration?.unregister();
             }
 
-            // Update stored version
+            // 3. Update stored version to prevent loop
             localStorage.setItem('app_version', CURRENT_VERSION);
 
-            // Force hard reload
+            // 4. Final force reload from server
             window.location.reload();
         } catch (error) {
             console.error('Error updating app:', error);
-            // Fallback: just reload
             window.location.reload();
         }
     };

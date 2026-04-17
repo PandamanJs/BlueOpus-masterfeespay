@@ -1,15 +1,12 @@
 /**
  * PDF Receipt Generator Utility
  * 
- * Generates professional payment receipts in PDF format using jsPDF
- * Modeled after Twalumbu Education Centre invoice format
+ * Generates professional payment receipts in PDF format using jsPDF.
+ * Updated to match high-fidelity "Luxe" Space Grotesk design.
  */
 
 import jsPDF from 'jspdf';
 
-/**
- * Interface for checkout service items
- */
 interface CheckoutService {
   id: string;
   description: string;
@@ -37,34 +34,21 @@ interface ReceiptData {
   paymentMethod?: string;
   admissionNumber?: string;
   isPaid?: boolean;
-  amountPaid?: number;
-  balanceDue?: number;
 }
 
-/**
- * Generate a PDF receipt from payment data
- * Modeled after professional invoice format
- */
 export function generateReceiptPDF(data: ReceiptData) {
   const {
     schoolName,
-    totalAmount, // This indicates the base payment amount made (e.g., 1.00)
-    baseAmount: providedBaseAmount, // sometimes passed
-    serviceFee: providedServiceFee, // sometimes passed
+    totalAmount,
+    baseAmount: providedBaseAmount,
     refNumber,
     dateTime,
-    scheduleId,
     services = [],
     parentName,
-    schoolAddress = '',
-    schoolPhone = '',
-    schoolEmail = '',
-    paymentMethod = 'N/A',
-    admissionNumber = '',
+    paymentMethod = 'Mobile Money',
     isPaid = true,
   } = data;
 
-  // Create PDF document
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -73,27 +57,18 @@ export function generateReceiptPDF(data: ReceiptData) {
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
+  const leftMargin = 15;
+  const rightMargin = pageWidth - 15;
+  const contentWidth = rightMargin - leftMargin;
 
-  // Sum of all service original amounts (e.g., 1700 + 50)
-  const servicesSum = services.reduce((acc, s) => acc + (s.amount || 0), 0) || totalAmount;
-
-  // Amount Paid Base (e.g., 1.00 or 1700)
-  const amountPaidBase = (providedBaseAmount !== undefined && providedBaseAmount !== null)
-    ? providedBaseAmount
-    : totalAmount;
-
-  // Service Fee (e.g., 0.03 or 51.00)
-  const serviceFeeValue = (providedServiceFee !== undefined && providedServiceFee !== null)
-    ? providedServiceFee
-    : (amountPaidBase * 0.03);
-
-  // Total Payment Made (e.g., 1.03)
-  const finalAmountPaid = isPaid ? (amountPaidBase + serviceFeeValue) : 0;
-
-  // Balance Due (e.g., 1700 - 1.00 = 1699)
-  const finalBalanceDue = isPaid ? Math.max(0, servicesSum - amountPaidBase) : servicesSum;
-
-  const paymentMethodLabel = isPaid ? paymentMethod.replace('_', ' ').toUpperCase() : 'PENDING';
+  // Constants for colors
+  const COLOR_TEXT_DIM = [115, 128, 140]; // #73808C
+  const COLOR_BLACK = [0, 0, 0];
+  const COLOR_RED = [234, 48, 48]; // #EA3030
+  const COLOR_GREEN_BG = [207, 242, 189]; // #CFF2BD
+  const COLOR_GREEN_TEXT = [43, 123, 0]; // #2B7B00
+  const COLOR_LIGHT_GRAY = [249, 250, 251]; // #F9FAFB
+  const COLOR_DIVIDER = [217, 217, 217]; // #D9D9D9
 
   // Helper method to extract Grade/Class from description
   const extractGrade = (desc: string) => {
@@ -102,248 +77,194 @@ export function generateReceiptPDF(data: ReceiptData) {
   };
 
   const studentClass = services[0]?.class || extractGrade(services[0]?.description || '');
-  const schoolTerm = services[0]?.term || 1;
+  const studentId = services[0]?.id || 'N/A';
+  const totalFeesCharged = services.reduce((acc, s) => acc + (s.amount || 0), 0) || totalAmount;
+  const balanceOwing = Math.max(0, totalFeesCharged - totalAmount);
 
   // --- RENDERING ---
-  let yPos = 25;
-  const leftMargin = 20;
-  const rightMargin = pageWidth - 20;
-  const contentWidth = rightMargin - leftMargin;
+  let yPos = 15;
 
-  // === SCHOOL HEADER ===
-  // Elegant dark green school name
-  doc.setFontSize(22);
+  // === LOGO & HEADER BARS ===
+  doc.setFillColor(239, 242, 245); // #EFF2F5
+  doc.circle(leftMargin + 5, yPos + 5, 7, 'F');
+  
+  doc.rect(leftMargin + 25, yPos, 45, 3, 'F');
+  doc.rect(leftMargin + 25, yPos + 6, 45, 3, 'F');
+  doc.rect(leftMargin + 25, yPos + 12, 40, 3, 'F');
+
+  yPos += 35;
+
+  // === RECEIPT TITLE & STATUS ===
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 54, 48); // #003630
-  doc.text(schoolName.toUpperCase(), leftMargin, yPos);
-
-  yPos += 8;
-
-  // Premium school contact information
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139); // Slate grayish
-
-  if (schoolAddress) {
-    doc.text(schoolAddress, leftMargin, yPos);
-    yPos += 5;
-  }
-  if (schoolPhone || schoolEmail) {
-    const contact = [schoolPhone, schoolEmail].filter(Boolean).join('  •  ');
-    doc.text(contact, leftMargin, yPos);
-  }
-
-  // === INVOICE HEADING ===
-  yPos += 15;
-  doc.setFontSize(26);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(149, 227, 108); // #95e36c
+  doc.setFontSize(36);
+  doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
   doc.text('RECEIPT', leftMargin, yPos);
 
   // Status Badge
-  const statusText = isPaid ? 'PAID' : 'PENDING';
-  const statusColor = isPaid ? [149, 227, 108] : [239, 68, 68];
+  const statusText = balanceOwing <= 0 ? 'PAID' : 'PARTLY PAID';
+  const badgeWidth = 25;
+  const badgeHeight = 8;
+  doc.setFillColor(COLOR_GREEN_BG[0], COLOR_GREEN_BG[1], COLOR_GREEN_BG[1]);
+  doc.roundedRect(leftMargin, yPos + 5, badgeWidth, badgeHeight, 4, 4, 'F');
+  doc.setFontSize(8);
+  doc.setTextColor(COLOR_GREEN_TEXT[0], COLOR_GREEN_TEXT[1], COLOR_GREEN_TEXT[2]);
+  doc.text(statusText, leftMargin + (badgeWidth / 2), yPos + 10.5, { align: 'center' });
 
-  doc.setFillColor(statusColor[0] as number, statusColor[1] as number, statusColor[2] as number);
-  doc.roundedRect(leftMargin + 48, yPos - 7, 18, 7, 1.5, 1.5, 'F');
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text(statusText, leftMargin + 57, yPos - 2, { align: 'center' });
+  // === RECEIPT META (Right side) ===
+  const metaX = rightMargin - 50;
+  const metaValueX = rightMargin;
+  let metaY = yPos - 12;
 
-  // === INVOICE DETAILS (Right side) ===
-  const detailsValueX = rightMargin;
-  const detailsLabelX = pageWidth - 70;
-  let detailsY = yPos - 15;
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(148, 163, 184); // Slate 400
-
-  doc.text('RECEIPT NO.', detailsLabelX, detailsY);
-  doc.setTextColor(15, 23, 42); // Slate 900
-  doc.text(refNumber, detailsValueX, detailsY, { align: 'right' });
-  detailsY += 6;
-
-  doc.setTextColor(148, 163, 184);
-  doc.text('DATE', detailsLabelX, detailsY);
-  doc.setTextColor(15, 23, 42);
-  doc.text(dateTime, detailsValueX, detailsY, { align: 'right' });
-  detailsY += 6;
-
-  doc.setTextColor(148, 163, 184);
-  doc.text('PAYMENT REF', detailsLabelX, detailsY);
-  doc.setTextColor(15, 23, 42);
-  doc.text(refNumber.substring(0, 10) + '...', detailsValueX, detailsY, { align: 'right' });
-
-  yPos += 20;
-
-  // === BILLING & STUDENT INFO ===
-  const boxWidth = contentWidth;
-  doc.setFillColor(248, 250, 252); // Slate 50
-  doc.setDrawColor(226, 232, 240); // Slate 200
-  doc.roundedRect(leftMargin, yPos, boxWidth, 24, 2, 2, 'FD');
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(148, 163, 184);
-  doc.text('BILLED TO', leftMargin + 6, yPos + 8);
-  doc.text('STUDENT CLASS', leftMargin + 85, yPos + 8);
-  doc.text('TERM', leftMargin + 155, yPos + 8);
-
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text(parentName || 'Valued Parent', leftMargin + 6, yPos + 16);
-  doc.text(studentClass || 'N/A', leftMargin + 85, yPos + 16);
-  doc.text(`Term ${schoolTerm}`, leftMargin + 155, yPos + 16);
-
-  yPos += 36;
-
-  // === TABLE HEADER ===
-  const tableTop = yPos;
-  const colWidths = {
-    service: 40,
-    description: 60,
-    qty: 15,
-    rate: 25,
-    amount: 30
+  const drawMetaRow = (label: string, value: string) => {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(COLOR_TEXT_DIM[0], COLOR_TEXT_DIM[1], COLOR_TEXT_DIM[2]);
+    doc.text(label, metaX, metaY);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+    doc.text(value, metaValueX, metaY, { align: 'right' });
+    metaY += 6;
   };
 
-  doc.setFillColor(0, 54, 48); // #003630 Dark Header
-  doc.rect(leftMargin, tableTop, contentWidth, 10, 'F');
+  drawMetaRow('Receipt No', refNumber);
+  drawMetaRow('Date', dateTime);
+  drawMetaRow('Payment Ref', refNumber);
+  drawMetaRow('Method', paymentMethod);
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
+  yPos += 25;
 
-  let colX = leftMargin + 5;
-  doc.text('STUDENT', colX, tableTop + 6.5);
-  colX += colWidths.service;
-  doc.text('SERVICE / DETAILS', colX, tableTop + 6.5);
-  colX += colWidths.description;
-  doc.text('QTY', colX, tableTop + 6.5);
-  colX += colWidths.qty;
-  doc.text('CHARGE', colX, tableTop + 6.5, { align: 'right' });
-  colX += colWidths.rate;
-  doc.text('TOTAL', colX + 2, tableTop + 6.5, { align: 'right' });
-
-  yPos = tableTop + 16;
-
-  // === TABLE ROWS ===
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(51, 65, 85);
-
-  services.forEach((service) => {
-    colX = leftMargin + 5;
-
-    // Student 
-    const serviceName = String(service.studentName || 'Student').substring(0, 20);
-    doc.text(serviceName, colX, yPos);
-    colX += colWidths.service;
-
-    // Description
-    const desc = service.description.length > 30
-      ? service.description.substring(0, 28) + '...'
-      : service.description;
-    doc.text(desc, colX, yPos);
-    colX += colWidths.description;
-
-    // Quantity
-    doc.text('1', colX, yPos);
-    colX += colWidths.qty;
-
-    // Charge (Rate)
-    const lineAmount = service.amount || 0;
-    doc.text(lineAmount.toFixed(2), colX, yPos, { align: 'right' });
-    colX += colWidths.rate;
-
-    // Total Line Amount
-    doc.setFont('helvetica', 'bold');
-    doc.text(lineAmount.toFixed(2), colX + 2, yPos, { align: 'right' });
-    doc.setFont('helvetica', 'normal');
-
-    yPos += 8;
-
-    doc.setDrawColor(241, 245, 249); // Slate 100
-    doc.line(leftMargin, yPos - 2, rightMargin, yPos - 2);
-    yPos += 2;
-  });
-
-  yPos += 5;
-
-  // === PREMIUM PAYMENT SUMMARY ===
-  const summaryLabelX = pageWidth - 80;
-  const summaryValueX = rightMargin - 3;
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100, 116, 139);
-
-  // Total Invoice Charges
-  doc.text('TOTAL INVOICE COST:', summaryLabelX, yPos);
-  doc.setTextColor(15, 23, 42);
-  doc.text(servicesSum.toFixed(2), summaryValueX, yPos, { align: 'right' });
-  yPos += 8;
-
-  // Service Fee
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(148, 163, 184);
-  doc.text('Service Fee (3%):', summaryLabelX, yPos);
-  doc.setTextColor(100, 116, 139);
-  doc.text(serviceFeeValue.toFixed(2), summaryValueX, yPos, { align: 'right' });
-  yPos += 8;
-
-  // Divider
-  doc.setDrawColor(226, 232, 240);
-  doc.line(summaryLabelX - 5, yPos - 3, rightMargin, yPos - 3);
-
-  // Amount Paid Today
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 54, 48); // Brand dark green
-  
-  // Truncate payment method if too long to prevent overlap
-  const displayPaymentMethod = paymentMethodLabel.length > 15 
-    ? paymentMethodLabel.substring(0, 12) + '...' 
-    : paymentMethodLabel;
-    
-  doc.text(`PAID (${displayPaymentMethod}):`, summaryLabelX, yPos);
-  doc.text(finalAmountPaid.toFixed(2), summaryValueX, yPos, { align: 'right' });
-  yPos += 10; // Increased gap
-
-  // Divider heavy
-  doc.setDrawColor(0, 54, 48);
-  doc.setLineWidth(0.8);
-  doc.line(summaryLabelX - 5, yPos - 4, rightMargin, yPos - 4);
-  yPos += 2;
-
-  // Final Balance
-  doc.setFontSize(11);
-  doc.text('BALANCE DUE:', summaryLabelX, yPos);
-  doc.setFontSize(13);
-  doc.setTextColor(239, 68, 68); // Red color for outstanding balance 
-  if (finalBalanceDue <= 0.01) doc.setTextColor(22, 163, 74); // Green if fully paid (handle floating point)
-  doc.text(`K ${finalBalanceDue.toFixed(2)}`, summaryValueX, yPos, { align: 'right' });
-
-  // === FOOTER (Bottom of page guarantee) ===
-  yPos = pageHeight - 25;
-
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.5);
-  doc.line(leftMargin, yPos - 5, rightMargin, yPos - 5);
+  // === INFO SUMMARY BAR ===
+  doc.setFillColor(COLOR_LIGHT_GRAY[0], COLOR_LIGHT_GRAY[1], COLOR_LIGHT_GRAY[2]);
+  doc.roundedRect(leftMargin, yPos, contentWidth, 16, 1.5, 1.5, 'F');
 
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(148, 163, 184);
-  doc.text('master-fees', leftMargin, yPos);
+  doc.setTextColor(191, 191, 191); // #BFBFBF
+  
+  const third = contentWidth / 3;
+  doc.text('BILLED TO', leftMargin + (third / 2), yPos + 5, { align: 'center' });
+  doc.text('GRADE', leftMargin + third + (third / 2), yPos + 5, { align: 'center' });
+  doc.text('STUDENT ID', leftMargin + (third * 2) + (third / 2), yPos + 5, { align: 'center' });
 
+  doc.setFontSize(10);
+  doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+  doc.text(parentName || 'Parent', leftMargin + (third / 2), yPos + 11, { align: 'center' });
+  doc.text(studentClass, leftMargin + third + (third / 2), yPos + 11, { align: 'center' });
+  doc.text(studentId, leftMargin + (third * 2) + (third / 2), yPos + 11, { align: 'center' });
+
+  yPos += 30;
+
+  // === TABLE HEADER ===
+  doc.setFillColor(239, 242, 245); // #EFF2F5
+  doc.roundedRect(leftMargin, yPos, contentWidth, 8, 1, 1, 'F');
+
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Schedule ID: ${scheduleId}  |  Admission Number: ${admissionNumber || 'N/A'}`, pageWidth / 2, yPos, { align: 'center' });
+  doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
 
-  doc.setFont('helvetica', 'italic');
-  doc.text('This is a computer-generated receipt and does not require a signature.', rightMargin, yPos, { align: 'right' });
+  let colX = leftMargin + 3;
+  doc.text('STUDENT', colX, yPos + 5);
+  colX += 25;
+  doc.text('DETAILS', colX, yPos + 5);
+  colX += 60;
+  doc.text('QTY', colX, yPos + 5, { align: 'center' });
+  colX += 15;
+  doc.text('K/UNIT', colX, yPos + 5, { align: 'center' });
+  colX += 20;
+  doc.text('TOTAL', colX, yPos + 5, { align: 'center' });
+  colX += 20;
+  doc.text('AMT PAID', colX, yPos + 5, { align: 'center' });
+  colX += 20;
+  doc.text('BALANCE', rightMargin - 3, yPos + 5, { align: 'right' });
+
+  yPos += 12;
+
+  // === TABLE ROWS ===
+  doc.setFontSize(9);
+  doc.setTextColor(88, 88, 88); // #585858
+
+  services.forEach((service) => {
+    colX = leftMargin + 3;
+    doc.text(String(service.studentName).substring(0, 15), colX, yPos);
+    colX += 25;
+    doc.text(String(service.description).substring(0, 35), colX, yPos);
+    colX += 60;
+    doc.text('1', colX, yPos, { align: 'center' });
+    colX += 15;
+    doc.text(service.amount.toLocaleString(), colX, yPos, { align: 'center' });
+    colX += 20;
+    doc.text(service.amount.toLocaleString(), colX, yPos, { align: 'center' });
+    colX += 20;
+    doc.text(totalAmount.toLocaleString(), colX, yPos, { align: 'center' });
+    colX += 20;
+    doc.text(Math.max(0, service.amount - totalAmount).toLocaleString(), rightMargin - 3, yPos, { align: 'right' });
+    yPos += 8;
+  });
+
+  // Divider
+  doc.setDrawColor(COLOR_DIVIDER[0], COLOR_DIVIDER[1], COLOR_DIVIDER[2]);
+  doc.line(leftMargin, yPos, rightMargin, yPos);
+  yPos += 8;
+
+  // === FOOTER TOTALS ===
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Total Fees Charged (T)', leftMargin + 3, yPos);
+  doc.text(`K ${totalFeesCharged.toLocaleString()}`, rightMargin - 3, yPos, { align: 'right' });
+  yPos += 8;
+
+  doc.text(`Amount Paid - ${paymentMethod} (P)`, leftMargin + 3, yPos);
+  doc.text(`-K ${totalAmount.toLocaleString()}`, rightMargin - 3, yPos, { align: 'right' });
+  yPos += 6;
+
+  // Heavy divider
+  doc.setLineWidth(0.5);
+  doc.line(leftMargin, yPos, rightMargin, yPos);
+  yPos += 8;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]);
+  doc.text('Balance Owing (T) - (P)', leftMargin + 3, yPos);
+  doc.setFontSize(13);
+  doc.text(`K ${balanceOwing.toLocaleString()}`, rightMargin - 3, yPos, { align: 'right' });
+
+  // === FINAL FOOTER BOX ===
+  yPos = pageHeight - 45;
+  doc.setFillColor(245, 247, 249); // #F5F7F9
+  doc.roundedRect(leftMargin, yPos, contentWidth, 25, 2, 2, 'F');
+
+  // Info Icon mock
+  doc.setDrawColor(175, 191, 207); // #AFBFCF
+  doc.circle(leftMargin + 8, yPos + 12.5, 5, 'D');
+  doc.line(leftMargin + 8, yPos + 10, leftMargin + 8, yPos + 14);
+  doc.circle(leftMargin + 8, yPos + 16, 0.2, 'D');
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+  
+  const footerText = [
+    'YOUR NEXT PAYMENT IS DUE ON THE 30/05/2026. ',
+    'PLEASE MAKE SURE TO SETTLE YOUR BALANCE BEFORE THE NEXT PAYMENT DATE. ',
+    'THANK YOU FOR CHOOSING US.'
+  ];
+
+  let footerY = yPos + 8;
+  doc.text('YOUR ', leftMargin + 18, footerY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]);
+  doc.text('NEXT PAYMENT IS DUE ON THE 30/05/2026.', leftMargin + 27, footerY);
+  
+  footerY += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+  doc.text('PLEASE MAKE SURE TO SETTLE YOUR BALANCE BEFORE THE NEXT PAYMENT DATE.', leftMargin + 18, footerY);
+  
+  footerY += 5;
+  doc.text('THANK YOU FOR CHOOSING US.', leftMargin + 18, footerY);
 
   // Save PDF
   const fileName = `Receipt_${refNumber}_${Date.now()}.pdf`;
   doc.save(fileName);
 }
-

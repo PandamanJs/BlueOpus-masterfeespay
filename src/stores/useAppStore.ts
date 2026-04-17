@@ -42,7 +42,10 @@ export type PageType =
   | "registration-form"
   | "registration-success"
   | "policies"
-  | "account-profile";
+  | "account-profile"
+  | "children-details"
+  | "audit-disputes"
+  | "student-manage";
 
 /**
  * CheckoutService Interface
@@ -62,6 +65,9 @@ export interface CheckoutService {
   term?: number;        // Optional: The term this service is for
   academicYear?: number; // Optional: The academic year this service is for
   grade?: string;       // Optional: The grade of the student
+  schoolId?: string;    // Optional: The UUID of the school
+  isDebt?: boolean;     // Optional: Whether this item is considered debt (VAT excluded)
+  categoryId?: string;  // Optional: The UUID of the fee category (used for category-specific discounts)
 }
 
 
@@ -84,17 +90,24 @@ interface AppState {
 
   // User State
   selectedSchool: string | null;
+  selectedSchoolId: string | null;
   selectedSchoolLogo: string | null;
+  vatEnabled: boolean;
   userName: string;
   userPhone: string;
   userEmail: string;
   userId: string;
+  isStaff: boolean; // Flag to track if the current parent is a school staff member
 
   // Student Selection State
   selectedStudentIds: string[];
+  students: any[]; // The list of students for the current user
 
   // Checkout State
   checkoutServices: CheckoutService[];
+  studentServices: Record<string, any[]>; // Mapping of studentId -> Service[]
+  inputAmounts: Record<string, number>;    // Mapping of serviceId -> partial amount
+  excludedServiceIds: string[];            // List of service IDs to exclude from checkout
   paymentAmount: number;
 
   // Payment State
@@ -121,12 +134,14 @@ interface AppState {
   setNavigationDirection: (direction: 'forward' | 'back') => void;
 
   // User Actions
-  setSelectedSchool: (school: string | null, logo?: string | null) => void;
+  setSelectedSchool: (school: string | null, logo?: string | null, schoolId?: string | null, vatEnabled?: boolean) => void;
   setUserName: (name: string) => void;
   setUserPhone: (phone: string) => void;
   setUserEmail: (email: string) => void;
   setUserId: (id: string) => void;
   setUserInfo: (name: string, phone: string, email?: string, id?: string) => void;
+  setIsStaff: (val: boolean) => void;
+  setStudents: (students: any[]) => void;
 
   // Student Selection Actions
   setSelectedStudentIds: (ids: string[]) => void;
@@ -139,6 +154,9 @@ interface AppState {
   addCheckoutService: (service: CheckoutService) => void;
   removeCheckoutService: (serviceId: string) => void;
   clearCheckoutServices: () => void;
+  setStudentServices: (services: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void;
+  setInputAmounts: (amounts: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  setExcludedServiceIds: (ids: string[] | ((prev: string[]) => string[])) => void;
   setPaymentAmount: (amount: number) => void;
 
   // Payment Actions
@@ -159,6 +177,8 @@ interface AppState {
 
   // Reset Actions
   resetCheckoutFlow: () => void;
+  editingStudentId: string | null;
+  setEditingStudentId: (id: string | null) => void;
   resetAll: () => void;
 }
 
@@ -182,13 +202,20 @@ export const useAppStore = create<AppState>()(
       hasHydrated: false,
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       selectedSchool: null,
+      selectedSchoolId: null,
       selectedSchoolLogo: null,
+      vatEnabled: false,
       userName: '',
       userPhone: '',
       userEmail: '',
       userId: '',
+      isStaff: false,
       selectedStudentIds: [],
+      students: [],
       checkoutServices: [],
+      studentServices: {},
+      inputAmounts: {},
+      excludedServiceIds: [],
       paymentAmount: 0,
       paymentReference: null,
       receiptStudentName: '',
@@ -200,6 +227,7 @@ export const useAppStore = create<AppState>()(
       hasSeenTutorial: false,
       lastCompletedPaymentTimestamp: null,
       paymentInProgress: false,
+      editingStudentId: null,
 
       // Navigation Actions
       navigateToPage: (page, direction = 'forward') => {
@@ -207,17 +235,17 @@ export const useAppStore = create<AppState>()(
           currentPage: page,
           navigationDirection: direction
         });
-
-        // Update browser history so the back button works
-        // We use hash routing (#search, #checkout, etc.)
-        const state = { page };
-        window.history.pushState(state, '', `#${page}`);
       },
 
       setNavigationDirection: (direction) => set({ navigationDirection: direction }),
 
       // User Actions
-      setSelectedSchool: (school, logo = null) => set({ selectedSchool: school, selectedSchoolLogo: logo }),
+      setSelectedSchool: (school, logo = null, schoolId = null, vatEnabled = false) => set({ 
+        selectedSchool: school, 
+        selectedSchoolLogo: logo,
+        selectedSchoolId: schoolId,
+        vatEnabled: vatEnabled
+      }),
 
       setUserName: (name) => set({ userName: name }),
 
@@ -228,6 +256,10 @@ export const useAppStore = create<AppState>()(
       setUserId: (id) => set({ userId: id }),
 
       setUserInfo: (name, phone, email = '', id = '') => set({ userName: name, userPhone: phone, userEmail: email, userId: id }),
+
+      setIsStaff: (val) => set({ isStaff: val }),
+
+      setStudents: (students) => set({ students }),
 
       // Student Selection Actions
       setSelectedStudentIds: (ids) => set({ selectedStudentIds: ids }),
@@ -255,6 +287,18 @@ export const useAppStore = create<AppState>()(
 
       clearCheckoutServices: () => set({ checkoutServices: [] }),
 
+      setStudentServices: (services) => set((state) => ({ 
+        studentServices: typeof services === 'function' ? services(state.studentServices) : services 
+      })),
+
+      setInputAmounts: (amounts) => set((state) => ({ 
+        inputAmounts: typeof amounts === 'function' ? amounts(state.inputAmounts) : amounts 
+      })),
+
+      setExcludedServiceIds: (ids) => set((state) => ({ 
+        excludedServiceIds: typeof ids === 'function' ? ids(state.excludedServiceIds) : ids 
+      })),
+
       setPaymentAmount: (amount) => set({ paymentAmount: amount }),
 
       // Payment Actions
@@ -278,6 +322,8 @@ export const useAppStore = create<AppState>()(
         hasSeenTutorial: true
       }),
 
+      setEditingStudentId: (id) => set({ editingStudentId: id }),
+
       // Security Actions
       markPaymentComplete: () => set({
         lastCompletedPaymentTimestamp: Date.now(),
@@ -297,6 +343,9 @@ export const useAppStore = create<AppState>()(
       resetCheckoutFlow: () => set({
         selectedStudentIds: [],
         checkoutServices: [],
+        studentServices: {},
+        inputAmounts: {},
+        excludedServiceIds: [],
         paymentAmount: 0,
         paymentInProgress: false,
       }),
@@ -311,6 +360,9 @@ export const useAppStore = create<AppState>()(
         userId: '',
         selectedStudentIds: [],
         checkoutServices: [],
+        studentServices: {},
+        inputAmounts: {},
+        excludedServiceIds: [],
         paymentAmount: 0,
         receiptStudentName: '',
         receiptStudentId: '',
@@ -330,7 +382,9 @@ export const useAppStore = create<AppState>()(
       // always start at search or services, never mid-payment or mid-checkout.
       partialize: (state) => ({
         selectedSchool: state.selectedSchool,
+        selectedSchoolId: state.selectedSchoolId,
         selectedSchoolLogo: state.selectedSchoolLogo,
+        vatEnabled: state.vatEnabled,
         userName: state.userName,
         userPhone: state.userPhone,
         userEmail: state.userEmail,
@@ -341,11 +395,13 @@ export const useAppStore = create<AppState>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.setHasHydrated(true);
-          // Sanitize: if somehow a payment-flow page snuck in, reset to a safe page.
-          // This is a belt-and-suspenders guard in case older persisted data exists.
-          const paymentFlowPages = ['payment', 'checkout', 'processing', 'add-services', 'pay-fees', 'success', 'download-receipt', 'failed'];
-          if (paymentFlowPages.includes(state.currentPage as string)) {
-            state.currentPage = state.userPhone ? 'services' : 'search';
+          
+          // Re-route to the services dashboard on every fresh open if they have a school,
+          // otherwise start at the beginning (search).
+          if (state.selectedSchool) {
+            state.currentPage = 'services';
+          } else {
+            state.currentPage = 'search';
           }
         }
       },
@@ -380,7 +436,9 @@ export const useUserInfo = () => useAppStore((state) => ({
   userEmail: state.userEmail,
   userId: state.userId,
   selectedSchool: state.selectedSchool,
+  selectedSchoolId: state.selectedSchoolId,
   selectedSchoolLogo: state.selectedSchoolLogo,
+  vatEnabled: state.vatEnabled,
 }));
 
 // Checkout Selectors

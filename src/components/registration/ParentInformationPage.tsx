@@ -3,7 +3,7 @@ import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown, Ch
 import { validatePhoneNumber, validateEmail, validateName } from '../../utils/validation';
 import { getSchools } from '../../lib/supabase/api/schools';
 import { verifySchoolCode } from '../../lib/supabase/api/security';
-import { getParentByPhone } from '../../lib/supabase/api/parents';
+import { getParentByPhone, getParentByEmail } from '../../lib/supabase/api/parents';
 import { haptics } from '../../utils/haptics';
 import { toast } from 'sonner';
 import type { School } from '../../types';
@@ -19,6 +19,7 @@ interface ParentInformationPageProps {
 }
 
 export interface ParentData {
+  parentId?: string;
   fullName: string;
   email: string;
   phone: string;
@@ -29,7 +30,6 @@ export interface ParentData {
 export default function ParentInformationPage({ onNext, onBack, initialData }: ParentInformationPageProps) {
   const [schools, setSchools] = useState<School[]>([]);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [prefilledSchoolName, setPrefilledSchoolName] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Read the school name the user already picked on the home screen
@@ -53,6 +53,57 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
 
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
+  // New: Inline availability checking state
+  const [availability, setAvailability] = useState<Record<string, { status: 'idle' | 'checking' | 'taken', name?: string }>>({});
+
+  // Effect to check field availability (luxe debounce-like feel)
+  useEffect(() => {
+    const checkField = async (id: string, value: string) => {
+      if (!value || value.length < 5) return;
+      console.log(`[Registration] Inline check for ${id}:`, value);
+
+      // Only check if it looks complete
+      if (id === 'phone' && value.length === 10) {
+        setAvailability(prev => ({ ...prev, [id]: { status: 'checking' } }));
+        try {
+          const parent = await getParentByPhone(value);
+          console.log(`[Registration] Phone match result for ${value}:`, !!parent);
+          if (parent) {
+            setAvailability(prev => ({ ...prev, [id]: { status: 'taken', name: parent.name } }));
+          } else {
+            setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+          }
+        } catch (e) {
+          console.error('[Registration] Phone check error:', e);
+          setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+        }
+      }
+
+      if (id === 'email' && value.includes('@') && value.includes('.')) {
+        setAvailability(prev => ({ ...prev, [id]: { status: 'checking' } }));
+        try {
+          const parent = await getParentByEmail(value);
+          console.log(`[Registration] Email match result for ${value}:`, !!parent);
+          if (parent) {
+            setAvailability(prev => ({ ...prev, [id]: { status: 'taken', name: parent.name } }));
+          } else {
+            setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+          }
+        } catch (e) {
+          console.error('[Registration] Email check error:', e);
+          setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+        }
+      }
+    };
+
+    const timer = setTimeout(() => {
+      checkField('phone', formData.phone);
+      checkField('email', formData.email);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [formData.phone, formData.email]);
+
   useEffect(() => {
     async function fetchSchools() {
       try {
@@ -69,7 +120,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           );
           if (match) {
             setFormData(prev => ({ ...prev, schoolId: match.id.toString() }));
-            setPrefilledSchoolName(match.name);
             return; // done — no need to check single-school fallback
           }
         }
@@ -77,7 +127,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
         // Priority 2: auto-select when there's only one school
         if (data && data.length === 1 && data[0]?.id) {
           setFormData(prev => ({ ...prev, schoolId: data[0].id.toString() }));
-          setPrefilledSchoolName(data[0].name);
         }
       } catch (error) {
         console.error('Failed to fetch schools:', error);
@@ -104,19 +153,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
     if (validateForm()) {
       setIsVerifying(true);
       try {
-        // Step 1: Check if phone number is already registered
-        const existingParent = await getParentByPhone(formData.phone);
-        if (existingParent) {
-          toast.error('This phone number is already registered.', {
-            description: 'Please go to the login page or use a different number.',
-            duration: 5000,
-          });
-          setErrors(prev => ({ ...prev, phone: 'Already registered' }));
-          setIsVerifying(false);
-          return;
-        }
-
-        // Step 2: Verify school access code
+        // Step 1: Verify school access code
         const isValid = await verifySchoolCode(formData.schoolId, formData.accessCode);
         if (isValid) {
           setShowConfirmModal(true);
@@ -151,15 +188,17 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
     text-[15px] font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#003630] placeholder:text-gray-300 focus:outline-none
   `;
 
+  const isSubmitDisabled = isVerifying || Object.values(availability).some(a => a.status === 'taken');
+
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
       <LogoHeader showBackButton={!!onBack} onBack={onBack} />
 
-      <div className="w-full flex justify-center">
+      <div className="w-full flex justify-center pt-6 pb-2">
         <OnboardingProgressBar currentStep={1} totalSteps={3} />
       </div>
 
-      <div className="flex-1 px-6 pt-6 pb-32 max-w-lg mx-auto w-full relative z-0">
+      <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full relative z-0">
         {/* Header - Matching SearchPage style */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -167,8 +206,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           transition={{ duration: 0.4 }}
           className="mb-8"
         >
-          <div className="inline-flex items-center gap-[8px] mb-[12px]">
-            <div className="w-[3px] h-[32px] bg-gradient-to-b from-[#95e36c] to-[#003630] rounded-full" />
+          <div className="mb-[12px]">
             <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.5px]">
               Parent/Guardian Info
             </h1>
@@ -188,7 +226,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           ].map((field) => (
             <div key={field.id} className="space-y-1.5">
               <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">{field.label}</label>
-              <div className="relative group">
+              <div className="relative group w-full">
                 <field.icon
                   size={18}
                   className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === field.id ? 'text-[#95e36c]' : 'text-gray-400'}`}
@@ -208,6 +246,36 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                   placeholder={field.placeholder}
                   className={inputClasses(field.id)}
                 />
+
+                {/* Availability Badge */}
+                <AnimatePresence>
+                  {(availability[field.id]?.status === 'taken' || availability[field.id]?.status === 'checking') && (
+                    <motion.div
+                      key={`${field.id}-status`}
+                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 z-[30] pointer-events-none"
+                    >
+                      {availability[field.id]?.status === 'taken' ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f43f5e]/10 border border-[#f43f5e]/20 rounded-[8px] shadow-[0_2px_10px_rgba(244,63,94,0.1)] backdrop-blur-md transition-all duration-300">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+                          <span 
+                            className="text-[10px] font-black !text-[#f43f5e] uppercase tracking-widest whitespace-nowrap"
+                            style={{ color: '#f43f5e' }}
+                          >
+                            can't use this it's already exists try a different one
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="px-3 py-1.5 flex items-center gap-2 bg-white/50 rounded-xl backdrop-blur-sm">
+                          <Loader2 className="w-3.5 h-3.5 text-[#95e36c] animate-spin" />
+                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Verifying</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
               {errors[field.id as keyof typeof errors] && (
                 <p className="text-[10px] text-red-500 pl-1 mt-1.5 font-semibold">{errors[field.id as keyof typeof errors]}</p>
@@ -218,22 +286,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Select Institution</label>
 
-            {/* Prefilled banner — shown when school was already chosen on home screen */}
-            <AnimatePresence>
-              {prefilledSchoolName && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-[10px] bg-[#95e36c]/10 border border-[#95e36c]/25 mb-1"
-                >
-                  <CheckCircle2 size={14} className="text-[#003630] flex-shrink-0" />
-                  <p className="text-[11px] font-bold text-[#003630] tracking-[-0.1px]">
-                    Auto-filled from your selection: <span className="text-[#007a5a]">{prefilledSchoolName}</span>
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             <div className="relative group">
               <SchoolIcon
@@ -247,9 +299,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 onChange={(e) => {
                   setFormData({ ...formData, schoolId: e.target.value });
                   setErrors({ ...errors, schoolId: '' });
-                  // Update the banner to reflect the new manual selection
-                  const chosen = schools.find(s => s.id.toString() === e.target.value);
-                  setPrefilledSchoolName(chosen ? chosen.name : null);
                 }}
                 className={`${inputClasses('schoolId')} appearance-none pr-10 cursor-pointer`}
                 style={{ WebkitAppearance: 'none' }}
@@ -280,7 +329,13 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 onFocus={() => setFocusedField('accessCode')}
                 onBlur={() => setFocusedField(null)}
                 onChange={(e) => {
-                  setFormData({ ...formData, accessCode: e.target.value.toUpperCase() });
+                  let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                  if (value.length > 3) {
+                    value = value.slice(0, 3) + '-' + value.slice(3, 7);
+                  } else {
+                    value = value.slice(0, 3);
+                  }
+                  setFormData({ ...formData, accessCode: value });
                   setErrors({ ...errors, accessCode: '' });
                 }}
                 placeholder="PRO-XXXX"
@@ -293,12 +348,12 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
       </div>
 
       {/* Fixed Bottom Button Section - Exact Clone of payschoolfees page */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#e5e7eb] px-[28px] pt-4 pb-16 shadow-[0px_-4px_16px_rgba(0,0,0,0.06)] z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#e5e7eb] px-[28px] py-8 shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">
         <div className="max-w-lg mx-auto">
           <button
             onClick={handleSubmit}
-            disabled={isVerifying}
-            className={`btn-dark btn-tactile relative w-full h-[56px] rounded-[18px] overflow-hidden touch-manipulation transition-all duration-300 ${isVerifying ? 'cursor-not-allowed opacity-60' : 'group'}`}
+            disabled={isSubmitDisabled}
+            className={`btn-dark btn-tactile relative w-full h-[56px] rounded-[18px] overflow-hidden touch-manipulation transition-all duration-300 ${isSubmitDisabled ? 'cursor-not-allowed opacity-60 grayscale-[0.5]' : 'group'}`}
           >
             {/* Shine Effect */}
             {!isVerifying && (
@@ -314,12 +369,12 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                     className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
                   />
-                  <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-white/60 tracking-[-0.3px]">
+                  <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-white/60 tracking-[-0.3px] -translate-y-[1.5px]">
                     Verifying...
                   </p>
                 </>
               ) : (
-                <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-white tracking-[-0.3px]">
+                <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-white tracking-[-0.3px] -translate-y-[1.5px]">
                   Continue Registration
                 </p>
               )}
@@ -346,8 +401,8 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
               className="relative w-full max-w-sm bg-white rounded-[24px] shadow-2xl overflow-hidden p-6"
             >
               <div className="flex justify-between items-start mb-4">
-                <div className="w-10 h-10 rounded-full bg-[#95e36c]/20 flex items-center justify-center text-[#003630]">
-                  <CheckCircle2 size={24} />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-[#003630]">
+                  <CheckCircle2 size={28} strokeWidth={2.5} />
                 </div>
                 <button
                   onClick={() => setShowConfirmModal(false)}
@@ -356,7 +411,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                   <X size={20} />
                 </button>
               </div>
-              
+
               <h3 className="text-xl font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] mb-2">
                 Confirm Details
               </h3>
@@ -386,13 +441,13 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 py-3.5 rounded-[16px] font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-gray-600 bg-gray-100/80 hover:bg-gray-200 transition-colors"
+                  className="flex-1 py-3.5 rounded-[12px] font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
                 >
                   Edit
                 </button>
                 <button
                   onClick={handleConfirm}
-                  className="flex-1 py-3.5 rounded-[16px] font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[#003630] bg-[#95e36c] hover:bg-[#85cc5f] transition-colors shadow-sm"
+                  className="flex-1 py-3.5 rounded-[12px] font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-white bg-[#003630] hover:bg-[#004d45] transition-colors shadow-lg active:scale-95"
                 >
                   Confirm & Next
                 </button>

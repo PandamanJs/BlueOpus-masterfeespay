@@ -949,7 +949,11 @@ export default function AddOtherServicesPopup({ onClose, onDone, schoolName, use
             <div className="relative flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-[8px] mb-[4px]">
-                  <div className="w-[3px] h-[18px] bg-gradient-to-b from-[#95e36c] to-[#7dd054] rounded-full" />
+                  <div className="flex items-center justify-center size-[22px] rounded-full border-[1.5px] border-black">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </div>
                   <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.5px] leading-[1.1]">
                     Services
                   </h2>

@@ -4,7 +4,7 @@ import { generateReceiptPDF } from "../utils/pdfGenerator";
 import { toast } from "sonner";
 import { Toaster } from "./ui/sonner";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Download, Mail, MessageCircle, Share2, ArrowLeft } from "lucide-react";
+import { Download, Mail, MessageCircle, Share2, ArrowLeft, CheckCircle2 } from "lucide-react";
 import LogoHeader from "./common/LogoHeader";
 
 interface CheckoutService {
@@ -25,6 +25,8 @@ interface DownloadReceiptPageProps {
 
 // MasterFeesLogo component removed in favor of LogoHeader
 
+import { ModernReceipt } from "./common/ModernReceipt";
+
 export default function DownloadReceiptPage({
   totalAmount,
   schoolName,
@@ -39,14 +41,11 @@ export default function DownloadReceiptPage({
   const { refNumber, dateTime, scheduleId } = useMemo(() => {
     const now = new Date();
     return {
-      refNumber: `000${Math.floor(Math.random() * 100000000)}`.slice(-12),
-      dateTime: now.toLocaleString('en-US', {
-        month: '2-digit',
+      refNumber: `RCP-${Math.floor(Math.random() * 100000000)}`.slice(-12),
+      dateTime: now.toLocaleDateString('en-GB', {
         day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
+        month: '2-digit',
+        year: 'numeric'
       }),
       scheduleId: `#${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`
     };
@@ -77,7 +76,7 @@ export default function DownloadReceiptPage({
       // Auto-trigger the download shortly after page load
       setTimeout(() => {
         handleDownloadReceipt();
-      }, 500);
+      }, 800);
     }
   }, []);
 
@@ -88,8 +87,7 @@ export default function DownloadReceiptPage({
       `School: ${schoolName}\n` +
       `Amount: K${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
       `Reference: ${refNumber}\n` +
-      `Date: ${dateTime}\n` +
-      `Status: Success\n\n` +
+      `Date: ${dateTime}\n\n` +
       `Thank you for using Master-Fees!`
     );
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
@@ -111,110 +109,66 @@ export default function DownloadReceiptPage({
     setShowShareMenu(false);
   };
 
+  // Mock items for the preview
+  const previewItems = services?.map(s => ({
+    studentName: s.studentName,
+    details: s.description,
+    qty: 1,
+    unitPrice: s.amount,
+    total: s.amount,
+    amtPaid: totalAmount, // Assuming totalAmount is what's paid now
+    balance: Math.max(0, s.amount - totalAmount)
+  })) || [
+    {
+        studentName: 'Student Name',
+        details: 'Term 1 School Fees',
+        qty: 1,
+        unitPrice: totalAmount,
+        total: totalAmount,
+        amtPaid: totalAmount,
+        balance: 0
+    }
+  ];
+
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col">
       <LogoHeader />
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-6 py-8">
-        <div className="w-full max-w-[368px] flex flex-col gap-4">
-          {/* Success Card */}
+      <div className="flex-1 flex flex-col items-center justify-start px-6 py-8 overflow-y-auto">
+        <div className="w-full max-w-[368px] flex flex-col gap-6">
+          {/* Success Header */}
+          <div className="flex flex-col items-center gap-1">
+             <div className="size-14 rounded-full bg-[#95e36c]/20 flex items-center justify-center mb-2">
+                <CheckCircle2 className="text-[#003630]" size={32} />
+             </div>
+             <h1 className="text-[24px] font-bold text-[#003630] font-['Space_Grotesk']">Payment Successful</h1>
+             <p className="text-[14px] text-gray-500 font-medium font-['Space_Grotesk']">Ref: {refNumber}</p>
+          </div>
+
+          {/* Receipt Preview - Scaled to fit mobile width */}
+          <div className="w-full overflow-hidden rounded-[24px] border border-gray-100 shadow-2xl bg-white flex justify-center py-2 relative">
+             <div className="scale-[0.55] origin-top -mb-[380px]">
+                <ModernReceipt 
+                   schoolName={schoolName}
+                   receiptNo={refNumber}
+                   date={dateTime}
+                   paymentRef={refNumber}
+                   paymentMethod="Mobile Money"
+                   billedTo={parentName || 'Parent'}
+                   grade={services?.[0]?.class || 'N/A'}
+                   studentId={services?.[0]?.id || 'N/A'}
+                   items={previewItems}
+                   totalFeesCharged={previewItems.reduce((acc, curr) => acc + curr.total, 0)}
+                   amountPaid={totalAmount}
+                   balanceOwing={previewItems.reduce((acc, curr) => acc + curr.balance, 0)}
+                   nextPaymentDate="30/05/2026"
+                   statusBadge={totalAmount >= previewItems.reduce((acc, curr) => acc + curr.total, 0) ? 'Paid' : 'Partly Paid'}
+                />
+             </div>
+          </div>          {/* Buttons Area */}
           <motion.div
-            className="bg-gradient-to-br from-[#003630] to-[#004d45] rounded-[20px] shadow-[0px_12px_32px_rgba(0,54,48,0.3)] px-6 pt-6 pb-9 flex flex-col items-center gap-2 border-[1.5px] border-white/10"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            {/* Success Icon */}
-            <motion.div
-              className="overflow-clip relative size-[100px] shrink-0"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{
-                type: "spring",
-                stiffness: 200,
-                damping: 15,
-                delay: 0.2
-              }}
-            >
-              <div className="absolute inset-[12.5%]">
-                <div className="absolute inset-[-4%]" style={{ "--stroke-0": "rgba(149, 227, 108, 1)" } as React.CSSProperties}>
-                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 81 81">
-                    <motion.path
-                      d={svgPaths.p3f23eb00}
-                      stroke="var(--stroke-0, #95E36C)"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="6"
-                      initial={{ pathLength: 0 }}
-                      animate={{ pathLength: 1 }}
-                      transition={{
-                        duration: 0.8,
-                        delay: 0.4,
-                        ease: "easeInOut"
-                      }}
-                    />
-                  </svg>
-                </div>
-              </div>
-            </motion.div>
-
-            <p className="font-['Inter:Extra_Light',sans-serif] font-extralight leading-[24px] text-[16px] text-white tracking-[-0.16px]">
-              Payment Success
-            </p>
-            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] leading-[24px] text-[32px] text-white tracking-[-0.32px]">
-              K{totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </motion.div>
-
-          {/* Payment Details Card */}
-          <motion.div
-            className="bg-white rounded-[20px] p-6 flex flex-col gap-2 border-[1.5px] border-[#e5e7eb] shadow-[0px_8px_24px_rgba(0,0,0,0.06)]"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] leading-[24px] text-[#003630] text-[18px] tracking-[-0.3px] mb-3">
-              Payment Details
-            </p>
-
-            {/* Ref Number */}
-            <div className="flex justify-between items-center py-2 border-b border-[#f3f4f6]">
-              <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[14px] text-[#6b7280] tracking-[-0.2px]">Ref Number</p>
-              <p className="font-['IBM_Plex_Sans_Condensed:SemiBold',sans-serif] text-[14px] text-[#003630] tracking-[-0.2px]">{refNumber}</p>
-            </div>
-
-            {/* Payment Status */}
-            <div className="flex justify-between items-center py-2 border-b border-[#f3f4f6]">
-              <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[14px] text-[#6b7280] tracking-[-0.2px]">Payment Status</p>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-[#95e36c] rounded-full" />
-                <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#003630] tracking-[-0.2px]">Success</p>
-              </div>
-            </div>
-
-            {/* Date & Time */}
-            <div className="flex justify-between items-center py-2 border-b border-[#f3f4f6]">
-              <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[14px] text-[#6b7280] tracking-[-0.2px]">Date & Time</p>
-              <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#003630] tracking-[-0.2px]">{dateTime}</p>
-            </div>
-
-            {/* Parent/Guardian Name */}
-            <div className="flex justify-between items-center py-2 border-b border-[#f3f4f6]">
-              <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[14px] text-[#6b7280] tracking-[-0.2px]">Parent/Guardian</p>
-              <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#003630] tracking-[-0.2px]">{parentName || 'Parent'}</p>
-            </div>
-
-            {/* Schedule ID */}
-            <div className="flex justify-between items-center py-2">
-              <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[14px] text-[#6b7280] tracking-[-0.2px]">Schedule ID</p>
-              <p className="font-['IBM_Plex_Sans_Condensed:SemiBold',sans-serif] text-[14px] text-[#003630] tracking-[-0.2px]">{scheduleId}</p>
-            </div>
-          </motion.div>
-
-          {/* Buttons */}
-          <motion.div
-            className="flex flex-col gap-2 mt-2 relative"
+            className="flex flex-col gap-3 mt-4 relative"
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.4 }}

@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { hapticFeedback } from "../utils/haptics";
 import LogoHeader from "./common/LogoHeader";
-
+import { Trash2, AlertTriangle, LogIn, Loader2 } from "lucide-react";
+import { getFeePolicies } from "../lib/supabase/api/schools";
 import type { CheckoutService as Service } from "../stores/useAppStore";
+import group16 from "../assets/decorations/Group 16.png";
+import group17 from "../assets/decorations/Group 17.png";
 
 interface CheckoutPage2Props {
   services: Service[];
@@ -15,405 +18,239 @@ interface CheckoutPage2Props {
   onBack: () => void;
 }
 
-
-
-function ChildPill({ name, isActive, onClick }: { name: string; isActive: boolean; onClick: () => void }) {
+/* ── Receipt / Invoice icon (from design spec) ── */
+function ReceiptIcon() {
   return (
-    <button
-      onClick={() => {
-        hapticFeedback('selection');
-        onClick();
-      }}
-      className={`h-[36px] px-[16px] rounded-[12px] transition-all duration-300 flex items-center justify-center relative shrink-0 min-w-[110px] active:scale-95 ${isActive
-        ? 'bg-[#95e36c] text-[#003630] border-transparent shadow-[0px_4px_12px_-2px_rgba(149,227,108,0.3)] z-10'
-        : 'bg-white border-[1.2px] border-[#f1f3f5] text-[#4b5563] shadow-[0px_2px_4px_rgba(0,0,0,0.02)]'
-        }`}
-    >
-      <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] tracking-[-0.2px] whitespace-nowrap`}>
-        {name}
-      </span>
-    </button>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8.66671 10.667H5.33337" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.33337 5.33301H5.33337" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10.6667 8H5.33337" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2.66663 1.99978C2.66663 1.82297 2.73686 1.6534 2.86189 1.52838C2.98691 1.40335 3.15648 1.33311 3.33329 1.33311C3.49837 1.33221 3.66028 1.37847 3.79996 1.46645L4.42196 1.86645C4.56132 1.9555 4.72325 2.00282 4.88863 2.00282C5.05401 2.00282 5.21593 1.9555 5.35529 1.86645L5.97796 1.46645C6.11732 1.3774 6.27925 1.33008 6.44463 1.33008C6.61001 1.33008 6.77193 1.3774 6.91129 1.46645L7.53329 1.86645C7.67265 1.9555 7.83458 2.00282 7.99996 2.00282C8.16534 2.00282 8.32727 1.9555 8.46663 1.86645L9.08863 1.46645C9.22798 1.3774 9.38991 1.33008 9.55529 1.33008C9.72067 1.33008 9.8826 1.3774 10.022 1.46645L10.6446 1.86645C10.784 1.9555 10.9459 2.00282 11.1113 2.00282C11.2767 2.00282 11.4386 1.9555 11.578 1.86645L12.2 1.46645C12.3396 1.37847 12.5015 1.33221 12.6666 1.33311C12.8434 1.33311 13.013 1.40335 13.138 1.52838C13.2631 1.6534 13.3333 1.82297 13.3333 1.99978V13.9998C13.3333 14.1766 13.2631 14.3462 13.138 14.4712C13.013 14.5962 12.8434 14.6664 12.6666 14.6664C12.5015 14.6674 12.3396 14.6211 12.2 14.5331L11.578 14.1331C11.4386 14.0441 11.2767 13.9967 11.1113 13.9967C10.9459 13.9967 10.784 14.0441 10.6446 14.1331L10.022 14.5331C9.8826 14.6222 9.72067 14.6695 9.55529 14.6695C9.38991 14.6695 9.22798 14.6222 9.08863 14.5331L8.46663 14.1331C8.32727 14.0441 8.16534 13.9967 7.99996 13.9967C7.83458 13.9967 7.67265 14.0441 7.53329 14.1331L6.91129 14.5331C6.77193 14.6222 6.61001 14.6695 6.44463 14.6695C6.27925 14.6695 6.11732 14.6222 5.97796 14.5331L5.35529 14.1331C5.21593 14.0441 5.05401 13.9967 4.88863 13.9967C4.72325 13.9967 4.56132 14.0441 4.42196 14.1331L3.79996 14.5331C3.66028 14.6211 3.49837 14.6674 3.33329 14.6664C3.15648 14.6664 2.98691 14.5962 2.86189 14.4712C2.73686 14.3462 2.66663 14.1766 2.66663 13.9998V1.99978Z" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-
-
-function ServiceItem({ description, amount }: { description: string; amount: number }) {
-  return (
-    <div className="flex items-center justify-between w-full py-2">
-      <div className="flex flex-col gap-1">
-        <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[13px] text-black leading-tight">{description}</p>
-      </div>
-      <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[13px] text-black">K{amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-    </div>
-  );
-}
-
-function AmountInput({ serviceId, value, onChange }: { serviceId: string; value: number; onChange: (serviceId: string, value: number) => void }) {
-  const [inputValue, setInputValue] = useState(value.toFixed(2));
+/* ── Amount input with %-badge | divider | K value ── */
+function AmountInput({
+  serviceId,
+  value,
+  fullAmount,
+  onChange,
+  disabled = false,
+}: {
+  serviceId: string;
+  value: number;
+  fullAmount: number;
+  onChange: (serviceId: string, value: number) => void;
+  disabled?: boolean;
+}) {
+  const [inputValue, setInputValue] = useState(value > 0 ? value.toFixed(2) : "");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setInputValue(newValue);
-
-    // Parse the value and update parent state
-    const parsed = parseFloat(newValue.replace(/,/g, ''));
+    const raw = e.target.value;
+    setInputValue(raw);
+    const parsed = parseFloat(raw.replace(/,/g, ""));
     if (!isNaN(parsed)) {
       onChange(serviceId, parsed);
-    } else if (newValue === '' || newValue === '0') {
+    } else if (raw === "" || raw === "0") {
       onChange(serviceId, 0);
     }
   };
 
+  const percentage =
+    fullAmount > 0 && value > 0
+      ? `${Math.round((value / fullAmount) * 100)}%`
+      : "-%";
+
   return (
-    <div className="relative w-full h-[48px] mt-2">
-      <div className="box-border flex items-center gap-2 h-full px-3 rounded-[12px] border-[1.5px] border-[#e5e7eb] bg-[#f9fafb] focus-within:border-[#95e36c] focus-within:bg-white transition-all shadow-sm">
-        <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[11px] text-[#6b7280] shrink-0">K</span>
+    <div className="self-stretch flex flex-col gap-3">
+      <p className="text-[#050505] text-[12px] font-normal font-['Inter']">
+        Enter Amount
+      </p>
+      <div
+        className={`self-stretch px-4 py-3 rounded-lg flex items-center gap-2.5 transition-opacity ${disabled ? 'opacity-50 grayscale-[0.5]' : ''}`}
+        style={{ outline: "1px solid #95E36C", outlineOffset: "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)" }}
+      >
+        {/* %-badge */}
+        <span className="text-black text-[12px] font-medium font-['Inter'] shrink-0">
+          {percentage}
+        </span>
+        {/* Vertical divider */}
+        <div className="w-px shrink-0" style={{ height: "11px", background: "#F2F2F2" }} />
+        {/* K input — right-aligned */}
         <input
           type="text"
+          inputMode="decimal"
           value={inputValue}
+          placeholder="K0.00"
           onChange={handleChange}
-          className="flex-1 min-w-0 font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[15px] text-right text-[#003630] bg-transparent outline-none pr-1 tracking-[-0.2px]"
+          disabled={disabled}
+          className="flex-1 text-right text-[#585858] text-[12px] font-bold font-['Inter'] bg-transparent border-none outline-none focus:ring-0 disabled:cursor-not-allowed"
+          style={{ border: 'none', outline: 'none' }}
         />
       </div>
     </div>
   );
 }
 
-function StudentInfoCard({ name, amount }: { name: string; amount: number }) {
-  return (
-    <div className="bg-white rounded-[20px] p-[16px] border-[1.5px] border-[#e5e7eb] shadow-sm mb-2">
-      <div className="flex flex-col gap-4 w-full">
-        <div className="flex items-start justify-between">
-          <div className="flex flex-col gap-1.5">
-            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630] tracking-[-0.3px] leading-tight">
-              {name}
-            </h3>
-            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[11px] leading-none opacity-60">
-              Student
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <p className="font-['Inter:Bold',sans-serif] text-[19px] text-[#003630] leading-none font-bold">
-              K {amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <span className="text-[9px] text-[#9ca3af] font-black uppercase tracking-[1px] leading-none">Setting up pricing</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+/**
+ * Intelligently match a service with its institutional fee policy.
+ */
+function findRelevantPolicy(service: Service, policies: any[], schoolId: string) {
+  if (!policies || policies.length === 0) return null;
+
+  return policies.find(p => {
+    if (p.school_id !== schoolId) return false;
+    
+    const desc = service.description?.toLowerCase() || "";
+    const name = p.name?.toLowerCase() || "";
+    const category = p.category?.toLowerCase() || "";
+    
+    // 1. Try matching by name (e.g. "Termly" or "Monthly" in description)
+    if (desc.includes('term') && name.includes('term')) return true;
+    if (desc.includes('month') && name.includes('month')) return true;
+    
+    // 2. Try matching by category
+    if (category === 'tuition' && (desc.includes('fees') || desc.includes('tuition'))) return true;
+    if (category === 'transport' && desc.includes('bus')) return true;
+    
+    // 3. Fallback to general payment plan for this school
+    return category === 'payment_plan';
+  }) || policies.find(p => p.school_id === schoolId);
 }
 
-function Digit({ digit }: { digit: string }) {
-  return (
-    <div className="h-[32px] overflow-hidden relative w-[min-content] flex items-center justify-center">
-      <motion.div
-        key={digit}
-        initial={{ y: "100%", opacity: 0 }}
-        animate={{ y: "0%", opacity: 1 }}
-        exit={{ y: "-100%", opacity: 0 }}
-        transition={{
-          type: "spring",
-          stiffness: 300,
-          damping: 30,
-          mass: 0.8
-        }}
-        className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.8px] leading-none font-black flex items-center h-full"
-      >
-        {digit}
-      </motion.div>
-    </div>
-  );
-}
-
-function AnimatedAmount({ amount }: { amount: number }) {
-  const formatted = amount.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-
-  return (
-    <div className="flex items-center">
-      {formatted.split("").map((char, i) => (
-        <Digit key={`${i}-${char}`} digit={char} />
-      ))}
-    </div>
-  );
-}
-
-function StudentServiceCard({
-  services,
-  inputAmounts,
+/* ── Single service card ── */
+function ServiceCard({
+  service,
+  inputAmount,
   onAmountChange,
-  onRemoveService
+  policies,
 }: {
-  services: Service[];
-  inputAmounts: Record<string, number>;
+  service: Service;
+  inputAmount: number;
   onAmountChange: (serviceId: string, value: number) => void;
-  onRemoveService: (serviceId: string) => void;
+  policies: any[];
+}) {
+  const schoolId = (service as any).schoolId;
+  const policy = findRelevantPolicy(service, policies, schoolId);
+
+  const allowInstallments = policy?.allow_installments ?? true;
+  const minPercentValue = policy?.min_payment_percent ?? 50;
+  const isStrict = policy?.strict_enforcement ?? true;
+
+  return (
+    <div
+      className={`w-full bg-white rounded-xl flex flex-col gap-4 transition-all ${
+        !allowInstallments ? "opacity-60 saturate-[0.8]" : ""
+      }`}
+      style={{
+        outline: "1px solid #EDECEC",
+        padding: "16px 16px 24px",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+      }}
+    >
+      {/* Header: name + amount */}
+      <div className="flex items-center gap-2.5">
+        <div className="flex-1 flex flex-col gap-0.5">
+          <span className="text-black text-[12px] font-bold font-['Inter']">
+            {service.description}
+          </span>
+          {service.studentName && (
+            <span className="text-[#808080] text-[10px] font-normal font-['Inter']">
+              {service.studentName}
+            </span>
+          )}
+        </div>
+        <span className="text-black text-[12px] font-bold font-['Inter']">
+          K{service.amount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+        </span>
+      </div>
+
+      {/* Divider */}
+      <div className="self-stretch" style={{ height: 0, outline: "0.5px solid #F2F2F2" }} />
+
+      {/* Amount input */}
+      <AmountInput
+        serviceId={service.id}
+        value={inputAmount}
+        fullAmount={service.amount}
+        onChange={onAmountChange}
+        disabled={!allowInstallments}
+      />
+
+      {/* Policy Messages */}
+      {(() => {
+        if (!allowInstallments) {
+          return (
+            <div className="flex items-center gap-2 text-[11px] font-['Inter'] leading-normal mt-3 animate-in fade-in" style={{ color: "#6B7280" }}>
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>This service must be paid in full (installments not allowed).</span>
+            </div>
+          );
+        }
+
+        const minPercent = minPercentValue / 100;
+        if (service.amount > 0 && inputAmount > 0 && inputAmount < service.amount * minPercent && isStrict) {
+          return (
+            <div className="flex items-center gap-2 text-[11px] font-['Inter'] leading-normal mt-3 animate-in fade-in slide-in-from-top-1" style={{ color: "#EF4444" }}>
+              <AlertTriangle size={14} className="shrink-0" style={{ color: "#EF4444" }} />
+              <span>You cannot make a part payment less than {minPercentValue}% for this service.</span>
+            </div>
+          );
+        }
+        return null;
+      })()}
+    </div>
+  );
+}
+
+/* ── Student pill tab ── */
+function StudentTab({
+  name,
+  isActive,
+  onClick,
+}: {
+  name: string;
+  isActive: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className="w-full flex flex-col gap-3">
-      <AnimatePresence mode="popLayout">
-        {services.map((service) => (
-          <motion.div
-            key={service.id}
-            layout
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9, x: -20 }}
-            className="card card-interactive rounded-[14px] p-5 group w-full border-[1.5px] border-[#e5e7eb] shadow-sm bg-white relative overflow-hidden"
-          >
-            <div className="flex items-start justify-between gap-4 mb-1">
-              <div className="flex-1 pr-6">
-                <ServiceItem
-                  description={service.description}
-                  amount={service.amount}
-                />
-              </div>
-
-              {/* Remove Button - Anchored Right */}
-              <button
-                onClick={() => {
-                  hapticFeedback('medium');
-                  onRemoveService(service.id);
-                }}
-                className="shrink-0 -mr-1 -mt-1 p-2 rounded-full bg-gray-50/80 backdrop-blur-sm text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors z-30 shadow-sm"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="mt-2 pt-2 border-t border-gray-100/60 pr-10">
-              <AmountInput
-                serviceId={service.id}
-                value={inputAmounts[service.id] || 0}
-                onChange={onAmountChange}
-              />
-            </div>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function Group({ total }: { total: number }) {
-  return (
-    <div className="flex items-center justify-between w-full mt-4">
-      <p className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] text-gray-500 uppercase tracking-widest">Total</p>
-      <div className="bg-white/95 backdrop-blur-[12px] border-[1.5px] border-[#eef1f5] px-5 py-2 rounded-[14px] shadow-[0px_8px_16px_-4px_rgba(0,54,48,0.12)] flex items-center gap-2 relative z-20">
-        <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630]/70">K</span>
-        <AnimatedAmount amount={total} />
-      </div>
-    </div>
-  );
-}
-
-function Frame20({ total }: { total: number }) {
-  return (
-    <div className="bg-white rounded-[24px] w-full max-w-[340px] mx-auto relative overflow-hidden ring-1 ring-[#e5e7eb] shadow-[0px_12px_24px_-8px_rgba(0,0,0,0.06)]">
-      {/* Decorative Chevrons in Top Right */}
-      <div className="absolute -top-4 -right-2 w-32 h-32 opacity-80 pointer-events-none">
-        <svg viewBox="0 0 100 100" fill="none" className="w-full h-full rotate-[-15deg]">
-          {/* Light Green Chevron */}
-          <path d="M40 20L65 45L40 70" stroke="#e0f7d4" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-          {/* Mid Green Chevron */}
-          <path d="M55 20L80 45L55 70" stroke="#95e36c" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" />
-          {/* Dark Green Chevron */}
-          <path d="M70 20L95 45L70 70" stroke="#003630" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-
-      <div className="p-5 flex flex-col gap-4 relative z-10">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#95e36c]/15 to-[#7dd054]/5 border-[1.5px] border-[#95e36c]/30 flex items-center justify-center">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-            <path d="M3 6h18" />
-            <path d="M16 10a4 4 0 0 1-8 0" />
+    <button
+      onClick={() => {
+        hapticFeedback("selection");
+        onClick();
+      }}
+      className={`flex items-center gap-[10px] px-[25px] h-[42px] rounded-xl shrink-0 transition-all active:scale-95 ${
+        isActive ? "bg-[#F3FCF0] outline outline-1 outline-[#95E36C]" : ""
+      }`}
+      style={{
+        outline: isActive ? "1px solid #95E36C" : "1px solid #F2F2F2",
+        outlineOffset: "0px",
+        background: isActive ? "#F3FCF0" : "#FFFFFF",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+      }}
+    >
+      {isActive && (
+        <div data-svg-wrapper>
+          <svg width="6" height="6" viewBox="0 0 6 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="3" cy="3" r="3" fill="#4FE501" />
           </svg>
         </div>
-
-        <div className="flex flex-col gap-1">
-          <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[22px] text-[#003630] tracking-[-0.3px]">Part Payment</h2>
-        </div>
-
-        <Group total={total} />
+      )}
+      <div
+        className="text-[12px] font-['Space_Grotesk'] whitespace-nowrap flex flex-col justify-end"
+        style={{
+          color: isActive ? "black" : "#2D2D2D",
+          fontWeight: isActive ? 700 : 500,
+        }}
+      >
+        {name}
       </div>
-    </div>
+    </button>
   );
 }
 
-
-
-function Group1({
-  services,
-  excludedServiceIds,
-  inputAmounts,
-  onAmountChange,
-  onRemoveService,
-  onProceed
-}: {
-  services: Service[];
-  excludedServiceIds: Set<string>;
-  inputAmounts: Record<string, number>;
-  onAmountChange: (serviceId: string, value: number) => void;
-  onRemoveService: (serviceId: string) => void;
-  onProceed: (amount: number) => void;
-}) {
-  // Filter out excluded services
-  const activeServicesList = services.filter(s => !excludedServiceIds.has(s.id));
-
-  // Calculate total from input amounts only for non-excluded services
-  const total = activeServicesList.reduce((sum, s) => sum + (inputAmounts[s.id] || 0), 0);
-  const [activeStudentId, setActiveStudentId] = useState<string>("");
-
-  // Group services by student
-  const servicesByStudent = activeServicesList.reduce((acc, service) => {
-    if (!acc[service.studentName]) {
-      acc[service.studentName] = [];
-    }
-    acc[service.studentName]!.push(service);
-    return acc;
-  }, {} as Record<string, Service[]>);
-
-  const studentNames = Object.keys(servicesByStudent);
-
-  // Set initial active student
-  useEffect(() => {
-    if (!activeStudentId && studentNames.length > 0 && studentNames[0]) {
-      setActiveStudentId(studentNames[0]);
-    }
-  }, [activeStudentId, studentNames]);
-
-  const activeServices = activeStudentId ? servicesByStudent[activeStudentId] || [] : [];
-  const activeStudentTotal = activeServices.reduce((sum, s) => sum + (inputAmounts[s.id] || 0), 0);
-
-  return (
-    <div className="flex flex-col flex-1 min-h-0 px-4 pt-6 relative overflow-hidden">
-      <div className="flex flex-col gap-1 mb-3 shrink-0">
-        <div className="inline-flex items-center gap-[8px]">
-          <div className="w-[3px] h-[24px] bg-gradient-to-b from-[#95e36c] to-[#003630] rounded-full" />
-          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[22px] text-[#003630] tracking-[-0.4px]">
-            Checkout
-          </h1>
-        </div>
-        <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[13px] text-[#6b7280] leading-[1.5] tracking-[-0.2px]">
-          Modify the amounts you wish to pay for each service
-        </p>
-      </div>
-
-      <div className="mb-4 shrink-0">
-        <Frame20 total={total} />
-      </div>
-
-      <div className="flex-1 min-h-0 relative flex flex-col">
-        <div className="bg-[#f9fafb]/50 box-border flex flex-col flex-1 min-h-0 overflow-hidden rounded-[24px] border-[1.5px] border-[#e5e7eb] w-full max-w-[360px] mx-auto relative">
-
-          {/* Student Selector - Pill style from AddServicesPage */}
-          <div className="flex-shrink-0 px-4 pt-4 bg-transparent">
-            <div className="flex gap-[12px] overflow-x-auto pb-4 scrollbar-hide py-2">
-              {studentNames.map(name => (
-                <ChildPill
-                  key={name}
-                  name={name}
-                  isActive={activeStudentId === name}
-                  onClick={() => setActiveStudentId(name)}
-                />
-              ))}
-            </div>
-
-            {/* Pagination Indicators - Pill style */}
-            <div className="flex justify-center gap-[7px] mb-4">
-              {studentNames.map(name => (
-                <div
-                  key={`dot-${name}`}
-                  className={`h-[5px] rounded-full transition-all duration-300 ${activeStudentId === name
-                    ? 'w-[18px] bg-[#95e36c] shadow-[0px_1px_3px_rgba(149,227,108,0.2)]'
-                    : 'w-[5px] bg-[#d1d5db]'
-                    }`}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-4 pb-4 scrollbar-hide overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
-            <AnimatePresence mode="wait">
-              {activeStudentId && (
-                <motion.div
-                  key={activeStudentId}
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="flex flex-col gap-4"
-                >
-                  <StudentInfoCard name={activeStudentId} amount={activeStudentTotal} />
-
-                  <div className="flex flex-col gap-2">
-                    <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[12px] text-gray-400 px-1 uppercase tracking-wider">Services</p>
-                    <StudentServiceCard
-                      services={activeServices}
-                      inputAmounts={inputAmounts}
-                      onAmountChange={onAmountChange}
-                      onRemoveService={onRemoveService}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-auto bg-white border-t-[1.5px] border-[#e5e7eb] px-[28px] pt-[16px] pb-[32px] shadow-[0px_-4px_16px_rgba(0,0,0,0.06)] z-50 shrink-0">
-        <button
-          onClick={() => {
-            hapticFeedback('heavy');
-            onProceed(total);
-          }}
-          disabled={total <= 0}
-          className={`relative h-[56px] w-full max-w-[327px] mx-auto rounded-[16px] overflow-hidden touch-manipulation block ${total <= 0 ? 'cursor-not-allowed' : 'group'
-            }`}
-          data-name="Button"
-        >
-          {/* Background */}
-          <div className={`absolute inset-0 transition-colors ${total <= 0
-            ? 'bg-[#d1d5db]'
-            : 'bg-[#003630] group-hover:bg-[#004d45]'
-            }`} />
-
-          {/* Shine Effect */}
-          {total > 0 && (
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-          )}
-
-          {/* Shadow */}
-          <div className={`absolute inset-0 transition-shadow ${total <= 0
-            ? 'shadow-sm'
-            : 'shadow-[0px_6px_20px_rgba(0,54,48,0.25)] group-active:shadow-[0px_2px_8px_rgba(0,54,48,0.2)]'
-            }`} />
-
-          {/* Content */}
-          <div className={`relative z-10 flex items-center justify-center gap-[10px] h-full transition-transform ${total > 0 && 'group-active:scale-[0.97]'
-            }`}>
-            <p className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] tracking-[-0.3px] ${total <= 0 ? 'text-white/60' : 'text-white'
-              }`}>Proceed</p>
-            {total > 0 && (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M7.5 15L12.5 10L7.5 5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </div>
-        </button>
-      </div>
-    </div>
-  );
-}
-
+/* ── Main export ── */
 export default function CheckoutPage2({
   services,
   inputAmounts,
@@ -421,30 +258,183 @@ export default function CheckoutPage2({
   onAmountChange,
   onRemoveService,
   onProceed,
-  onBack
+  onBack,
 }: CheckoutPage2Props) {
-  // Calculate total from input amounts for non-excluded services
-  const totalAmount = services
-    .filter(s => !excludedServiceIds.has(s.id))
-    .reduce((sum, s) => sum + (inputAmounts[s.id] || 0), 0);
+  const [policies, setPolicies] = useState<any[]>([]);
+  const [isLoadingPolicies, setIsLoadingPolicies] = useState(true);
+
+  // Fetch policies for the schools involved
+  useEffect(() => {
+    async function fetchPolicies() {
+      // Find all unique school IDs. Fallback to a query if student has schoolId.
+      const schoolIds = Array.from(new Set(services.map(s => s.studentId ? (s as any).schoolId : null).filter(Boolean))) as string[];
+      
+      if (schoolIds.length > 0) {
+        setIsLoadingPolicies(true);
+        const fetched = await getFeePolicies(schoolIds);
+        setPolicies(fetched);
+        setIsLoadingPolicies(false);
+      } else {
+        // Fallback or try to get from services some other way
+        setIsLoadingPolicies(false);
+      }
+    }
+    fetchPolicies();
+  }, [services]);
+
+  const activeServices = services.filter((s) => !excludedServiceIds.has(s.id));
+
+  const hasPolicyViolation = activeServices.some((service) => {
+    const amount = inputAmounts[service.id] || 0;
+    if (amount <= 0) return false;
+    
+    // Find policy for this school
+    const schoolId = (service as any).schoolId;
+    const policy = findRelevantPolicy(service, policies, schoolId);
+    
+    // Use the fetched min_payment_percent or default to 50
+    const minPercent = (policy?.min_payment_percent ?? 50) / 100;
+    const isStrict = policy?.strict_enforcement ?? true;
+
+    return isStrict && amount < service.amount * minPercent;
+  });
+
+  const total = activeServices.reduce(
+    (acc, s) => acc + (excludedServiceIds.has(s.id) ? 0 : inputAmounts[s.id] || 0),
+    0
+  );
+
+  // Group by student
+  const servicesByStudent = activeServices.reduce((acc, service) => {
+    if (!acc[service.studentName]) acc[service.studentName] = [];
+    acc[service.studentName]!.push(service);
+    return acc;
+  }, {} as Record<string, Service[]>);
+
+  const studentNames = Object.keys(servicesByStudent);
+  const [activeStudent, setActiveStudent] = useState(studentNames[0] || "");
+
+  useEffect(() => {
+    if (!activeStudent && studentNames.length > 0 && studentNames[0]) {
+      setActiveStudent(studentNames[0]);
+    }
+  }, [activeStudent, studentNames]);
+
+  const visibleServices = activeStudent
+    ? servicesByStudent[activeStudent] || []
+    : [];
 
   return (
-    <div className="bg-white h-[100dvh] w-full flex justify-center overflow-hidden fixed inset-0">
-      <div className="flex flex-col w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-full shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] relative overflow-hidden" data-name="Checkout page 2">
-        <LogoHeader showBackButton onBack={() => {
-          hapticFeedback('light');
-          onBack();
-        }} />
-        <div className="flex-1 min-h-0 relative flex flex-col">
-          <Group1
-            services={services}
-            excludedServiceIds={excludedServiceIds}
-            inputAmounts={inputAmounts}
-            onAmountChange={onAmountChange}
-            onRemoveService={onRemoveService}
-            onProceed={() => onProceed(totalAmount)}
-          />
+    <div className="h-[100dvh] w-full flex justify-center overflow-hidden fixed inset-0" style={{ background: "#F9FAFB" }}>
+      <div className="flex flex-col w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-full relative overflow-hidden">
+
+        {/* ── Header ── */}
+        <LogoHeader />
+
+        {/* ── Scrollable body ── */}
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+
+          {/* White info block */}
+          <div className="bg-white px-6 pt-6 pb-6 flex flex-col gap-6 relative overflow-hidden">
+            {/* Decorative Assets from right corner */}
+            <div className="absolute right-0 top-0 h-full w-full pointer-events-none overflow-hidden select-none z-0">
+              <div className="relative w-full h-full">
+                <div
+                  className="absolute right-[10px] w-[120px] h-[120px] opacity-[0.08]"
+                  style={{ top: '-60px', transform: 'rotate(25deg)', zIndex: 0 }}
+                >
+                  <img src={group16} alt="" className="w-full h-full object-contain" />
+                </div>
+                <div
+                  className="absolute right-[8px] w-[120px] h-[120px] opacity-[0.15]"
+                  style={{ bottom: '-50px', transform: 'translateY(5px) rotate(-12deg)', zIndex: 1 }}
+                >
+                  <img src={group17} alt="" className="w-full h-full object-contain" />
+                </div>
+              </div>
+            </div>
+
+            {/* Title + description */}
+            <div className="self-stretch flex flex-col">
+              <div className="self-stretch flex items-center gap-3">
+                {/* Credit card icon — spec */}
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 5H4C2.89543 5 2 5.89543 2 7V17C2 18.1046 2.89543 19 4 19H20C21.1046 19 22 18.1046 22 17V7C22 5.89543 21.1046 5 20 5Z" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 10H22" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <div className="flex-1 py-1 flex justify-start items-center gap-2.5">
+                  <h1 className="text-black text-[20px] font-bold font-['Inter']">Pay in Part</h1>
+                </div>
+              </div>
+              <div className="self-stretch py-1.5 rounded-md flex justify-center items-center gap-2.5">
+                <p className="flex-1 text-black text-[12px] font-normal font-['Inter']">
+                  You can read through the School's Different Policies related to school fees from here. You can also make a Request to get a Refund.
+                </p>
+              </div>
+            </div>
+
+            {/* Student tabs row — h-[50px], gap-4 */}
+            {studentNames.length > 0 && (
+              <div className="h-[60px] flex items-center gap-4 overflow-x-auto scrollbar-hide">
+                {studentNames.map((name) => (
+                  <StudentTab
+                    key={name}
+                    name={name}
+                    isActive={activeStudent === name}
+                    onClick={() => setActiveStudent(name)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Service cards ── */}
+          <div className="px-6 py-4 flex flex-col gap-4">
+            <AnimatePresence mode="popLayout">
+              {visibleServices.map((service) => (
+                <motion.div
+                  key={service.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <ServiceCard
+                    service={service}
+                    inputAmount={inputAmounts[service.id] || 0}
+                    onAmountChange={onAmountChange}
+                    policies={policies}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+
         </div>
+
+        {/* ── Bottom action bar ── */}
+        <div className="bg-white px-6 pt-5 pb-5" style={{ borderTop: "1px solid #E6E6E6" }}>
+          <button
+            onClick={() => {
+              hapticFeedback("heavy");
+              onProceed(total);
+            }}
+            disabled={total <= 0 || hasPolicyViolation}
+            className={`w-full h-[60px] rounded-xl flex items-center justify-center gap-3 transition-all active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed`}
+            style={{
+              background: total <= 0 || hasPolicyViolation ? "#E5E7EB" : "#003129",
+            }}
+          >
+            <span className="text-white text-[12px] font-bold font-['Inter']">
+              Proceed to Payment
+            </span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4.5 10L8.5 6L4.5 2" stroke="#8FF957" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+
       </div>
     </div>
   );

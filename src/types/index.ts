@@ -159,10 +159,19 @@ export interface School {
   lenco_public_key?: string; // Each school's unique Lenco API key
   uses_forms?: boolean;
   grade_pricing?: Array<{ name: string; label: string; value: string; price: number }>;
-  other_services?: Array<{ id: string; name: string; price: number; category: string }>;
+  other_services?: Array<{ id: string; name: string; price: number; category: string; category_name?: string }>;
   bus_routes?: Array<{ id: string; name: string; price: number; description?: string }>;
   boarding_rooms?: Array<{ id: string; name: string; price: number; capacity?: number }>;
   canteen_plans?: Array<{ id: string; name: string; price: number; description?: string }>;
+  category_names?: Record<string, string>;
+  category_ids?: {
+    tuition?: string;
+    transport?: string;
+    canteen?: string;
+    uniforms?: string;
+    other?: string;
+  };
+  vat_enabled?: boolean;
 }
 
 /**
@@ -237,5 +246,21 @@ export interface Transaction {
   meta_data?: Record<string, any>;
   initiated_at: string;
   completed_at?: string;
+  created_at: string;
+}
+
+/**
+ * Discount Definition entity
+ */
+export interface DiscountDefinition {
+  discount_id: string;
+  school_id: string;
+  name: string;
+  description: string | null;
+  discount_type: 'percentage' | 'fixed';
+  amount: number;
+  is_active: boolean;
+  fee_item_id?: string;    // Link to a specific service/fee item
+  fee_category_id?: string; // Link to a broad fee category (e.g., Tuition)
   created_at: string;
 }

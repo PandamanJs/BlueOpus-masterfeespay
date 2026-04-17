@@ -6,7 +6,7 @@ import lazyLoadWithTracking from "./utils/lazyLoad";
 import performanceMonitor from "./utils/performanceMonitor";
 import type { PaymentData } from "./components/HistoryPage";
 import { Toaster } from "./components/ui/sonner";
-import { getStudentsByPhone, getStudentsByParentId } from "./data/students";
+import { getStudentsByPhone } from "./data/students";
 import { incrementStudentSelection } from "./utils/preferences";
 import { useAppStore } from "./stores/useAppStore";
 import type { CheckoutService, PageType } from "./stores/useAppStore";
@@ -15,7 +15,8 @@ import { toast } from "sonner";
 import DynamicIsland, { useDynamicIsland } from "./components/DynamicIsland";
 import { getSchools } from "./lib/supabase/api/schools";
 import { hapticFeedback } from "./utils/haptics";
-import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "./lib/supabase/api/transactions";
+import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent } from "./lib/supabase/api/transactions";
+import { checkIfStaff } from "./lib/supabase/api/parents";
 
 import { UpdateNotification } from "./components/UpdateNotification";
 import { useOfflineManager } from "./hooks/useOfflineManager";
@@ -104,6 +105,21 @@ const LazyAccountProfilePage = lazyLoadWithTracking(
   { componentName: "AccountProfilePage" }
 );
 
+const LazyAuditDisputesPage = lazyLoadWithTracking(
+  () => import("./components/AuditDisputesPage"),
+  { componentName: "AuditDisputesPage" }
+);
+
+const LazyChildrenDetailsPage = lazyLoadWithTracking(
+  () => import("./components/ChildrenDetailsPage"),
+  { componentName: "ChildrenDetailsPage" }
+);
+
+const LazyStudentManagePage = lazyLoadWithTracking(
+  () => import("./components/StudentManagePage"),
+  { componentName: "StudentManagePage" }
+);
+
 const LazyTutorial = lazyLoadWithTracking(
   () => import("./components/Tutorial"),
   { componentName: "Tutorial" }
@@ -127,6 +143,11 @@ const LazyRegistrationSuccessPage = lazyLoadWithTracking(
 const LazyViewPaymentPlansPage = lazyLoadWithTracking(
   () => import("./components/ViewPaymentPlansPage"),
   { componentName: "ViewPaymentPlansPage" }
+);
+
+const LazyPoliciesPage = lazyLoadWithTracking(
+  () => import("./components/PoliciesPage"),
+  { componentName: "PoliciesPage" }
 );
 
 /**
@@ -661,7 +682,7 @@ function SearchPage({ onProceed, selectedSchool, onSchoolSelect }: { onProceed: 
   return (
     <div className="bg-white min-h-screen w-full flex justify-center">
       <div className="bg-white w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen overflow-hidden flex flex-col relative" data-name="Page 3">
-        <DecorativeShapes />
+        {/* Background shapes removed for cleaner UI */}
         <Frame4 />
 
         {/* Main Scrollable Content */}
@@ -885,13 +906,17 @@ export default function App() {
   const lastCompletedPaymentTimestamp = useAppStore((state) => state.lastCompletedPaymentTimestamp);
   const paymentInProgress = useAppStore((state) => state.paymentInProgress);
   const hasHydrated = useAppStore((state) => state.hasHydrated);
+  const students = useAppStore((state) => state.students);
+  const isStaff = useAppStore((state) => state.isStaff);
 
   // iOS Features Demo state
   const [showIOSDemo, setShowIOSDemo] = useState(false);
 
   // Students data from Supabase
-  const [students, setStudents] = useState<any[]>([]);
-  const [studentsLoading, setStudentsLoading] = useState(false);
+  const studentsLoading = useAppStore((state) => state.studentsLoading || false); // Added if not exist, else keep as is
+  const setStudents = useAppStore((state) => state.setStudents);
+  const setIsStaff = useAppStore((state) => state.setIsStaff);
+  const [studentsLoadingLocal, setStudentsLoading] = useState(false);
   const [studentsError, setStudentsError] = useState<string | null>(null);
 
   // Dynamic Island for payment status
@@ -931,20 +956,29 @@ export default function App() {
   const fetchStudents = async (phone: string) => {
     if (!phone) {
       setStudents([]);
+      setIsStaff(false);
       return;
     }
-    console.log('[App] Fetching students for phone:', phone);
+    console.log('[App] Fetching students and staff status for phone:', phone);
     setStudentsLoading(true);
     setStudentsError(null);
     try {
-      const studentData = await getStudentsByPhone(phone);
-      console.log('[App] Successfully fetched students:', studentData.length);
+      // Parallel fetch for students and staff status
+      const [studentData, staffStatus] = await Promise.all([
+        getStudentsByPhone(phone),
+        checkIfStaff(phone)
+      ]);
+      
+      console.log('[App] Successfully fetched:', { students: studentData.length, isStaff: staffStatus });
+      
       setStudents(studentData);
+      setIsStaff(staffStatus);
+      
       return studentData;
     } catch (error) {
-      console.error('[App] Error fetching students:', error);
-      setStudentsError('Failed to load student data. Please try again.');
-      toast.error('Failed to load student data');
+      console.error('[App] Error fetching user data:', error);
+      setStudentsError('Failed to load user data. Please try again.');
+      toast.error('Failed to load user data');
       return [];
     } finally {
       setStudentsLoading(false);
@@ -958,14 +992,6 @@ export default function App() {
     }
   }, [userPhone, hasHydrated]);
 
-  // Keep balances fresh whenever user lands on balance-sensitive pages.
-  useEffect(() => {
-    if (!hasHydrated || !userPhone) return;
-    if (currentPage === "pay-fees" || currentPage === "services" || currentPage === "history") {
-      fetchStudents(userPhone);
-    }
-  }, [currentPage, userPhone, hasHydrated]);
-
   const handleTutorialComplete = () => {
     completeTutorial();
   };
@@ -975,7 +1001,7 @@ export default function App() {
     const state = useAppStore.getState();
 
     // Anyone can access these pages
-    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies'];
+    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage'];
     if (publicPages.includes(page)) return true;
 
     // Payment flow pages require proper context
@@ -1018,7 +1044,8 @@ export default function App() {
   /**
    * navigateToPage Utility
    * 
-   * Synchronizes browser history with the internal app state.
+   * Updates only the internal store. The synchronized effect below will 
+   * handle the side-effect of updating the browser history.
    */
   const navigateToPage = (page: PageType, direction: 'forward' | 'back' = 'forward', replaceHistory = false) => {
     // 1. Performance monitoring
@@ -1027,21 +1054,20 @@ export default function App() {
     // 2. Set direction for animations
     setNavigationDirection(direction);
 
-    // 3. Update Browser History (using Hash Routing)
-    const state = { page };
+    // 3. Update internal store (This will trigger the useEffect for history sync)
+    // We pass a custom flag to handle replacement vs pushing
     if (replaceHistory) {
-      window.history.replaceState(state, '', `#${page}`);
+      window.history.replaceState({ page }, '', `#${page}`);
     } else {
-      // Don't push if we're already on this page in history
       if (window.history.state?.page !== page) {
-        window.history.pushState(state, '', `#${page}`);
+        window.history.pushState({ page }, '', `#${page}`);
       }
     }
-
-    // 4. Update Internal Store
+    
+    // Update store state
     useAppStore.setState({ currentPage: page });
 
-    // 5. Cleanup monitoring
+    // 4. Cleanup monitoring
     setTimeout(() => endTracking(), 100);
   };
 
@@ -1051,7 +1077,7 @@ export default function App() {
 
     // Check if there's a hash in the URL on initial load
     const hash = window.location.hash.slice(1);
-    const validPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'pay-fees', 'add-services', 'checkout', 'payment', 'processing', 'failed', 'success', 'download-receipt', 'registration-portal', 'registration-form'];
+    const validPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'pay-fees', 'add-services', 'checkout', 'payment', 'processing', 'failed', 'success', 'download-receipt', 'registration-portal', 'registration-form', 'registration-success', 'policies', 'account-profile', 'audit-disputes', 'children-details', 'student-manage'];
 
     if (hash && validPages.includes(hash as PageType)) {
       const targetPage = hash as PageType;
@@ -1085,32 +1111,19 @@ export default function App() {
       // Security: Prevent rapid navigation manipulation
       const now = Date.now();
       if (navigationLockRef.current || (now - lastNavigationRef.current) < 300) {
-        console.warn('[Security] Rapid navigation detected. Ignoring.');
         event.preventDefault();
         return;
       }
 
       navigationLockRef.current = true;
       lastNavigationRef.current = now;
+      setTimeout(() => { navigationLockRef.current = false; }, 300);
 
-      // Release lock after 300ms
-      setTimeout(() => {
-        navigationLockRef.current = false;
-      }, 300);
-
-      const targetPage = event.state?.page as PageType;
+      const targetPage = event.state?.page as PageType || (window.location.hash.slice(1) as PageType) || 'search';
       const currentPageValue = useAppStore.getState().currentPage;
-      const state = useAppStore.getState();
 
-      console.log(`[Navigation] Attempting navigation from ${currentPageValue} to ${targetPage}`);
-
-      // Security Level 1: Prevent backward navigation from success or download-receipt pages
-      // For security reasons, redirect to services page instead
+      // 1. Safety Checks (Redirection)
       if (currentPageValue === 'success' || currentPageValue === 'download-receipt') {
-        event.preventDefault();
-        console.warn('[Security] Blocked back navigation from payment completion page. Redirecting to services.');
-
-        // Clear payment flow and redirect to services
         clearPaymentSecurity();
         resetCheckoutFlow();
         window.history.replaceState({ page: 'services' }, '', '#services');
@@ -1118,59 +1131,21 @@ export default function App() {
         return;
       }
 
-      // Security Level 2: Prevent navigation TO processing page via back button
-      // Users should never be able to return to the processing page
       if (targetPage === 'processing') {
-        event.preventDefault();
-        console.warn('[Security] Blocked navigation to processing page. Moving forward.');
         window.history.forward();
         return;
       }
 
-      // Security Level 3: Prevent navigation TO success or download-receipt without proper context
-      if (targetPage === 'success' || targetPage === 'download-receipt') {
-        if (!canAccessPage(targetPage)) {
-          event.preventDefault();
-          console.warn(`[Security] Blocked unauthorized access to ${targetPage}. Redirecting to services.`);
-          window.history.replaceState({ page: 'services' }, '', '#services');
-          useAppStore.setState({ currentPage: 'services' });
-          return;
-        }
-      }
-
-      // Security Level 4: Validate access to target page
-      // If validation fails, always return to the safety of the search page (Home)
-      if (targetPage && !canAccessPage(targetPage)) {
-        event.preventDefault();
-        console.warn(`[Security] Access validation failed for page: ${targetPage}. Redirecting to Home.`);
+      // 2. Validate Access
+      if (!canAccessPage(targetPage)) {
         window.history.replaceState({ page: 'search' }, '', '#search');
         useAppStore.setState({ currentPage: 'search' });
         return;
       }
 
-      // Security Level 5: Check if payment was recently completed
-      // Prevent going back through payment flow after completion
-      if (state.lastCompletedPaymentTimestamp) {
-        const timeSincePayment = Date.now() - state.lastCompletedPaymentTimestamp;
-        const isRecentPayment = timeSincePayment < 5 * 60 * 1000; // 5 minutes
-
-        const paymentFlowPages: PageType[] = ['payment', 'checkout', 'add-services', 'pay-fees'];
-        if (isRecentPayment && paymentFlowPages.includes(targetPage)) {
-          event.preventDefault();
-          console.warn('[Security] Blocked navigation to payment flow after recent payment completion. Redirecting to services.');
-          window.history.replaceState({ page: 'services' }, '', '#services');
-          useAppStore.setState({ currentPage: 'services' });
-          return;
-        }
-      }
-
-      // Allow navigation
+      // 3. Apply Navigation
       setNavigationDirection('back');
-      if (targetPage) {
-        useAppStore.setState({ currentPage: targetPage });
-      } else {
-        useAppStore.setState({ currentPage: 'search' });
-      }
+      useAppStore.setState({ currentPage: targetPage });
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -1259,21 +1234,9 @@ export default function App() {
   /* -------------------------------------------------------------------------- */
 
   const handleClearBalances = async (selectedIds: string[]) => {
-    const selectedStudents = students.filter(s => selectedIds.includes(s.id));
-    const unverifiedSelected = selectedStudents.filter(s => s.verificationStatus === 'unverified');
-    if (unverifiedSelected.length > 0) {
-      toast.error("Some selected profiles are pending school confirmation.", {
-        description: "Payments unlock automatically once the school confirms student details.",
-      });
-    }
-
-    const eligibleIds = selectedStudents
-      .filter(s => s.verificationStatus !== 'unverified')
-      .map(s => s.id);
-
     // 1. Filter students with balance
     const studentsWithBalance = students.filter(s =>
-      eligibleIds.includes(s.id) && s.balances > 0
+      selectedIds.includes(s.id) && s.balances > 0
     );
 
     if (studentsWithBalance.length === 0) return;
@@ -1282,36 +1245,88 @@ export default function App() {
     let balanceServices: CheckoutService[] = [];
 
     for (const student of studentsWithBalance) {
-      // Use the unified financial summary logic for accurate reconciliation
-      const summary = await getStudentFinancialSummary(student.id);
-      
-      if (summary && summary.items) {
-        // Filter for items that actually have an outstanding balance
-        const outstandingItems = summary.items.filter(item => item.balance > 0);
-        
-        const servicesValue = outstandingItems.map(item => ({
-          id: item.invoice_id || crypto.randomUUID(),
-          description: item.name || "School Fees",
-          amount: item.balance,
-          invoiceNo: item.invoice_number || `INV-${(item.invoice_id || '').substring(0, 4)}`,
-          invoice_id: item.invoice_id,
+      // Fetch both detailed invoices and pending transactions
+      const [invoices, pendingTxs] = await Promise.all([
+        getInvoicesWithBalanceForStudent(student.id),
+        getPendingTransactionsForStudent(student.id)
+      ]);
+
+      if (invoices.length > 0) {
+        // Use detailed invoices from payment_history
+        const servicesValue = invoices.map(inv => ({
+          id: inv.id || crypto.randomUUID(),
+          description: inv.service_name || "School Fees",
+          amount: inv.balance_remaining || 0,
+          invoiceNo: inv.invoice_number || `INV-${inv.id?.substring(0, 4)}`,
+          invoice_id: inv.id || undefined,  // actual UUID for DB linkage
           studentName: student.name,
           studentId: student.id,
-          term: item.term,
-          academicYear: item.academic_year,
-          grade: student.grade
+          term: inv.term,
+          academicYear: inv.academic_year,
+          grade: student.grade,
+          schoolId: student.schoolId,
+          isDebt: true
         }));
-        
         balanceServices = [...balanceServices, ...servicesValue];
+
+      }
+
+      // Also include any other pending transactions that aren't necessarily tied to an invoice in payment_history
+      if (pendingTxs.length > 0) {
+        // Simple heuristic: if we already have invoices, maybe don't duplicate pending stuff 
+        // unless they are for different amounts or don't look like invoice payments
+        const invoiceIds = invoices.map(i => i.id);
+
+        const additionalServices = pendingTxs
+          .filter(tx => !invoiceIds.includes(tx.id)) // Avoid double counting if IDs match
+          .map(tx => {
+            let desc = "Outstanding Balance";
+            if (tx.meta_data && (tx.meta_data as any).description) {
+              desc = (tx.meta_data as any).description;
+            } else {
+              desc = `Pending Payment - ${student.name}`;
+            }
+
+            return {
+              id: tx.id || crypto.randomUUID(),
+              description: desc,
+              amount: tx.amount,
+              invoiceNo: tx.reference || `BAL-${student.id.substring(0, 4)}`,
+              studentName: student.name,
+              studentId: student.id,
+              term: tx.meta_data?.['term'],
+              academicYear: tx.meta_data?.['year'] || tx.meta_data?.['academicYear'],
+              grade: student.grade,
+              schoolId: student.schoolId,
+              isDebt: true
+            };
+          });
+
+        balanceServices = [...balanceServices, ...additionalServices];
+      }
+
+      // Final fallback if both were empty but student has a balance field > 0
+      if (invoices.length === 0 && pendingTxs.length === 0 && student.balances > 0) {
+        balanceServices.push({
+          id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7),
+          description: `Outstanding Balance`,
+          amount: student.balances,
+          invoiceNo: `BAL-${student.id.substring(0, 4)}-${Date.now().toString().slice(-4)}`,
+          studentName: student.name,
+          studentId: student.id,
+          term: undefined,
+          academicYear: undefined,
+          grade: student.grade,
+          schoolId: student.schoolId,
+          isDebt: true
+        });
       }
     }
 
     // 3. Update store and navigate
-
-    // 3. Update store and navigate
     setCheckoutServices(balanceServices);
     setPaymentAmount(balanceServices.reduce((acc, curr) => acc + curr.amount, 0));
-    setSelectedStudentIds(eligibleIds);
+    setSelectedStudentIds(selectedIds);
     navigateToPage('checkout');
   };
 
@@ -1336,25 +1351,14 @@ export default function App() {
     navigateToPage("registration-form");
   };
 
-  const handleRegistrationComplete = async (parentPhone: string, parentName: string, parentId?: string) => {
+  const handleRegistrationComplete = async (parentPhone: string, parentName: string, parentId: string) => {
     // After successful registration, automatically log in the parent
     // Set user info in the store
-    setUserInfo(parentName, parentPhone);
+    setUserInfo(parentName, parentPhone, '', parentId);
 
     // Fetch their students to populate the app
     try {
-      let studentData = parentId
-        ? await getStudentsByParentId(parentId)
-        : await getStudentsByPhone(parentPhone);
-
-      // Allow a short sync window before giving up so newly linked students appear immediately.
-      for (let attempt = 0; attempt < 4 && studentData.length === 0; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        studentData = parentId
-          ? await getStudentsByParentId(parentId)
-          : await getStudentsByPhone(parentPhone);
-      }
-
+      const studentData = await getStudentsByPhone(parentPhone);
       setStudents(studentData);
 
       // Show success notification
@@ -1372,8 +1376,8 @@ export default function App() {
     }
   };
 
-  const handleProceedToServices = async (name: string, phone: string) => {
-    setUserInfo(name, phone);
+  const handleProceedToServices = async (name: string, phone: string, id: string) => {
+    setUserInfo(name, phone, '', id);
     // Explicitly fetch students to ensure they are loaded when entering services
     await fetchStudents(phone);
     navigateToPage("services");
@@ -1422,27 +1426,12 @@ export default function App() {
 
   const handleSelectServices = (selectedStudents: string[]) => {
     setNavigationDirection('forward');
-    const selectedStudentRows = students.filter(s => selectedStudents.includes(s.id));
-    const blocked = selectedStudentRows.filter(s => s.verificationStatus === 'unverified');
-    const eligible = selectedStudentRows.filter(s => s.verificationStatus !== 'unverified').map(s => s.id);
-
-    if (blocked.length > 0) {
-      toast.error("Some selected profiles are pending school confirmation.", {
-        description: "Payments are available as soon as the school confirms those profiles.",
-      });
-    }
-
-    if (eligible.length === 0) {
-      toast.info("No verified students selected yet.");
-      return;
-    }
-
     // Track student selections in preferences
-    eligible.forEach(studentId => {
+    selectedStudents.forEach(studentId => {
       incrementStudentSelection(studentId);
     });
 
-    setSelectedStudentIds(eligible);
+    setSelectedStudentIds(selectedStudents);
     navigateToPage("add-services");
   };
 
@@ -1455,19 +1444,7 @@ export default function App() {
   };
 
   const handleCheckout = (services: CheckoutService[]) => {
-    const blockedIds = new Set(
-      students.filter(s => s.verificationStatus === 'unverified').map(s => s.id)
-    );
-    const eligibleServices = services.filter(service => !service.studentId || !blockedIds.has(service.studentId));
-    if (eligibleServices.length !== services.length) {
-      toast.error("Removed items awaiting school confirmation.", {
-        description: "Only confirmed student profiles can proceed to payment.",
-      });
-    }
-    if (eligibleServices.length === 0) {
-      return;
-    }
-    setCheckoutServices(eligibleServices);
+    setCheckoutServices(services);
     navigateToPage("checkout");
   };
 
@@ -1485,7 +1462,12 @@ export default function App() {
   };
 
   const handleSchoolSelection = (school: School | null) => {
-    setSelectedSchool(school ? school.name : null, school ? school.logo : null);
+    setSelectedSchool(
+      school ? school.name : null, 
+      school ? school.logo : null, 
+      school ? school.id as string : null,
+      school ? !!school.vat_enabled : false
+    );
   };
 
   const handlePaymentComplete = () => {
@@ -1498,13 +1480,8 @@ export default function App() {
     // Show success notification in Dynamic Island
     dynamicIsland.success({ subtitle: 'Payment successful! Receipt generated' });
 
-    // Navigate directly to success page
-    navigateToPage("success");
-
-    // Update history to prevent back navigation loop
-    window.history.replaceState({ page: 'success' }, '', '#success');
-    useAppStore.setState({ currentPage: 'success' });
-    setNavigationDirection('forward');
+    // Navigate directly to success page (this handles state and history)
+    navigateToPage("success", "forward", true);
   };
 
   const handleProcessingComplete = (success: boolean) => {
@@ -1517,9 +1494,7 @@ export default function App() {
 
       // Replace processing page in history to prevent back navigation
       // Clear the entire history stack to prevent going back through payment flow
-      window.history.replaceState({ page: 'success' }, '', '#success');
-      useAppStore.setState({ currentPage: 'success' });
-      setNavigationDirection('forward');
+      navigateToPage('success', 'forward', true);
 
       console.log('[Security] Payment completed successfully. Navigation restricted.');
     } else {
@@ -1539,9 +1514,7 @@ export default function App() {
   const handleViewReceiptsFromSuccess = () => {
     // After successful payment, user can view receipts
     // This replaces the success page to prevent going back through payment flow
-    window.history.replaceState({ page: 'download-receipt' }, '', '#download-receipt');
-    useAppStore.setState({ currentPage: 'download-receipt' });
-    setNavigationDirection('forward');
+    navigateToPage('download-receipt', 'forward', true);
   };
 
   const handleDownloadReceipts = () => {
@@ -1550,19 +1523,10 @@ export default function App() {
 
   const handleGoHome = () => {
     // Navigate home and clear the payment flow from history
-    // This replaces the current page to prevent back navigation
     console.log('[Navigation] Returning to services. Clearing payment data.');
-
     clearPaymentSecurity();
     resetCheckoutFlow();
-    if (userPhone) {
-      fetchStudents(userPhone);
-    }
-
-    // Clear all payment-related history by replacing state
-    window.history.replaceState({ page: 'services' }, '', '#services');
-    useAppStore.setState({ currentPage: 'services' });
-    setNavigationDirection('forward');
+    navigateToPage('services', 'forward', true);
   };
 
   // Page transition animation variants - direction aware
@@ -1688,6 +1652,7 @@ export default function App() {
         {currentPage === "add-services" && (
           <motion.div
             key="add-services"
+            className="absolute inset-0 w-full h-full"
             variants={pageVariants}
             initial="initial"
             animate="animate"
@@ -1780,11 +1745,10 @@ export default function App() {
               onPayFees={handlePayFees}
               debtCount={students.reduce((sum, s) => sum + s.unpaidInvoicesCount, 0)}
               onInactivityRefresh={() => {
-                // Refresh data in-place to avoid unexpected page resets/logouts.
-                console.log('[App] Services page inactivity refresh triggered: refreshing students in place');
-                if (userPhone) {
-                  fetchStudents(userPhone);
-                }
+                // Re-navigate to services to trigger fresh data load
+                console.log('[App] Services page inactivity refresh triggered');
+                navigateToPage('search');
+                setTimeout(() => navigateToPage('services'), 100);
               }}
               navigateToPage={navigateToPage}
             />
@@ -1846,7 +1810,7 @@ export default function App() {
                 sessionStorage.setItem('pendingRegistration', JSON.stringify(data));
 
                 // Set user info and school
-                setUserInfo(data.name, data.phone);
+                setUserInfo(data.name, data.phone, '', data.userId);
                 if (data.schoolName) {
                   setSelectedSchool(data.schoolName);
                 }
@@ -1873,12 +1837,26 @@ export default function App() {
                   sessionStorage.removeItem('pendingRegistration');
 
                   // Auto-login the newly registered parent
-                  handleRegistrationComplete(data.phone, data.name, data.parentId);
+                  handleRegistrationComplete(data.phone, data.name, data.userId);
                 } else {
                   // Fallback: just navigate to search if no data found
                   navigateToPage("search");
                 }
               }}
+            />
+          </motion.div>
+        )}
+
+        {currentPage === "audit-disputes" && (
+          <motion.div
+            key="audit-disputes"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <LazyAuditDisputesPage
+              navigateToPage={navigateToPage}
             />
           </motion.div>
         )}
@@ -1891,9 +1869,11 @@ export default function App() {
             animate="animate"
             exit="exit"
           >
-            <LazyViewPaymentPlansPage
+            <LazyPoliciesPage
               onBack={() => navigateToPage("services", "back")}
-              schoolName={selectedSchool || "International School"}
+              students={students}
+              userPhone={userPhone}
+              userName={userName}
             />
           </motion.div>
         )}
@@ -1906,6 +1886,28 @@ export default function App() {
             exit="exit"
           >
             <LazyAccountProfilePage navigateToPage={navigateToPage} />
+          </motion.div>
+        )}
+        {currentPage === "children-details" && (
+          <motion.div
+            key="children-details"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <LazyChildrenDetailsPage navigateToPage={navigateToPage} />
+          </motion.div>
+        )}
+        {currentPage === "student-manage" && (
+          <motion.div
+            key="student-manage"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <LazyStudentManagePage navigateToPage={navigateToPage} />
           </motion.div>
         )}
       </AnimatePresence>
