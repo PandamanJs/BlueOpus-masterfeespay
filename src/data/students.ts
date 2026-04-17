@@ -146,7 +146,7 @@ export async function getParentDataByPhone(phone: string): Promise<ParentData | 
     };
   } catch (error) {
     console.error('[getParentDataByPhone] Error:', error);
-    return null;
+    throw error;
   }
 }
 
@@ -167,3 +167,4 @@ export function getInstitutionType(_schoolName: string): 'school' | 'university'
 export function canSelectTerm(_schoolName: string): boolean {
   return true;
 }
+r

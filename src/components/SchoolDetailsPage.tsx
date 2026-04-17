@@ -74,8 +74,19 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
       saveLastPhone(phoneNumber);
       hapticFeedback('medium');
       onProceed(parentData.name, phoneNumber, parentData.id);
-    } catch (error) {
-      toast.error("Validation failed");
+    } catch (error: any) {
+      console.error('[validateAndProceed] Error:', error);
+      const isNetworkError = !navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Network');
+      
+      if (isNetworkError) {
+        toast.error("Network Error", { 
+          description: "Unable to reach the server. Please check your internet connection and try again." 
+        });
+      } else {
+        toast.error("Validation failed", {
+          description: "There was a problem checking your account. Please try again later."
+        });
+      }
     } finally {
       setIsValidating(false);
     }
