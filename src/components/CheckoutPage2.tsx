@@ -93,6 +93,32 @@ function AmountInput({
   );
 }
 
+/**
+ * Intelligently match a service with its institutional fee policy.
+ */
+function findRelevantPolicy(service: Service, policies: any[], schoolId: string) {
+  if (!policies || policies.length === 0) return null;
+
+  return policies.find(p => {
+    if (p.school_id !== schoolId) return false;
+    
+    const desc = service.description?.toLowerCase() || "";
+    const name = p.name?.toLowerCase() || "";
+    const category = p.category?.toLowerCase() || "";
+    
+    // 1. Try matching by name (e.g. "Termly" or "Monthly" in description)
+    if (desc.includes('term') && name.includes('term')) return true;
+    if (desc.includes('month') && name.includes('month')) return true;
+    
+    // 2. Try matching by category
+    if (category === 'tuition' && (desc.includes('fees') || desc.includes('tuition'))) return true;
+    if (category === 'transport' && desc.includes('bus')) return true;
+    
+    // 3. Fallback to general payment plan for this school
+    return category === 'payment_plan';
+  }) || policies.find(p => p.school_id === schoolId);
+}
+
 /* ── Single service card ── */
 function ServiceCard({
   service,
@@ -106,7 +132,8 @@ function ServiceCard({
   policies: any[];
 }) {
   const schoolId = (service as any).schoolId;
-  const policy = policies.find(p => p.school_id === schoolId);
+  const policy = findRelevantPolicy(service, policies, schoolId);
+
   const allowInstallments = policy?.allow_installments ?? true;
   const minPercentValue = policy?.min_payment_percent ?? 50;
   const isStrict = policy?.strict_enforcement ?? true;
@@ -257,14 +284,13 @@ export default function CheckoutPage2({
 
   const activeServices = services.filter((s) => !excludedServiceIds.has(s.id));
 
-  // Determine if any service violates its school's policy
   const hasPolicyViolation = activeServices.some((service) => {
     const amount = inputAmounts[service.id] || 0;
     if (amount <= 0) return false;
     
     // Find policy for this school
     const schoolId = (service as any).schoolId;
-    const policy = policies.find(p => p.school_id === schoolId);
+    const policy = findRelevantPolicy(service, policies, schoolId);
     
     // Use the fetched min_payment_percent or default to 50
     const minPercent = (policy?.min_payment_percent ?? 50) / 100;
