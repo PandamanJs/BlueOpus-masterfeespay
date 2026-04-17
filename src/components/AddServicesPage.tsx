@@ -1143,6 +1143,9 @@ function UnifiedServicesPopup({
     const [boardingFrequency, setBoardingFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
     const [transportFrequency, setTransportFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
     const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
+    const [sportsFrequency, setSportsFrequency] = useState<'monthly' | 'termly' | 'yearly'>('termly');
+    const [selectedSportsPlanId, setSelectedSportsPlanId] = useState<string>("");
+    const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
 
     // Uniforms/Other state
     const [selectedOtherId, setSelectedOtherId] = useState<string>("");
@@ -2872,74 +2875,271 @@ function UnifiedServicesPopup({
                                                 }
 
                                                 if (activeTab === 'sports') {
+                                                    const sportsItems = schoolData?.other_services?.filter(s => {
+                                                        const cat = s.category?.toLowerCase() || '';
+                                                        return cat.includes('sport') || cat.includes('club');
+                                                    }) || [];
+
+                                                    const selectedSportsPlan = sportsItems.find(s => s.id === selectedSportsPlanId);
+
                                                     return (
-                                                        <div key={`sports-${catName}`} className="w-full flex flex-col gap-3 mb-6">
-                                                            <div className="flex items-center px-2 mb-1">
-                                                                <span className="text-black text-[14px] font-['Space_Grotesk',sans-serif] font-bold tracking-tight">
-                                                                    {catName}
-                                                                </span>
-                                                            </div>
-                                                            <div className="grid grid-cols-2 gap-3 w-full">
-                                                                {items.map((svc) => {
-                                                                    const qty = otherQuantities[svc.id] || 0;
-                                                                    const itemId = `other-${svc.id}`;
-                                                                    const isSelected = qty > 0;
-
-                                                                    const handleQtyChange = (newQty: number) => {
-                                                                        setOtherQuantities(prev => ({ ...prev, [svc.id]: newQty }));
-                                                                        haptics.selection();
-                                                                        if (newQty === 0) {
-                                                                            setStagedItems(prev => prev.filter(p => p.id !== itemId));
-                                                                        } else {
-                                                                            setStagedItems(prev => {
-                                                                                const exists = prev.find(p => p.id === itemId);
-                                                                                if (exists) {
-                                                                                    return prev.map(p => p.id === itemId ? { ...p, amount: svc.price * newQty, quantity: newQty } : p);
-                                                                                }
-                                                                                return [...prev, {
-                                                                                    id: itemId,
-                                                                                    description: svc.name,
-                                                                                    amount: svc.price * newQty,
-                                                                                    quantity: newQty,
-                                                                                    invoiceNo: "205",
-                                                                                    pricing_id: svc.id,
-                                                                                    categoryId: schoolData?.category_ids?.other
-                                                                                }];
-                                                                            });
-                                                                        }
-                                                                    };
-
-                                                                    return (
-                                                                        <div key={svc.id} className={`relative flex flex-col p-4 rounded-[20px] transition-all duration-300 ${isSelected ? 'bg-[#f8fcf4] border-2 border-[#95e36c] shadow-[0_8px_20px_rgba(149,227,108,0.15)]' : 'bg-white border-[1px] border-gray-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)]'}`}>
-                                                                            <div className="flex items-start justify-between w-full mb-3">
-                                                                                <div className={`w-[36px] h-[36px] flex items-center justify-center rounded-[12px] transition-colors ${isSelected ? 'bg-[#95e36c] text-[#003630]' : 'bg-[#FAFAFA] text-gray-400'}`}>
-                                                                                    <Users size={16} strokeWidth={2.5} />
-                                                                                </div>
-                                                                                <div className={`font-['Inter',sans-serif] text-[12px] font-bold mt-1 ${isSelected ? 'text-[#003630]' : 'text-gray-500'}`}>
-                                                                                    K{svc.price.toLocaleString()}
-                                                                                </div>
-                                                                            </div>
-                                                                            <h4 className="flex-1 font-['Inter',sans-serif] text-[12px] font-bold tracking-tight leading-[1.3] text-black pr-1 mb-4 flex items-center">
-                                                                                {svc.name}
-                                                                            </h4>
-                                                                            <div className="w-full">
-                                                                                {qty === 0 ? (
-                                                                                    <button onClick={(e) => { e.stopPropagation(); handleQtyChange(1); }} className="w-full h-8 rounded-[10px] bg-[#FAFAFA] border border-gray-200 text-black text-[12px] font-bold active:scale-95 transition-all outline-none">
-                                                                                        Join Club
-                                                                                    </button>
-                                                                                ) : (
-                                                                                    <button onClick={(e) => { e.stopPropagation(); handleQtyChange(0); }} className="w-full h-8 rounded-[10px] bg-white border-[1.5px] border-[#95e36c] text-[#003630] text-[12px] font-bold active:scale-95 transition-all outline-none flex items-center justify-center gap-2 shadow-[0_2px_8px_rgba(149,227,108,0.1)]">
-                                                                                        <div className="w-[16px] h-[16px] shrink-0 rounded-full bg-[#95e36c] text-[#003630] flex items-center justify-center">
-                                                                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                                                                        </div>
-                                                                                        Joined
-                                                                                    </button>
-                                                                                )}
-                                                                            </div>
+                                                        <div className="flex flex-col gap-6">
+                                                            {/* Plan Selection */}
+                                                            <div className="flex flex-col gap-3">
+                                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Select Club / Sport</label>
+                                                                <div className="relative">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                            setIsSportsDropdownOpen(!isSportsDropdownOpen);
+                                                                        }}
+                                                                        className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                                    >
+                                                                        <div className="flex flex-col items-start">
+                                                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900">
+                                                                                {selectedSportsPlan?.name || "Choose a Club or Sport"}
+                                                                            </span>
+                                                                            {selectedSportsPlan && (
+                                                                                <span className="text-[11px] text-gray-400">
+                                                                                    K{selectedSportsPlan.price.toLocaleString()} per month
+                                                                                </span>
+                                                                            )}
                                                                         </div>
-                                                                    );
-                                                                })}
+                                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isSportsDropdownOpen ? 'rotate-180' : ''}`}>
+                                                                            <path d="m6 9 6 6 6-6" />
+                                                                        </svg>
+                                                                    </button>
+
+                                                                    <AnimatePresence>
+                                                                        {isSportsDropdownOpen && (
+                                                                            <motion.div
+                                                                                initial={{ opacity: 0, y: -10 }}
+                                                                                animate={{ opacity: 1, y: 0 }}
+                                                                                exit={{ opacity: 0, y: -10 }}
+                                                                                className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[100] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
+                                                                            >
+                                                                                <div className="p-3 flex flex-col gap-1">
+                                                                                    {sportsItems.map((item) => (
+                                                                                        <button
+                                                                                            key={item.id}
+                                                                                            onClick={(e) => {
+                                                                                                e.preventDefault();
+                                                                                                e.stopPropagation();
+                                                                                                setSelectedSportsPlanId(item.id);
+                                                                                                setIsSportsDropdownOpen(false);
+                                                                                                haptics.selection();
+                                                                                            }}
+                                                                                            className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedSportsPlanId === item.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                                        >
+                                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${selectedSportsPlanId === item.id ? 'text-white' : 'text-gray-900'}`}>
+                                                                                                {item.name}
+                                                                                            </span>
+                                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[11px] ${selectedSportsPlanId === item.id ? 'text-white' : 'text-[#003630]'}`}>
+                                                                                                K{item.price.toLocaleString()}
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        )}
+                                                                    </AnimatePresence>
+                                                                </div>
                                                             </div>
+
+                                                            {/* Academic Year Selector */}
+                                                            {!isSportsDropdownOpen && (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0, y: 10 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    className="flex flex-col gap-6"
+                                                                >
+                                                                    <div className="flex flex-col gap-3">
+                                                                        <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Academic Year</label>
+                                                                        <div className="relative">
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    e.stopPropagation();
+                                                                                    setIsYearDropdownOpen(!isYearDropdownOpen);
+                                                                                }}
+                                                                                className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                                            >
+                                                                                <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900">
+                                                                                    {selectedAcademicYear}
+                                                                                </span>
+                                                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isYearDropdownOpen ? 'rotate-180' : ''}`}>
+                                                                                    <path d="m6 9 6 6 6-6" />
+                                                                                </svg>
+                                                                            </button>
+
+                                                                            <AnimatePresence>
+                                                                                {isYearDropdownOpen && (
+                                                                                    <motion.div
+                                                                                        initial={{ opacity: 0, y: -10 }}
+                                                                                        animate={{ opacity: 1, y: 0 }}
+                                                                                        exit={{ opacity: 0, y: -10 }}
+                                                                                        className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden pointer-events-auto"
+                                                                                    >
+                                                                                        <div className="p-3 flex flex-col gap-1">
+                                                                                            {[new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => (
+                                                                                                <button
+                                                                                                    key={year}
+                                                                                                    onClick={(e) => {
+                                                                                                        e.preventDefault();
+                                                                                                        e.stopPropagation();
+                                                                                                        setSelectedAcademicYear(year);
+                                                                                                        setIsYearDropdownOpen(false);
+                                                                                                        haptics.selection();
+                                                                                                    }}
+                                                                                                    className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedAcademicYear === year ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                                                >
+                                                                                                    <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${selectedAcademicYear === year ? 'text-white' : 'text-gray-900'}`}>
+                                                                                                        {year}
+                                                                                                    </span>
+                                                                                                </button>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </motion.div>
+                                                                                )}
+                                                                            </AnimatePresence>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Frequency Selector */}
+                                                                    <div className="flex flex-col gap-3">
+                                                                        <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 text-left w-full">Subscription Frequency</h3>
+                                                                        <div className="grid grid-cols-3 gap-3">
+                                                                            {['monthly', 'termly', 'yearly'].map((freq) => (
+                                                                                <button
+                                                                                    key={freq}
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        haptics.selection();
+                                                                                        setSportsFrequency(freq as any);
+                                                                                    }}
+                                                                                    className={`h-[48px] rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-2 ${sportsFrequency === freq
+                                                                                        ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                                        : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                                        }`}
+                                                                                >
+                                                                                    <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] capitalize ${sportsFrequency === freq ? 'text-white' : 'text-gray-900'}`}>
+                                                                                        {freq}
+                                                                                    </span>
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Period Selection Grid */}
+                                                                    <div className="flex flex-col gap-4">
+                                                                        <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 text-left w-full">
+                                                                            {sportsFrequency === 'monthly' ? 'Select Months' : sportsFrequency === 'termly' ? 'Select Terms' : 'One Year Membership'}
+                                                                        </h3>
+
+                                                                        <div className="grid grid-cols-3 gap-4">
+                                                                            {sportsFrequency === 'termly' ? (
+                                                                                [1, 2, 3].map((term) => {
+                                                                                    const termId = selectedSportsPlan ? `sports-${selectedSportsPlanId}-term-${term}` : `sports-term-${term}`;
+                                                                                    const isTermStaged = isStaged(termId);
+
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={term}
+                                                                                            disabled={!selectedSportsPlan}
+                                                                                            onClick={(e) => {
+                                                                                                e.preventDefault();
+                                                                                                if (!selectedSportsPlan) return;
+
+                                                                                                const newService = {
+                                                                                                    id: termId,
+                                                                                                    description: `${selectedSportsPlan.name} Membership - Term ${term}`,
+                                                                                                    amount: selectedSportsPlan.price * 3,
+                                                                                                    invoiceNo: "205",
+                                                                                                    term: term,
+                                                                                                    academicYear: selectedAcademicYear,
+                                                                                                    pricing_id: selectedSportsPlanId,
+                                                                                                    categoryId: schoolData?.category_ids?.other
+                                                                                                };
+
+                                                                                                setStagedItems(prev => {
+                                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                                });
+                                                                                                haptics.selection();
+                                                                                            }}
+                                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-2 flex items-center justify-center gap-2 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                        >
+                                                                                            <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px]">Term {term}</span>
+                                                                                        </button>
+                                                                                    );
+                                                                                })
+                                                                            ) : sportsFrequency === 'monthly' ? (
+                                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                                    const termId = `sports-${selectedSportsPlanId}-month-${month}`;
+                                                                                    const isTermStaged = isStaged(termId);
+
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={month}
+                                                                                            disabled={!selectedSportsPlan}
+                                                                                            onClick={(e) => {
+                                                                                                e.preventDefault();
+                                                                                                if (!selectedSportsPlan) return;
+
+                                                                                                const newService = {
+                                                                                                    id: termId,
+                                                                                                    description: `${selectedSportsPlan.name} - ${month} ${selectedAcademicYear}`,
+                                                                                                    amount: selectedSportsPlan.price,
+                                                                                                    invoiceNo: "205",
+                                                                                                    academicYear: selectedAcademicYear,
+                                                                                                    pricing_id: selectedSportsPlanId,
+                                                                                                    categoryId: schoolData?.category_ids?.other
+                                                                                                };
+
+                                                                                                setStagedItems(prev => {
+                                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                                });
+                                                                                                haptics.selection();
+                                                                                            }}
+                                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                        >
+                                                                                            <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px]">{month}</span>
+                                                                                        </button>
+                                                                                    );
+                                                                                })
+                                                                            ) : (
+                                                                                <button
+                                                                                    disabled={!selectedSportsPlan}
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        if (!selectedSportsPlan) return;
+                                                                                        const termId = `sports-${selectedSportsPlanId}-year`;
+                                                                                        const newService = {
+                                                                                            id: termId,
+                                                                                            description: `${selectedSportsPlan.name} - Full Year ${selectedAcademicYear}`,
+                                                                                            amount: selectedSportsPlan.price * 9,
+                                                                                            invoiceNo: "205",
+                                                                                            academicYear: selectedAcademicYear,
+                                                                                            pricing_id: selectedSportsPlanId,
+                                                                                            categoryId: schoolData?.category_ids?.other
+                                                                                        };
+                                                                                        setStagedItems(prev => {
+                                                                                            const exists = prev.some(s => s.id === termId);
+                                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                        });
+                                                                                        haptics.selection();
+                                                                                    }}
+                                                                                    className={`col-span-3 h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isStaged(`sports-${selectedSportsPlanId}-year`) ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                >
+                                                                                    <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px]">Pay for Full Academic Year</span>
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
                                                         </div>
                                                     );
                                                 }

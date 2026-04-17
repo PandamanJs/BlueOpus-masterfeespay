@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAppStore } from '../stores/useAppStore';
 import type { PageType } from '../stores/useAppStore';
 import LogoHeader from "./common/LogoHeader";
+import { toast } from 'sonner';
+import { hapticFeedback } from '../utils/haptics';
+import { updateParent } from '../lib/supabase/api/parents';
+import { User, Mail, Phone, Loader2, Save, Shield } from 'lucide-react';
+
 
 // ─── Luxe Design Tokens ──────────────────────────────────────────────────────
 const EMERALD = "#003630";

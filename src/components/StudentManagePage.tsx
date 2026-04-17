@@ -13,6 +13,8 @@ import {
 import { useAppStore } from '../stores/useAppStore';
 import { hapticFeedback } from '../utils/haptics';
 import { toast } from 'sonner';
+import group16 from '../assets/Group 16.png';
+import group17 from '../assets/Group 17.png';
 import { getGradesBySchool, updateStudent } from '../lib/supabase/api/students';
 import type { PageType } from '../stores/useAppStore';
 

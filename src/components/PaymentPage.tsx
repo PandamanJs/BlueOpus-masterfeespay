@@ -19,6 +19,8 @@ import { DiscountDefinition } from "../types";
 import { toast } from "sonner";
 import RollingNumber from "./ui/RollingNumber";
 import LogoHeader from "./common/LogoHeader";
+import group16 from "../assets/decorations/Group 16.png";
+import group17 from "../assets/decorations/Group 17.png";
 
 interface PaymentPageProps {
   onBack: () => void;
@@ -195,11 +197,13 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
     // SIBLING DISCOUNT CHECK
     // Logic: Look for "2nd", "3rd", "4th" or "2 students", etc.
-    const siblingMatch = fullDesc.match(/(\d+)(st|nd|rd|th)?\s+student|sibling|(\d+)\s+students/i);
+    const siblingMatch = fullDesc.match(/(\d+)(?:st|nd|rd|th)?\s+(?:student|child|sibling)|(\d+)\s+(?:students|children|siblings)|sibling|child/i);
     if (siblingMatch) {
-      const requiredCount = parseInt(siblingMatch[1] || siblingMatch[3]);
+      const capturedNum = siblingMatch[1] || siblingMatch[2];
+      const requiredCount = capturedNum ? parseInt(capturedNum) : 2;
       if (students.length < requiredCount) return false;
     }
+
 
     // STAFF DISCOUNT CHECK
     if (fullDesc.includes("staff")) {
@@ -588,7 +592,23 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               </div>
             </div>
 
-            {/* Removed decorations */}
+            {/* Decorative Assets from right corner */}
+            <div className="absolute right-0 top-0 h-full w-full pointer-events-none overflow-hidden select-none z-0">
+              <div className="relative w-full h-full">
+                <div
+                  className="absolute right-[10px] w-[120px] h-[120px] opacity-[0.08]"
+                  style={{ top: '-60px', transform: 'rotate(25deg)', zIndex: 0 }}
+                >
+                  <img src={group16} alt="" className="w-full h-full object-contain" />
+                </div>
+                <div
+                  className="absolute right-[8px] w-[120px] h-[120px] opacity-[0.15]"
+                  style={{ bottom: '-50px', transform: 'translateY(5px) rotate(-12deg)', zIndex: 1 }}
+                >
+                  <img src={group17} alt="" className="w-full h-full object-contain" />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* ── 3. Main Breakdown Card ── */}

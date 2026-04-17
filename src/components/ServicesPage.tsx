@@ -17,6 +17,7 @@ import {
   Check,
   Baby,
   ShieldCheck,
+  Wallet,
 } from "lucide-react";
 import masterFeesLogo from "../assets/header_logo.png";
 
@@ -91,41 +92,21 @@ function SettingsDrawer({
               {/* Premium Gradient Top Border */}
               <div className="h-[2px] bg-gradient-to-r from-transparent via-[#95e36c]/60 to-transparent" />
 
-              {/* Header - Luxe Style */}
-              <div className="px-8 pt-8 pb-5 bg-white/40 backdrop-blur-xl border-b border-white/40">
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col gap-0.5">
-                    <h2 className="text-[24px] font-[900] text-[#003630] tracking-[-0.8px] font-['Space_Grotesk',sans-serif]">Settings</h2>
-                    <p className="text-[11px] text-[#003630]/40 font-bold uppercase tracking-[0.15em] ml-0.5">Profile & Preferences</p>
-                  </div>
-                  <button
-                    onClick={onClose}
-                    className="w-10 h-10 rounded-full bg-white/80 border border-white flex items-center justify-center text-[#6b7280] shadow-sm active:scale-90 transition-all hover:bg-white"
-                  >
-                    <X size={18} />
-                  </button>
+              {/* Header - Center Aligned */}
+              <div className="px-8 pt-8 pb-5 bg-white/40 backdrop-blur-xl border-b border-white/40 relative">
+                <div className="flex flex-col items-center justify-center gap-0.5">
+                  <h2 className="text-[24px] font-[900] text-[#003630] tracking-[-0.8px] font-['Space_Grotesk',sans-serif]">Settings</h2>
+                  <p className="text-[11px] text-[#003630]/40 font-bold uppercase tracking-[0.15em]">Profile & Preferences</p>
                 </div>
+                <button
+                  onClick={onClose}
+                  className="absolute right-8 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 border border-white flex items-center justify-center text-[#6b7280] shadow-sm active:scale-90 transition-all hover:bg-white z-10"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar scroll-smooth">
-                {/* Profile Card - High-Fidelity Checkout Style */}
-                {/* Identity Header - Raw Typography */}
-                <div className="mx-2 mb-10 mt-2">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <p className="text-[10px] font-[900] text-[#003630] uppercase tracking-[0.25em] opacity-40">Primary Account</p>
-                      <div className="flex items-center gap-4">
-                        <h2 className="text-[32px] font-[900] tracking-[-1.5px] leading-tight text-[#003630] font-['Space_Grotesk',sans-serif]">
-                          {userName || "Louis Siwale"}
-                        </h2>
-                        <div className="px-3 py-1.5 rounded-xl bg-[#003630]/5 text-[#003630]/60 font-black text-[13px] tracking-[0.5px] font-['Space_Grotesk',sans-serif]">
-                          {userPhone}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="flex-1 overflow-y-auto px-6 py-2 no-scrollbar scroll-smooth">
                 {/* Menu Items - Premium List */}
                 <div className="space-y-4">
                   <p className="font-['Space_Grotesk',sans-serif] text-[11px] text-gray-400 px-2 font-black uppercase tracking-[0.2em] mb-4 opacity-80">General Settings</p>
@@ -200,10 +181,7 @@ function SettingsDrawer({
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
 
                   {/* Content */}
-                  <div className="relative z-10 flex items-center justify-center gap-3 h-full">
-                    <div className="size-8 rounded-xl bg-[#95e36c]/20 flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform">
-                      <LogOut size={18} className="text-[#95e36c]" strokeWidth={3} />
-                    </div>
+                  <div className="relative z-10 flex items-center justify-center h-full">
                     <p className="font-['Space_Grotesk',sans-serif] text-[18px] font-bold text-white tracking-[-0.5px]">Sign Out</p>
                   </div>
                 </button>
@@ -330,12 +308,8 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
             className="w-full h-[52px] px-6 bg-[#003630] rounded-xl flex items-center justify-between group active:scale-[0.98] transition-all shadow-lg shadow-teal-950/20"
           >
             <div className="flex items-center gap-3">
-              <div className="w-5 h-5 relative text-white group-hover:scale-110 transition-transform">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2" />
-                  <line x1="2" y1="7" x2="22" y2="7" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                </svg>
+              <div className="w-5 h-5 relative text-[#95e36c] group-hover:scale-110 transition-transform">
+                <Wallet size={20} strokeWidth={2.5} />
               </div>
               <span className="text-white text-[13px] font-medium font-['Inter'] tracking-tight">
                 {isUniversity ? 'Pay Tuition' : 'Pay for School Fees'}

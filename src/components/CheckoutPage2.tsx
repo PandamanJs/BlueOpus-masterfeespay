@@ -5,6 +5,8 @@ import LogoHeader from "./common/LogoHeader";
 import { Trash2, AlertTriangle, LogIn, Loader2 } from "lucide-react";
 import { getFeePolicies } from "../lib/supabase/api/schools";
 import type { CheckoutService as Service } from "../stores/useAppStore";
+import group16 from "../assets/decorations/Group 16.png";
+import group17 from "../assets/decorations/Group 17.png";
 
 interface CheckoutPage2Props {
   services: Service[];
@@ -307,7 +309,24 @@ export default function CheckoutPage2({
         <div className="flex-1 overflow-y-auto no-scrollbar">
 
           {/* White info block */}
-          <div className="bg-white px-6 pt-6 pb-6 flex flex-col gap-6">
+          <div className="bg-white px-6 pt-6 pb-6 flex flex-col gap-6 relative overflow-hidden">
+            {/* Decorative Assets from right corner */}
+            <div className="absolute right-0 top-0 h-full w-full pointer-events-none overflow-hidden select-none z-0">
+              <div className="relative w-full h-full">
+                <div
+                  className="absolute right-[10px] w-[120px] h-[120px] opacity-[0.08]"
+                  style={{ top: '-60px', transform: 'rotate(25deg)', zIndex: 0 }}
+                >
+                  <img src={group16} alt="" className="w-full h-full object-contain" />
+                </div>
+                <div
+                  className="absolute right-[8px] w-[120px] h-[120px] opacity-[0.15]"
+                  style={{ bottom: '-50px', transform: 'translateY(5px) rotate(-12deg)', zIndex: 1 }}
+                >
+                  <img src={group17} alt="" className="w-full h-full object-contain" />
+                </div>
+              </div>
+            </div>
 
             {/* Title + description */}
             <div className="self-stretch flex flex-col">
