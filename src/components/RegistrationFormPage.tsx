@@ -27,6 +27,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
   // Duplicate account detection state
   const [pendingParentId, setPendingParentId] = useState<string | null>(null);
   const [duplicateAccountName, setDuplicateAccountName] = useState<string | null>(null);
+  const [duplicateMatchType, setDuplicateMatchType] = useState<'phone' | 'email' | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   // ── Back-navigation fix ──────────────────────────────────────────────────
@@ -66,11 +67,32 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
 
   // Push a history entry so browser back has something to pop back through.
   // Without this, the first back swipe would exit the registration page entirely.
-  const handleParentNext = (data: ParentData) => {
+  const handleParentNext = async (data: ParentData) => {
     console.log('[Registration] Step 1 -> 2 (Parent info confirmed)', data);
-    setParentData(data);
-    setCurrentStep('students');
-    window.history.pushState({ page: 'registration-form', step: 'students' }, '', '#registration-form');
+    setIsSubmitting(true);
+    try {
+      const result = await registerParent(data);
+      console.log('[Registration] Parent register result:', result);
+
+      if (result.isExisting) {
+        console.log('[Registration] Existing account detected during Step 1, showing modal');
+        setPendingParentId(result.parentId);
+        setDuplicateAccountName(result.existingName || 'Unknown');
+        setDuplicateMatchType(result.matchType || null);
+        setParentData(data); // Save data temporarily to resume after modal
+        setShowDuplicateModal(true);
+        return;
+      }
+
+      setParentData({ ...data, parentId: result.parentId });
+      setCurrentStep('students');
+      window.history.pushState({ page: 'registration-form', step: 'students' }, '', '#registration-form');
+    } catch (error) {
+      console.error('[Registration] Parent registration error:', error);
+      toast.error('Failed to register parent details. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleStudentsBack = () => {
@@ -98,21 +120,14 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
           console.log('[Registration] Using confirmed existing parentId:', confirmedParentId);
           resolvedParentId = confirmedParentId;
         } else {
-          console.log('[Registration] Registering/looking up parent...');
-          // 1. Register / look up parent
-          const result = await registerParent(parentData);
-          console.log('[Registration] Parent register result:', result);
-
-          if (result.isExisting) {
-            console.log('[Registration] Existing account detected, showing modal with name:', result.existingName);
-            setPendingParentId(result.parentId);
-            setDuplicateAccountName(result.existingName || 'Unknown');
-            setShowDuplicateModal(true);
-            setIsSubmitting(false);
-            return;
+          if (!parentData?.parentId) {
+            console.log('[Registration] Parent not registered, registering now...');
+            const result = await registerParent(parentData);
+            resolvedParentId = result.parentId;
+          } else {
+            console.log('[Registration] Using pre-registered parentId:', parentData.parentId);
+            resolvedParentId = parentData.parentId;
           }
-
-          resolvedParentId = result.parentId;
         }
 
         console.log('[Registration] Proceeding with parentId:', resolvedParentId);
@@ -148,8 +163,16 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
   // Called when parent clicks "Yes, that's me" on the duplicate modal
   const handleConfirmExistingAccount = async () => {
     setShowDuplicateModal(false);
-    if (pendingParentId) {
-      await handleFinalConfirm(pendingParentId);
+    if (pendingParentId && parentData) {
+      const updatedParentData = { ...parentData, parentId: pendingParentId };
+      setParentData(updatedParentData);
+      
+      if (currentStep === 'parent') {
+        setCurrentStep('students');
+        window.history.pushState({ page: 'registration-form', step: 'students' }, '', '#registration-form');
+      } else {
+        await handleFinalConfirm(pendingParentId);
+      }
     }
   };
 
@@ -201,10 +224,17 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         }
 
         console.log('[Registration] Created new parent:', newParent.parent_id);
-        await linkStudentsToParent(newParent.parent_id, studentsData, parentData.schoolId);
-        toast.success('Registration completed successfully!');
-        const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
-        onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName, userId: newParent.parent_id });
+        setParentData({ ...parentData, parentId: newParent.parent_id });
+
+        if (currentStep === 'parent') {
+          setCurrentStep('students');
+          window.history.pushState({ page: 'registration-form', step: 'students' }, '', '#registration-form');
+        } else {
+          await linkStudentsToParent(newParent.parent_id, studentsData, parentData.schoolId);
+          toast.success('Registration completed successfully!');
+          const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
+          onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName, userId: newParent.parent_id });
+        }
       } catch (err) {
         console.error('[Registration] Reject duplicate error:', err);
         toast.error('Registration failed. Please try again.');
@@ -254,7 +284,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
                   Existing Account Found
                 </h2>
                 <p className="text-[13px] text-gray-500 mt-1 leading-relaxed">
-                  Your phone number or email matches an account under the name:
+                  Your {duplicateMatchType === 'email' ? 'email address' : 'phone number'} is already linked to an account under the name:
                 </p>
                 <p className="text-[17px] font-bold text-[#003630] mt-1 tracking-[-0.3px]">
                   {duplicateAccountName}

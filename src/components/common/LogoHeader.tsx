@@ -43,17 +43,6 @@ export default function LogoHeader({ onBack, showBackButton = false, className, 
     return (
         <div className={`h-[66px] w-full sticky top-0 z-[100] bg-white/95 backdrop-blur-[20px] flex items-center px-4 ${className}`}>
             
-            {showBackButton && onBack && (
-               <button 
-                onClick={onBack}
-                className="absolute left-[16px] top-1/2 translate-y-[-50%] p-2 rounded-full active:bg-gray-100 z-50"
-               >
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M15 18L9 12L15 6" stroke="#003630" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                 </svg>
-               </button>
-            )}
-
             <button 
                 onClick={handleHomeClick}
                 className="relative flex items-center gap-[12px] touch-manipulation active:scale-95 transition-transform"

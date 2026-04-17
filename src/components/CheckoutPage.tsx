@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import CheckoutPage2 from "./CheckoutPage2";
 import { hapticFeedback } from "../utils/haptics";
 import LogoHeader from "./common/LogoHeader";
 import { Trash2, ChevronRight, CreditCard } from "lucide-react";
+import { useAppStore } from "../stores/useAppStore";
 import type { CheckoutService as Service } from "../stores/useAppStore";
 import group16 from "../assets/decorations/Group 16.png";
 import group17 from "../assets/decorations/Group 17.png";
@@ -41,15 +42,27 @@ function HeroDecorations() {
 export default function CheckoutPage({ services, onProceed }: CheckoutPageProps) {
   const [showPayInPart, setShowPayInPart] = useState(false);
 
-  // Lifted state from CheckoutPage2 to persist across toggles
-  const [excludedServiceIds, setExcludedServiceIds] = useState<Set<string>>(new Set());
-  const [inputAmounts, setInputAmounts] = useState<Record<string, number>>(() => {
-    const amounts: Record<string, number> = {};
-    services.forEach(service => {
-      amounts[service.id] = service.amount;
-    });
-    return amounts;
-  });
+  // Global state from useAppStore to persist across page navigations
+  const excludedServiceIds = useAppStore(state => state.excludedServiceIds);
+  const setExcludedServiceIds = useAppStore(state => state.setExcludedServiceIds);
+  const inputAmounts = useAppStore(state => state.inputAmounts);
+  const setInputAmounts = useAppStore(state => state.setInputAmounts);
+
+  // Initialize input amounts from services if not already set
+  useEffect(() => {
+    if (services.length > 0) {
+      const missingKeys = services.filter(s => inputAmounts[s.id] === undefined);
+      if (missingKeys.length > 0) {
+        setInputAmounts(prev => {
+          const next = { ...prev };
+          missingKeys.forEach(s => {
+            if (next[s.id] === undefined) next[s.id] = s.amount;
+          });
+          return next;
+        });
+      }
+    }
+  }, [services, inputAmounts, setInputAmounts]);
 
   const handleAmountChange = (serviceId: string, value: number) => {
     setInputAmounts(prev => ({
@@ -60,14 +73,14 @@ export default function CheckoutPage({ services, onProceed }: CheckoutPageProps)
 
   const handleRemoveService = (serviceId: string) => {
     setExcludedServiceIds(prev => {
-      const next = new Set(prev);
-      next.add(serviceId);
-      return next;
+      if (prev.includes(serviceId)) return prev;
+      return [...prev, serviceId];
     });
     hapticFeedback('light');
   };
 
-  const activeServices = services.filter(s => !excludedServiceIds.has(s.id));
+  const excludedSet = useMemo(() => new Set(excludedServiceIds), [excludedServiceIds]);
+  const activeServices = services.filter(s => !excludedSet.has(s.id));
   const totalAmountValue = activeServices.reduce((sum, s) => sum + (inputAmounts[s.id] || 0), 0);
 
   if (showPayInPart) {
@@ -75,7 +88,7 @@ export default function CheckoutPage({ services, onProceed }: CheckoutPageProps)
       <CheckoutPage2
         services={services}
         inputAmounts={inputAmounts}
-        excludedServiceIds={excludedServiceIds}
+        excludedServiceIds={excludedSet}
         onAmountChange={handleAmountChange}
         onRemoveService={handleRemoveService}
         onProceed={onProceed}

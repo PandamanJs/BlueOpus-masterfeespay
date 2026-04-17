@@ -105,6 +105,9 @@ interface AppState {
 
   // Checkout State
   checkoutServices: CheckoutService[];
+  studentServices: Record<string, any[]>; // Mapping of studentId -> Service[]
+  inputAmounts: Record<string, number>;    // Mapping of serviceId -> partial amount
+  excludedServiceIds: string[];            // List of service IDs to exclude from checkout
   paymentAmount: number;
 
   // Payment State
@@ -151,6 +154,9 @@ interface AppState {
   addCheckoutService: (service: CheckoutService) => void;
   removeCheckoutService: (serviceId: string) => void;
   clearCheckoutServices: () => void;
+  setStudentServices: (services: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void;
+  setInputAmounts: (amounts: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  setExcludedServiceIds: (ids: string[] | ((prev: string[]) => string[])) => void;
   setPaymentAmount: (amount: number) => void;
 
   // Payment Actions
@@ -207,6 +213,9 @@ export const useAppStore = create<AppState>()(
       selectedStudentIds: [],
       students: [],
       checkoutServices: [],
+      studentServices: {},
+      inputAmounts: {},
+      excludedServiceIds: [],
       paymentAmount: 0,
       paymentReference: null,
       receiptStudentName: '',
@@ -278,6 +287,18 @@ export const useAppStore = create<AppState>()(
 
       clearCheckoutServices: () => set({ checkoutServices: [] }),
 
+      setStudentServices: (services) => set((state) => ({ 
+        studentServices: typeof services === 'function' ? services(state.studentServices) : services 
+      })),
+
+      setInputAmounts: (amounts) => set((state) => ({ 
+        inputAmounts: typeof amounts === 'function' ? amounts(state.inputAmounts) : amounts 
+      })),
+
+      setExcludedServiceIds: (ids) => set((state) => ({ 
+        excludedServiceIds: typeof ids === 'function' ? ids(state.excludedServiceIds) : ids 
+      })),
+
       setPaymentAmount: (amount) => set({ paymentAmount: amount }),
 
       // Payment Actions
@@ -322,6 +343,9 @@ export const useAppStore = create<AppState>()(
       resetCheckoutFlow: () => set({
         selectedStudentIds: [],
         checkoutServices: [],
+        studentServices: {},
+        inputAmounts: {},
+        excludedServiceIds: [],
         paymentAmount: 0,
         paymentInProgress: false,
       }),
@@ -336,6 +360,9 @@ export const useAppStore = create<AppState>()(
         userId: '',
         selectedStudentIds: [],
         checkoutServices: [],
+        studentServices: {},
+        inputAmounts: {},
+        excludedServiceIds: [],
         paymentAmount: 0,
         receiptStudentName: '',
         receiptStudentId: '',

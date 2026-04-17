@@ -500,6 +500,15 @@ export interface FinancialSummary {
  * This enables the UI to show a unified history that includes non-invoiced items.
  */
 export async function getStudentFinancialSummary(studentId: string): Promise<any> {
+    // If it's a temporary local ID, return an empty summary instead of querying Supabase
+    if (studentId.startsWith('new-')) {
+        return {
+            student: { id: studentId, name: 'New Student', grade: '...' },
+            items: [],
+            totalBalance: 0,
+            transactions: []
+        };
+    }
     try {
         const [
             studentResp,

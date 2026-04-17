@@ -96,7 +96,7 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData, onEd
           Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
         </p>
         {(student.parentName || student.otherParentName) && (
-          <p className="text-[12px] text-[#95e36c] font-black uppercase tracking-wider mt-1">
+          <p className="text-[12px] text-[#003630] font-bold uppercase tracking-wider mt-1">
             Guardian: {student.parentName || student.otherParentName}
           </p>
         )}
@@ -135,7 +135,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const [newStudent, setNewStudent] = useState({
     name: '',
     grade: '',
-    class: '',
+    class: 'General',
     studentId: '',
   });
 
@@ -202,12 +202,10 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
         const classes = await getClassesByGrade(parentData.schoolId, grade.grade_id);
         setAvailableClasses(classes);
 
-        // If there's only one class (or no classes), auto-select it
-        if (classes.length === 1) {
+        // Auto-select class in background
+        if (classes.length > 0) {
           setNewStudent(prev => ({ ...prev, class: classes[0] }));
-        } else if (classes.length === 0) {
-          // If no specific streams exist for this grade (e.g. Baby Class), 
-          // we use 'General' as the default value to keep it simple.
+        } else {
           setNewStudent(prev => ({ ...prev, class: 'General' }));
         }
       } catch (error) {
@@ -368,10 +366,10 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     ${formErrors[field as keyof typeof formErrors]
       ? 'ring-4 ring-red-500/10 border-[1.5px] border-red-500 bg-red-50/20'
       : focusedField === field
-        ? 'ring-4 ring-[#95e36c]/20 border-[1.5px] border-[#95e36c] shadow-lg'
+        ? 'ring-4 ring-gray-100 border-[1.5px] border-[#003630] shadow-lg'
         : 'border-[1.5px] border-white shadow-sm hover:border-[#d1d5db]'
     }
-    text-[16px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] placeholder:text-gray-300 focus:outline-none
+    text-[16px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] placeholder:text-gray-300 focus:outline-none text-center
   `;
 
   const isButtonDisabled = students.length === 0 || showAddForm;
@@ -380,28 +378,25 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
       <LogoHeader showBackButton onBack={onBack} />
 
-      <div className="w-full flex justify-center">
+      <div className="w-full flex justify-center pt-6 pb-2">
         <OnboardingProgressBar currentStep={2} totalSteps={3} />
       </div>
 
-      <div className="flex-1 px-6 pt-6 pb-32 max-w-lg mx-auto w-full">
+      <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="inline-flex items-center gap-[10px] mb-[12px]">
-            <div className="w-[4px] h-[28px] bg-gradient-to-b from-[#95e36c] to-[#003630] rounded-full shadow-[0_2px_8px_rgba(149,227,108,0.3)]" />
-            <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.8px]">
-              Add Pupils to your Account
-            </h1>
+          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.8px] mb-2 leading-tight">
+            Add Pupils to your Account
+          </h1>
+          <div className="text-[14px] text-gray-500 tracking-[-0.2px] leading-relaxed">
+            <p>Add your child(ren) to your account.</p>
+            <p className="mt-1 text-gray-400">
+              If you cannot find your child, please add them manually by entering their details.
+            </p>
           </div>
-          <p className="text-[14px] text-gray-500 tracking-[-0.2px] leading-relaxed pl-[14px]">
-            Add your child(ren) to your account.
-            <br />
-            <ul>Search for your child's name</ul>
-            <ul>If you cannot find your child, please add them manually by entering their details.</ul>
-          </p>
         </motion.div>
 
 
@@ -418,14 +413,20 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
               >
                 <div
                   className={`
-                    relative bg-white rounded-[12px] overflow-hidden
-                    transition-all duration-300 border-[1px] border-[#6b7280]
-                    ${focusedField === 'search' ? 'ring-2 ring-gray-200' : ''}
-                    `}
+                    relative bg-white rounded-[16px] overflow-hidden
+                    transition-all duration-300
+                    ${focusedField === 'search'
+                      ? 'ring-4 ring-[#95e36c]/20 border-[1.5px] border-[#95e36c] shadow-lg'
+                      : 'border-[1.5px] border-[#e5e7eb] shadow-sm'
+                    }
+                  `}
                 >
                   <div className="flex items-center px-4 h-[56px]">
                     <Search
-                      className="flex-shrink-0 text-gray-400"
+                      className={`
+                        flex-shrink-0 transition-colors duration-300
+                        ${focusedField === 'search' ? 'text-[#95e36c]' : 'text-[#003630]/40'}
+                      `}
                       size={20}
                     />
                     <input
@@ -435,8 +436,8 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                       onBlur={() => setFocusedField(null)}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search for your Child"
-                      className="flex-1 px-3 bg-transparent outline-none text-[#003630] placeholder:text-gray-400"
-                      style={{ fontSize: '16px' }}
+                      className="flex-1 px-3 bg-transparent outline-none border-none focus:outline-none focus:ring-0 text-[#003630] placeholder:text-[#003630]/40"
+                      style={{ fontSize: '16px', outline: 'none', border: 'none', boxShadow: 'none' }}
                     />
                     {searchQuery && (
                       <button
@@ -471,7 +472,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                               Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? student.class : ''}
                             </span>
                             {(student.parentName || student.otherParentName) && (
-                              <span className="text-[10px] text-[#95e36c] font-black uppercase tracking-wider">
+                              <span className="text-[10px] text-[#003630] font-bold uppercase tracking-wider">
                                 Guardian: {student.parentName || student.otherParentName}
                               </span>
                             )}
@@ -484,22 +485,19 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                 )}
               </AnimatePresence>
 
-              <AnimatePresence>
-                {searchQuery.length >= 3 && (
-                  <motion.button
-                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                    animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                    onClick={() => { haptics.light(); setShowAddForm(true); window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form'); }}
-                    className="w-full h-[56px] rounded-[12px] bg-[#f3f4f6] border border-[#6b7280] flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors overflow-hidden"
-                  >
-                    <Plus size={18} className="text-[#374151]" />
-                    <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[16px] text-[#374151]">
-                      Add Student Manually
-                    </span>
-                  </motion.button>
-                )}
-              </AnimatePresence>
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ scale: 1.01, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => { haptics.light(); setShowAddForm(true); window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form'); }}
+                className="w-full h-[60px] rounded-[16px] bg-[#f9fafb] border-[1.5px] border-dashed border-[#d1d5db] flex items-center justify-center gap-2 hover:border-[#003630] transition-colors group mt-4 shadow-sm"
+              >
+                <Plus size={18} className="text-gray-400 group-hover:text-[#003630] transition-colors" />
+                <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[16px] text-gray-400 group-hover:text-[#003630] transition-colors">
+                  Add Pupil Manually
+                </span>
+              </motion.button>
             </div>
 
             {/* Students List Box */}
@@ -562,7 +560,6 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                   <div className="space-y-2.5">
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Student Full Name</label>
                     <div className="relative group">
-                      <User size={20} className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'name' ? 'text-[#95e36c]' : 'text-[#003630]/30'}`} />
                       <input
                         type="text"
                         value={newStudent.name}
@@ -603,7 +600,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                                     <span>{match.studentId}</span>
                                   </div>
                                   {(match.parentName || match.otherParentName) && (
-                                    <span className="text-[#95e36c] uppercase text-[9px] font-black tracking-wider">
+                                    <span className="text-[#003630] uppercase text-[9px] font-bold tracking-wider">
                                       Guardian: {match.parentName || match.otherParentName}
                                     </span>
                                   )}
@@ -620,7 +617,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                   </div>
 
                   {/* Grade & Class Grid */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-6">
                     <div className="space-y-2.5">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade</label>
                       <div className="relative group">
@@ -635,7 +632,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                           {isLoadingMetadata ? (
                             <option value="">Loading...</option>
                           ) : availableGrades.length === 0 ? (
-                            <option value="">⚠ No grades</option>
+                            <option value="">⚠ No grades found</option>
                           ) : (
                             <>
                               <option value="">Select Grade</option>
@@ -649,44 +646,15 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                       </div>
                     </div>
 
-                    <div className="space-y-2.5">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Class/Stream</label>
-                      <div className="relative group">
-                        <select
-                          value={newStudent.class}
-                          onFocus={() => { setFocusedField('class'); haptics.light(); }}
-                          onBlur={() => setFocusedField(null)}
-                          onChange={(e) => setNewStudent({ ...newStudent, class: e.target.value })}
-                          className={`${inputClasses('class')} appearance-none pr-12`}
-                          disabled={isLoadingClasses || (availableClasses.length === 0 && newStudent.class === 'General')}
-                        >
-                          {isLoadingClasses ? (
-                            <option value="">Loading...</option>
-                          ) : availableClasses.length === 0 ? (
-                            <option value="General">General</option>
-                          ) : (
-                            <>
-                              <option value="">Select</option>
-                              {availableClasses.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </>
-                          )}
-                        </select>
-                        <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'class' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
-                      </div>
-                    </div>
+                    {/* Class/Stream is now auto-filled in background */}
                   </div>
 
                   <button
                     onClick={handleSaveStudent}
-                    className="w-full h-14 rounded-[20px] bg-[#003630] border border-[#003630] shadow-[0_8px_24px_rgba(0,54,48,0.25)] active:scale-[0.97] transition-all flex items-center justify-center gap-3 group/btn mt-4"
+                    className="w-full h-14 rounded-[16px] bg-[#003630] border border-[#003630] shadow-[0_8px_24px_rgba(0,54,48,0.25)] active:scale-[0.97] transition-all flex items-center justify-center gap-3 group/btn mt-4"
                   >
-                    <div className="size-8 rounded-full bg-[#95e36c]/20 flex items-center justify-center transition-all group-hover/btn:bg-[#95e36c]">
-                      <Plus size={18} className="text-[#95e36c] group-hover/btn:text-[#003630]" strokeWidth={3} />
-                    </div>
                     <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-white font-bold">
-                      {editingId ? 'Update Details' : 'Add to Application'}
+                      {editingId ? 'Update Student' : 'Add Student'}
                     </span>
                   </button>
                 </div>
@@ -697,13 +665,13 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       </div>
 
       {/* Fixed Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#f0f1f3] px-[28px] pt-[20px] pb-16 shadow-[0px_-8px_24px_rgba(0,0,0,0.04)] z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#f0f1f3] px-[28px] py-8 shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">
         <div className="max-w-lg mx-auto">
           <button
             onClick={handleComplete}
             disabled={isButtonDisabled}
             className={`
-              w-full h-14 rounded-[18px] bg-[#003630] border border-[#003630] 
+              w-full h-14 rounded-[12px] bg-[#003630] border border-[#003630] 
               transition-all flex items-center justify-center gap-3 group/btn 
               ${isButtonDisabled
                 ? 'opacity-30 shadow-none grayscale pointer-events-none'
@@ -711,8 +679,8 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
               }
             `}
           >
-            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] font-bold text-white">
-              Review Balances
+            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] font-bold text-white tracking-[0.5px] -translate-y-[1px]">
+              PROCEED TO REVIEW
             </span>
           </button>
         </div>

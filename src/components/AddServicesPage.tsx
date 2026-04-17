@@ -259,7 +259,8 @@ export default function AddServicesPage({
     const [showAddFeesForm, setShowAddFeesForm] = useState(false);
     const [showOtherServicesPopup, setShowOtherServicesPopup] = useState(false);
     const [showUnifiedPopup, setShowUnifiedPopup] = useState(false);
-    const [studentServices, setStudentServices] = useState<Record<string, Service[]>>({});
+    const studentServices = useAppStore(state => state.studentServices);
+    const setStudentServices = useAppStore(state => state.setStudentServices);
 
     const [financialSummary, setFinancialSummary] = useState<any>(null);
     const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);

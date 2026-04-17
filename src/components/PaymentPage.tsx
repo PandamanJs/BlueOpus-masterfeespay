@@ -585,8 +585,12 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               </div>
               <div className="self-stretch inline-flex justify-start items-center">
                 <div className="flex-1 flex justify-start items-end">
-                  <div style={{ color: '#003129' }} className="text-[40px] font-black">
-                    K{Number(totalAmount).toFixed(1)}
+                  <div style={{ color: '#003129' }}>
+                    <RollingNumber 
+                      value={finalAmount} 
+                      currency="K" 
+                      className="text-[40px] font-black justify-start" 
+                    />
                   </div>
                 </div>
               </div>
@@ -615,7 +619,6 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
           <div className="p-4 flex flex-col gap-4">
             <div className="w-full bg-white rounded-2xl p-6 flex flex-col gap-9 shadow-lg outline outline-1 outline-offset-[-1px] outline-gray-200">
 
-              {/* Breakdown Section */}
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2 mb-2">
                   <ReceiptItemIcon />
@@ -627,6 +630,18 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                     <span>Cart Total</span>
                     <span>K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                   </div>
+
+                  {calculatedDiscountAmount > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -5 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="flex justify-between items-center text-[#EF4444] text-[12px] font-medium"
+                    >
+                      <span>Discounts (Deduction)</span>
+                      <span>-K{calculatedDiscountAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                    </motion.div>
+                  )}
+
                   <div className="flex justify-between items-center text-[#585858] text-[12px]">
                     <span>Transaction Fee</span>
                     <span>K{serviceFee.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>

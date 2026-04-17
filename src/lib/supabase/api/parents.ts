@@ -68,6 +68,64 @@ export async function getParentByPhone(phone: string): Promise<ParentWithStudent
         throw error;
     }
 }
+/**
+ * Get parent by email address.
+ */
+export async function getParentByEmail(email: string): Promise<ParentWithStudents | null> {
+    try {
+        const { data: parentRaw, error: parentError } = await supabase
+            .from('parents')
+            .select('*')
+            .eq('email', email.trim())
+            .limit(1)
+            .maybeSingle();
+
+        if (parentError) handleSupabaseError(parentError, 'getParentByEmail');
+        if (!parentRaw) return null;
+
+        const parent: Parent = {
+            id: parentRaw.parent_id,
+            name: `${parentRaw.first_name || ''} ${parentRaw.last_name || ''}`.trim(),
+            phone: parentRaw.phone_number,
+            email: parentRaw.email,
+            address: null,
+            created_at: parentRaw.created_at,
+            updated_at: null,
+        } as unknown as Parent;
+
+        const { data: studentsRaw, error: studentsError } = await supabase
+            .from('students')
+            .select(`
+                *,
+                school:schools(*),
+                student_grade(
+                    grade_id,
+                    is_active,
+                    grade:grades(grade_name)
+                )
+            `)
+            .or(`parent_id.eq.${parent.id},other_parent_id.eq.${parent.id}`);
+
+        if (studentsError) handleSupabaseError(studentsError, 'getParentByEmail - students');
+
+        const mappedStudents = (studentsRaw || []).map((s: any) => {
+            const activeGrade = s.student_grade?.find((sg: any) => sg.is_active) || s.student_grade?.[0];
+            return {
+                ...s,
+                id: s.student_id,
+                name: `${s.first_name || ''} ${s.last_name || ''}`.trim(),
+                grade: activeGrade?.grade?.grade_name || 'Unknown',
+                gradeId: activeGrade?.grade_id,
+                admissionNumber: s.admission_number,
+            };
+        });
+
+        return { ...parent, students: mappedStudents as StudentWithSchool[] };
+    } catch (error) {
+        console.error('[getParentByEmail] Error:', error);
+        throw error;
+    }
+}
 
 /**
  * Get students for a parent by phone number.

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { LogIn } from "lucide-react";
+import { LogIn, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { saveLastPhone, getLastPhone } from "../utils/preferences";
 import { hapticFeedback } from "../utils/haptics";
@@ -106,13 +106,19 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
         </p>
 
         <div className="w-full space-y-4">
-          <div className="relative">
+          <div className="relative group">
+            <div 
+              className="absolute top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-black transition-colors pointer-events-none"
+              style={{ left: '10px' }}
+            >
+              <Phone size={18} strokeWidth={2.5} />
+            </div>
             <input
               type="tel"
               value={phoneNumber}
               onChange={handlePhoneChange}
               placeholder="09x-xxx-xxxx"
-              className={`w-full h-[54px] px-5 rounded-[12px] border transition-all outline-none text-[16px] font-medium tracking-wide placeholder:text-gray-200 ${hasInputError ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-100 focus:border-black'
+              className={`w-full h-[54px] px-5 text-center rounded-[12px] border transition-all outline-none text-[16px] font-medium tracking-wide placeholder:text-gray-200 ${hasInputError ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-100 focus:border-black'
                 }`}
             />
           </div>

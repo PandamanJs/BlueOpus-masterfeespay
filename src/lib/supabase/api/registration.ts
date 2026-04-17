@@ -96,6 +96,7 @@ export interface RegisterParentResult {
     isExisting: boolean;
     existingName?: string;
     isNameMatch?: boolean;
+    matchType?: 'phone' | 'email';
 }
 
 export async function registerParent(parentData: ParentData): Promise<RegisterParentResult> {
@@ -119,7 +120,7 @@ export async function registerParent(parentData: ParentData): Promise<RegisterPa
     if (phoneMatch) {
         const existingName = `${phoneMatch.first_name} ${phoneMatch.last_name}`.trim();
         const isNameMatch = parentData.fullName.trim().toLowerCase() === existingName.toLowerCase();
-        return { parentId: phoneMatch.parent_id, isExisting: true, existingName, isNameMatch };
+        return { parentId: phoneMatch.parent_id, isExisting: true, existingName, isNameMatch, matchType: 'phone' };
     }
 
     // 2. Email-based fallback
@@ -134,7 +135,7 @@ export async function registerParent(parentData: ParentData): Promise<RegisterPa
         
         if (emailMatch) {
             const existingName = `${emailMatch.first_name} ${emailMatch.last_name}`.trim();
-            return { parentId: emailMatch.parent_id, isExisting: true, existingName };
+            return { parentId: emailMatch.parent_id, isExisting: true, existingName, matchType: 'email' };
         }
     }
 
@@ -239,3 +240,38 @@ export async function getClassesByGrade(schoolId: string, gradeId: string) {
 }
 
 
+
+/**
+ * Saves a parent's verification or dispute of a student's ledger balance.
+ */
+export async function saveLedgerVerification(params: {
+    studentId: string;
+    parentId?: string;
+    schoolId?: string;
+    status: 'confirmed' | 'disputed';
+    notes?: string;
+    metadata?: any;
+}) {
+    console.log('[Registration] Saving ledger verification:', { 
+        studentId: params.studentId, 
+        status: params.status 
+    });
+
+    const { error } = await supabase
+        .from('ledger_verifications')
+        .insert({
+            student_id: params.studentId,
+            parent_id: params.parentId, // Optional if we don't have it yet, but best to have it
+            school_id: params.schoolId,
+            status: params.status,
+            notes: params.notes,
+            meta_data: params.metadata || {}
+        });
+
+    if (error) {
+        console.error('Error saving ledger verification:', error);
+        throw error;
+    }
+
+    return { success: true };
+}
