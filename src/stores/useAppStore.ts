@@ -42,7 +42,10 @@ export type PageType =
   | "registration-form"
   | "registration-success"
   | "policies"
-  | "account-profile";
+  | "account-profile"
+  | "children-details"
+  | "audit-disputes"
+  | "student-manage";
 
 /**
  * CheckoutService Interface
@@ -168,6 +171,8 @@ interface AppState {
 
   // Reset Actions
   resetCheckoutFlow: () => void;
+  editingStudentId: string | null;
+  setEditingStudentId: (id: string | null) => void;
   resetAll: () => void;
 }
 
@@ -213,6 +218,7 @@ export const useAppStore = create<AppState>()(
       hasSeenTutorial: false,
       lastCompletedPaymentTimestamp: null,
       paymentInProgress: false,
+      editingStudentId: null,
 
       // Navigation Actions
       navigateToPage: (page, direction = 'forward') => {
@@ -295,6 +301,8 @@ export const useAppStore = create<AppState>()(
         hasSeenTutorial: true
       }),
 
+      setEditingStudentId: (id) => set({ editingStudentId: id }),
+
       // Security Actions
       markPaymentComplete: () => set({
         lastCompletedPaymentTimestamp: Date.now(),
@@ -360,11 +368,13 @@ export const useAppStore = create<AppState>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.setHasHydrated(true);
-          // Sanitize: if somehow a payment-flow page snuck in, reset to a safe page.
-          // This is a belt-and-suspenders guard in case older persisted data exists.
-          const paymentFlowPages = ['payment', 'checkout', 'processing', 'add-services', 'pay-fees', 'success', 'download-receipt', 'failed'];
-          if (paymentFlowPages.includes(state.currentPage as string)) {
-            state.currentPage = state.userPhone ? 'services' : 'search';
+          
+          // Re-route to the services dashboard on every fresh open if they have a school,
+          // otherwise start at the beginning (search).
+          if (state.selectedSchool) {
+            state.currentPage = 'services';
+          } else {
+            state.currentPage = 'search';
           }
         }
       },

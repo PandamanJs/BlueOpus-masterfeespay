@@ -32,6 +32,7 @@ export interface Student {
 }
 
 export interface ParentData {
+  id: string; // Parent's UUID from the database
   name: string;
   phone: string;
   students: Student[];
@@ -137,8 +138,9 @@ export async function getParentDataByPhone(phone: string): Promise<ParentData | 
     );
 
     return {
+      id: parentData.id,
       name: parentData.name,
-      phone: parentData.phone_number,
+      phone: (parentData as any).phone_number || parentData.phone,
       students: convertedStudents,
       primarySchool: parentData.students[0]?.school.name || '',
     };

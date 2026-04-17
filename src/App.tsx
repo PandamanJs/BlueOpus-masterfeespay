@@ -105,6 +105,21 @@ const LazyAccountProfilePage = lazyLoadWithTracking(
   { componentName: "AccountProfilePage" }
 );
 
+const LazyAuditDisputesPage = lazyLoadWithTracking(
+  () => import("./components/AuditDisputesPage"),
+  { componentName: "AuditDisputesPage" }
+);
+
+const LazyChildrenDetailsPage = lazyLoadWithTracking(
+  () => import("./components/ChildrenDetailsPage"),
+  { componentName: "ChildrenDetailsPage" }
+);
+
+const LazyStudentManagePage = lazyLoadWithTracking(
+  () => import("./components/StudentManagePage"),
+  { componentName: "StudentManagePage" }
+);
+
 const LazyTutorial = lazyLoadWithTracking(
   () => import("./components/Tutorial"),
   { componentName: "Tutorial" }
@@ -986,7 +1001,7 @@ export default function App() {
     const state = useAppStore.getState();
 
     // Anyone can access these pages
-    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies'];
+    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage'];
     if (publicPages.includes(page)) return true;
 
     // Payment flow pages require proper context
@@ -1062,7 +1077,7 @@ export default function App() {
 
     // Check if there's a hash in the URL on initial load
     const hash = window.location.hash.slice(1);
-    const validPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'pay-fees', 'add-services', 'checkout', 'payment', 'processing', 'failed', 'success', 'download-receipt', 'registration-portal', 'registration-form'];
+    const validPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'pay-fees', 'add-services', 'checkout', 'payment', 'processing', 'failed', 'success', 'download-receipt', 'registration-portal', 'registration-form', 'registration-success', 'policies', 'account-profile', 'audit-disputes', 'children-details', 'student-manage'];
 
     if (hash && validPages.includes(hash as PageType)) {
       const targetPage = hash as PageType;
@@ -1336,10 +1351,10 @@ export default function App() {
     navigateToPage("registration-form");
   };
 
-  const handleRegistrationComplete = async (parentPhone: string, parentName: string) => {
+  const handleRegistrationComplete = async (parentPhone: string, parentName: string, parentId: string) => {
     // After successful registration, automatically log in the parent
     // Set user info in the store
-    setUserInfo(parentName, parentPhone);
+    setUserInfo(parentName, parentPhone, '', parentId);
 
     // Fetch their students to populate the app
     try {
@@ -1361,8 +1376,8 @@ export default function App() {
     }
   };
 
-  const handleProceedToServices = async (name: string, phone: string) => {
-    setUserInfo(name, phone);
+  const handleProceedToServices = async (name: string, phone: string, id: string) => {
+    setUserInfo(name, phone, '', id);
     // Explicitly fetch students to ensure they are loaded when entering services
     await fetchStudents(phone);
     navigateToPage("services");
@@ -1795,7 +1810,7 @@ export default function App() {
                 sessionStorage.setItem('pendingRegistration', JSON.stringify(data));
 
                 // Set user info and school
-                setUserInfo(data.name, data.phone);
+                setUserInfo(data.name, data.phone, '', data.userId);
                 if (data.schoolName) {
                   setSelectedSchool(data.schoolName);
                 }
@@ -1822,12 +1837,26 @@ export default function App() {
                   sessionStorage.removeItem('pendingRegistration');
 
                   // Auto-login the newly registered parent
-                  handleRegistrationComplete(data.phone, data.name);
+                  handleRegistrationComplete(data.phone, data.name, data.userId);
                 } else {
                   // Fallback: just navigate to search if no data found
                   navigateToPage("search");
                 }
               }}
+            />
+          </motion.div>
+        )}
+
+        {currentPage === "audit-disputes" && (
+          <motion.div
+            key="audit-disputes"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <LazyAuditDisputesPage
+              navigateToPage={navigateToPage}
             />
           </motion.div>
         )}
@@ -1857,6 +1886,28 @@ export default function App() {
             exit="exit"
           >
             <LazyAccountProfilePage navigateToPage={navigateToPage} />
+          </motion.div>
+        )}
+        {currentPage === "children-details" && (
+          <motion.div
+            key="children-details"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <LazyChildrenDetailsPage navigateToPage={navigateToPage} />
+          </motion.div>
+        )}
+        {currentPage === "student-manage" && (
+          <motion.div
+            key="student-manage"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <LazyStudentManagePage navigateToPage={navigateToPage} />
           </motion.div>
         )}
       </AnimatePresence>

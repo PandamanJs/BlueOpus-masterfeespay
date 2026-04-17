@@ -366,7 +366,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
     try {
       // 4. Get the school's Lenco public key
       const schools = await getSchools();
-      const school = schools.find(s => s.name === selectedSchool);
+      const school = schools.find(s => s.name === selectedSchoolName);
 
       if (!school) {
         toast.error("School not found. Please try again.");
@@ -478,7 +478,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                   services: group.services,
                   userName,
                   userPhone,
-                  schoolName: selectedSchool,
+                  schoolName: selectedSchoolName,
                   schoolLencoKey: school.lenco_public_key,
                   term: firstSvc.term?.toString() || "1",
                   year: firstSvc.academicYear?.toString() || new Date().getFullYear().toString(),

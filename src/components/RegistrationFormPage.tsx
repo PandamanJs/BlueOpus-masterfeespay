@@ -12,7 +12,7 @@ import { useAppStore } from '../stores/useAppStore';
 
 interface RegistrationFormPageProps {
   onBack: () => void;
-  onComplete: (data: { name: string; phone: string; schoolName: string }) => void;
+  onComplete: (data: { name: string; phone: string; schoolName: string; userId: string }) => void;
 }
 
 type RegistrationStep = 'parent' | 'students' | 'review';
@@ -130,7 +130,8 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         onComplete({
           name: parentData.fullName,
           phone: parentData.phone,
-          schoolName: schoolName
+          schoolName: schoolName,
+          userId: resolvedParentId
         });
 
       } catch (error) {
@@ -203,7 +204,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         await linkStudentsToParent(newParent.parent_id, studentsData, parentData.schoolId);
         toast.success('Registration completed successfully!');
         const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
-        onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName });
+        onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName, userId: newParent.parent_id });
       } catch (err) {
         console.error('[Registration] Reject duplicate error:', err);
         toast.error('Registration failed. Please try again.');

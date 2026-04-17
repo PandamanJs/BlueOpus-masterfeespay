@@ -15,8 +15,10 @@ import {
   X,
   Phone,
   Check,
+  Baby,
   ShieldCheck,
 } from "lucide-react";
+import masterFeesLogo from "../assets/header_logo.png";
 
 interface ServicesPageProps {
   userName: string;
@@ -51,9 +53,9 @@ function SettingsDrawer({
   navigateToPage: (page: PageType, direction?: 'forward' | 'back') => void;
 }) {
   const items = [
-    { icon: <User size={20} />, label: "Account Profile", disabled: true },
-    { icon: <ShieldCheck size={20} />, label: "Policies & Refunds", disabled: false },
-    { icon: <Bell size={20} />, label: "Notifications", disabled: true },
+    { icon: <User size={20} />, label: "Account Profile", disabled: false },
+    { icon: <ShieldCheck size={20} />, label: "Audit & Disputes", disabled: false },
+    { icon: <Baby size={20} />, label: "Children's Details", disabled: false },
     { icon: <HelpCircle size={20} />, label: "Help & Support", disabled: true },
   ];
 
@@ -89,55 +91,44 @@ function SettingsDrawer({
               {/* Premium Gradient Top Border */}
               <div className="h-[2px] bg-gradient-to-r from-transparent via-[#95e36c]/60 to-transparent" />
 
-              {/* Header - Refined History Style */}
-              <div className="px-6 pt-6 pb-4 border-b border-[#f0f1f3] bg-white">
+              {/* Header - Luxe Style */}
+              <div className="px-8 pt-8 pb-5 bg-white/40 backdrop-blur-xl border-b border-white/40">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-[14px] bg-[#95e36c]/10 flex items-center justify-center text-[#01403c]">
-                      <Settings size={20} />
-                    </div>
-                    <div>
-                      <h2 className="text-[18px] font-black text-[#003630] tracking-[-0.5px]">Settings</h2>
-                      <p className="text-[11px] text-[#003630]/50 font-medium uppercase tracking-[0.5px]">Profile & Preferences</p>
-                    </div>
+                  <div className="flex flex-col gap-0.5">
+                    <h2 className="text-[24px] font-[900] text-[#003630] tracking-[-0.8px] font-['Space_Grotesk',sans-serif]">Settings</h2>
+                    <p className="text-[11px] text-[#003630]/40 font-bold uppercase tracking-[0.15em] ml-0.5">Profile & Preferences</p>
                   </div>
                   <button
                     onClick={onClose}
-                    className="w-8 h-8 rounded-full bg-[#f1f3f5] flex items-center justify-center text-[#6b7280] active:scale-90 transition-transform"
+                    className="w-10 h-10 rounded-full bg-white/80 border border-white flex items-center justify-center text-[#6b7280] shadow-sm active:scale-90 transition-all hover:bg-white"
                   >
-                    <X size={16} />
+                    <X size={18} />
                   </button>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar scroll-smooth">
                 {/* Profile Card - High-Fidelity Checkout Style */}
-                <div className="bg-[#003630] rounded-[32px] p-6 text-white shadow-[0px_24px_48px_-12px_rgba(0,54,48,0.45)] mb-8 relative overflow-hidden group border border-white/10 transition-all duration-500 hover:shadow-[0px_32px_64px_-16px_rgba(0,54,48,0.55)]">
-                  {/* Triple Chevron Decoration - Checkout Engine Parity */}
-                  <div className="absolute -top-4 -right-1 w-38 h-38 opacity-30 pointer-events-none group-hover:scale-110 group-hover:rotate-[-10deg] transition-all duration-1000 ease-out">
-                    <svg viewBox="0 0 100 100" fill="none" className="w-full h-full rotate-[-15deg]">
-                      <path d="M40 20L65 45L40 70" stroke="#e0f7d4" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M55 20L80 45L55 70" stroke="#95e36c" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" />
-                      <path d="M70 20L95 45L70 70" stroke="#ffffff" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" className="opacity-20" />
-                    </svg>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <h2 className="text-[28px] font-black tracking-[-1px] leading-tight text-white drop-shadow-md font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
-                      {userName || "Louis Siwale"}
-                    </h2>
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 shadow-inner group/phone hover:bg-white/15 transition-colors w-fit">
-                      <Phone size={14} className="text-[#95e36c] group-hover/phone:scale-110 transition-transform" />
-                      <p className="text-[14px] font-bold tracking-[0.2px] text-white/90 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif]">
-                        {userPhone}
-                      </p>
+                {/* Identity Header - Raw Typography */}
+                <div className="mx-2 mb-10 mt-2">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-[10px] font-[900] text-[#003630] uppercase tracking-[0.25em] opacity-40">Primary Account</p>
+                      <div className="flex items-center gap-4">
+                        <h2 className="text-[32px] font-[900] tracking-[-1.5px] leading-tight text-[#003630] font-['Space_Grotesk',sans-serif]">
+                          {userName || "Louis Siwale"}
+                        </h2>
+                        <div className="px-3 py-1.5 rounded-xl bg-[#003630]/5 text-[#003630]/60 font-black text-[13px] tracking-[0.5px] font-['Space_Grotesk',sans-serif]">
+                          {userPhone}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Menu Items - Premium List */}
                 <div className="space-y-4">
-                  <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[12px] text-gray-400 px-1 uppercase tracking-[0.1em] mb-4 opacity-80">General Settings</p>
+                  <p className="font-['Space_Grotesk',sans-serif] text-[11px] text-gray-400 px-2 font-black uppercase tracking-[0.2em] mb-4 opacity-80">General Settings</p>
                   {items.map((item, idx) => (
                     <motion.button
                       key={item.label}
@@ -153,6 +144,12 @@ function SettingsDrawer({
                         if (item.label === "Account Profile") {
                           onClose();
                           navigateToPage("account-profile");
+                        } else if (item.label === "Children's Details") {
+                          onClose();
+                          navigateToPage("children-details");
+                        } else if (item.label === "Audit & Disputes") {
+                          onClose();
+                          navigateToPage("audit-disputes");
                         } else if (item.label === "Policies & Refunds") {
                           onClose();
                           navigateToPage("policies");
@@ -160,19 +157,26 @@ function SettingsDrawer({
                           toast.info(`${item.label} coming soon!`);
                         }
                       }}
-                      className={`w-full group active:scale-[0.98] transition-all ${item.disabled ? 'opacity-40 pointer-events-none saturate-50' : ''}`}
+                      className={`w-full group active:scale-[0.98] transition-all px-1 ${item.disabled ? 'opacity-40 pointer-events-none saturate-50' : ''}`}
                     >
-                      <div className={`flex items-center justify-between p-4 bg-[#f9fafb] border border-[#f1f3f5] rounded-[24px] shadow-sm ${!item.disabled && 'group-hover:border-[#95e36c]/60 group-hover:bg-white group-hover:shadow-md'} transition-all duration-300`}>
-                        <div className="flex items-center gap-5">
-                          <div className="text-[#94a3b8] group-hover:text-[#003630] group-hover:scale-110 transition-all duration-300">
+                      <div 
+                        className={`flex items-center justify-between p-5 rounded-[24px] shadow-sm border border-white/40 transition-all duration-300 relative overflow-hidden ${!item.disabled && 'hover:shadow-lg hover:border-[#95e36c]/40'}`}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.65)",
+                          backdropFilter: "blur(16px) saturate(160%)",
+                          WebkitBackdropFilter: "blur(16px) saturate(160%)"
+                        }}
+                      >
+                        <div className="flex items-center gap-4 relative z-10">
+                          <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center text-gray-500 group-hover:text-[#003630] group-hover:scale-110 transition-all duration-500 shadow-sm border border-white/50">
                             {item.icon}
                           </div>
-                          <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630] tracking-[-0.2px]">
+                          <span className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-[#003630] tracking-[-0.3px]">
                             {item.label}
                           </span>
                         </div>
-                        <div className="w-[36px] h-[36px] rounded-full bg-white flex items-center justify-center text-[#cbd5e1] group-hover:text-[#003630] transition-all border border-transparent group-hover:border-[#95e36c]/30">
-                          <ChevronRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
+                        <div className="w-[32px] h-[32px] rounded-full bg-white/80 flex items-center justify-center text-gray-400 group-hover:text-[#003630] transition-all border border-white/50 z-10">
+                          <ChevronRight size={16} strokeWidth={3} className="group-hover:translate-x-0.5 transition-transform" />
                         </div>
                       </div>
                     </motion.button>
@@ -180,30 +184,30 @@ function SettingsDrawer({
                 </div>
               </div>
 
-              {/* Enhanced Logout Action - Dark Emerald Shine */}
-              <div className="px-8 pt-6 pb-14 bg-white border-t border-[#f3f4f6]/60 flex flex-col gap-4 shadow-[0px_-10px_30px_rgba(0,0,0,0.03)] z-50">
+              {/* Luxe Logout Action */}
+              <div className="px-8 pt-6 pb-14 bg-white/40 backdrop-blur-xl border-t border-white/40 flex flex-col gap-4 z-50">
                 <button
                   onClick={() => {
                     haptics.heavy?.();
                     onLogout();
                   }}
-                  className="relative h-[60px] w-full max-w-[340px] mx-auto rounded-[20px] overflow-hidden group active:scale-[0.96] transition-all shadow-[0px_12px_24px_-8px_rgba(0,54,48,0.3)] touch-manipulation block"
+                  className="relative h-[60px] w-full max-w-[340px] mx-auto rounded-[20px] overflow-hidden group active:scale-[0.96] transition-all shadow-[0_12px_24px_-8px_rgba(0,54,48,0.3)] block"
                 >
                   {/* Background */}
-                  <div className="absolute inset-0 bg-[#003630] group-hover:bg-[#014d45] transition-colors" />
+                  <div className="absolute inset-0 bg-[#003630] group-hover:bg-[#004d45] transition-colors" />
 
                   {/* Shine Effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
 
                   {/* Content */}
                   <div className="relative z-10 flex items-center justify-center gap-3 h-full">
-                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform">
-                      <LogOut size={18} className="text-[#95e36c]" strokeWidth={2.5} />
+                    <div className="size-8 rounded-xl bg-[#95e36c]/20 flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform">
+                      <LogOut size={18} className="text-[#95e36c]" strokeWidth={3} />
                     </div>
-                    <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[17px] text-white tracking-[-0.3px]">Sign Out</p>
+                    <p className="font-['Space_Grotesk',sans-serif] text-[18px] font-bold text-white tracking-[-0.5px]">Sign Out</p>
                   </div>
                 </button>
-                <p className="text-center text-[11px] text-[#9ca3af] font-['Inter:Medium',sans-serif] uppercase tracking-widest mt-1 opacity-60">Version 1.2.4 • Secure Session</p>
+                <p className="text-center text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-2 opacity-60">Version 1.2.4 • Secure Session</p>
               </div>
             </div>
           </motion.div>

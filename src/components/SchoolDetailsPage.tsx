@@ -10,7 +10,7 @@ import LogoHeader from "./common/LogoHeader";
 interface SchoolDetailsPageProps {
   schoolName: string;
   schoolLogo?: string | null;
-  onProceed: (userName: string, userPhone: string) => void;
+  onProceed: (userName: string, userPhone: string, userId: string) => void;
   onBack: () => void;
   onRegistration: () => void;
 }
@@ -73,7 +73,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
       }
       saveLastPhone(phoneNumber);
       hapticFeedback('medium');
-      onProceed(parentData.name, phoneNumber);
+      onProceed(parentData.name, phoneNumber, parentData.id);
     } catch (error) {
       toast.error("Validation failed");
     } finally {

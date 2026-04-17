@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Info, Loader2 } from 'lucide-react';
-import { type StudentData, getStudentFinancialSummary } from '../../lib/supabase/api/registration';
+import { type StudentData } from '../../lib/supabase/api/registration';
+import { getStudentFinancialSummary } from '../../lib/supabase/api/transactions';
 import { haptics } from '../../utils/haptics';
 import LogoHeader from '../common/LogoHeader';
 import OnboardingProgressBar from './OnboardingProgressBar';

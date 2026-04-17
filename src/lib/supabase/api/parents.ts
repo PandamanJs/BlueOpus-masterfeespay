@@ -179,6 +179,31 @@ export async function logDispute(studentId: string, parentId: string, notes: str
         throw error;
     }
 }
+
+/**
+ * Get all disputes logged by a parent.
+ */
+export async function getDisputesByParent(parentId: string): Promise<any[]> {
+    try {
+        const { data, error } = await supabase
+            .from('disputes')
+            .select(`
+                *,
+                student:students(first_name, last_name, student_id)
+            `)
+            .eq('parent_id', parentId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            handleSupabaseError(error, 'getDisputesByParent');
+            return [];
+        }
+        return data || [];
+    } catch (error) {
+        console.error('[getDisputesByParent] Error:', error);
+        return [];
+    }
+}
 /**
  * Check if the given phone number belongs to a staff member.
  * Checks both the 'profiles' table (roles) and 'parents' table (is_staff flag).
