@@ -126,19 +126,20 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   // Store instance for setting reference
   const store = useAppStore();
 
-  // Get user info from store
   const userPhone = useAppStore((state) => state.userPhone);
   const userName = useAppStore((state) => state.userName);
   const selectedSchoolId = useAppStore((state) => state.selectedSchoolId);
   const selectedSchoolLogo = useAppStore((state) => state.selectedSchoolLogo);
   const selectedSchoolName = useAppStore((state) => state.selectedSchool);
   const vatEnabled = useAppStore((state) => state.vatEnabled);
+  const students = useAppStore((state) => state.students);
+  const isStaff = useAppStore((state) => state.isStaff);
 
   // Fetch discounts from DB
   useEffect(() => {
     async function loadDiscounts() {
       if (!selectedSchoolId) return;
-      
+
       setIsFetchingDiscounts(true);
       try {
         const discounts = await getDiscountDefinitions([selectedSchoolId]);
@@ -149,36 +150,184 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
         setIsFetchingDiscounts(false);
       }
     }
-    
+
     loadDiscounts();
   }, [selectedSchoolId]);
 
-  // Calculate discount total
+  // Identify invoice vs debt portions for VAT calculation
+  const invoiceTotal = checkoutServices
+    .filter(service => {
+      // Primary check: explicit flag from our logic
+      if (service.isDebt) return false;
+
+      // Secondary check: keyword heuristic for safety
+      const desc = service.description.toLowerCase();
+      const isBalanceKeyword =
+        desc.includes('balance') ||
+        desc.includes('debt') ||
+        desc.includes('outstanding') ||
+        desc.includes('pending payment');
+
+      if (isBalanceKeyword) return false;
+
+      return true;
+    })
+    .reduce((sum, service) => sum + service.amount, 0);
+
+  /**
+   * CONTEXT-AWARE DISCOUNT LOGIC
+   * 
+   * 1. Sibling Discount: Verifies student count against the required number in description.
+   * 2. Staff Discount: Only visible/selectable if current parent is a staff member.
+   * 3. Early Bird: Restricted to full payments (no partial balances) and start-of-term.
+   * 4. Service Specificity: Applies to Tuition/School Fees unless specified for "All Services".
+   */
+
+  const getDiscountDescription = (discount: DiscountDefinition) => {
+    return (discount.name + " " + (discount.description || "")).toLowerCase();
+  };
+
+  const isDiscountEligible = (discount: DiscountDefinition) => {
+    // Basic debt-only cart rule
+    if (invoiceTotal <= 0) return false;
+
+    const fullDesc = getDiscountDescription(discount);
+
+    // SIBLING DISCOUNT CHECK
+    // Logic: Look for "2nd", "3rd", "4th" or "2 students", etc.
+    const siblingMatch = fullDesc.match(/(\d+)(st|nd|rd|th)?\s+student|sibling|(\d+)\s+students/i);
+    if (siblingMatch) {
+      const requiredCount = parseInt(siblingMatch[1] || siblingMatch[3]);
+      if (students.length < requiredCount) return false;
+    }
+
+    // STAFF DISCOUNT CHECK
+    if (fullDesc.includes("staff")) {
+      if (!isStaff) return false;
+    }
+
+    // EARLY BIRD CHECK
+    if (fullDesc.includes("early bird")) {
+      // 1. Must NOT be an outstanding balance (debt) payment
+      const hasDebtItems = checkoutServices.some(s => s.isDebt);
+      if (hasDebtItems) return false;
+
+      // 2. Must be a full current fee payment (no keywords suggesting partial payment)
+      const hasPartialKeywords = checkoutServices.some(s =>
+        s.description.toLowerCase().includes("balance") ||
+        s.description.toLowerCase().includes("partial") ||
+        s.description.toLowerCase().includes("installment")
+      );
+      if (hasPartialKeywords) return false;
+
+      // 3. Simple logic for "start of term" - check if current month is Jan, May, or Sept
+      const currentMonth = new Date().getMonth(); // 0-indexed (0=Jan, 4=May, 8=Sep)
+      const isStartOfTerm = [0, 4, 8].includes(currentMonth); // Allow only the first month of the term
+      if (!isStartOfTerm) return false;
+
+      // 4. Must be paying for a core fee category (unless it's an "all surfaces" discount handled later)
+      const isPayingCoreFee = checkoutServices.some(s => {
+        const desc = s.description.toLowerCase();
+        return desc.includes("tuition") || desc.includes("school fee") || (discount.fee_category_id && s.categoryId === discount.fee_category_id);
+      });
+
+      if (!isPayingCoreFee) return false;
+    }
+
+    return true;
+  };
+
+  const getDiscountableBase = (discount: DiscountDefinition) => {
+    // 1. PRECISE MATCHING: If the discount explicitly targets a category or item ID
+    // This is the most accurate method and avoids keyword guesswork.
+    if (discount.fee_category_id || discount.fee_item_id) {
+      return checkoutServices
+        .filter(s => {
+          if (s.isDebt) return false; // Discounts only apply to new invoices
+
+          // Match by categoryId (e.g., all Tuition items)
+          if (discount.fee_category_id && s.categoryId === discount.fee_category_id) return true;
+
+          // Match by pricing_id (e.g., specific Grade 5 Tuition item)
+          if (discount.fee_item_id && s.pricing_id === discount.fee_item_id) return true;
+
+          return false;
+        })
+        .reduce((sum, s) => sum + s.amount, 0);
+    }
+
+    const fullDesc = getDiscountDescription(discount);
+
+    // 2. HEURISTIC FALLBACKS: For legacy discounts without explicit ID links
+    // If description suggests explicitly "all services" or "everything", apply to full invoice total
+    if (fullDesc.includes("all services") || fullDesc.includes("all items") || fullDesc.includes("general")) {
+      return invoiceTotal;
+    }
+
+    // Default: Apply keyword search (Tuition, School Fees)
+    return checkoutServices
+      .filter(s => {
+        if (s.isDebt) return false;
+        const sDesc = s.description.toLowerCase();
+        return sDesc.includes("tuition") || sDesc.includes("school fee") || sDesc.includes("fees");
+      })
+      .reduce((sum, s) => sum + s.amount, 0);
+
+    return tuitionTotal;
+  };
+
+  // Calculate discount total based on eligibility and specific bases
   const calculatedDiscountAmount = selectedDiscountIds.reduce((total, id) => {
     const discount = availableDiscounts.find(d => d.discount_id === id);
-    if (!discount) return total;
-    
+    if (!discount || !isDiscountEligible(discount)) return total;
+
+    const baseAmount = getDiscountableBase(discount);
+
     if (discount.discount_type === 'percentage') {
-      return total + (totalAmount * (discount.amount / 100));
+      return total + (baseAmount * (discount.amount / 100));
     } else {
-      return total + Number(discount.amount);
+      // For fixed amounts, we cap it at the base amount
+      return total + Math.min(Number(discount.amount), baseAmount);
     }
   }, 0);
 
   const discountedTotal = Math.max(0, totalAmount - calculatedDiscountAmount);
 
-  // Calculate VAT and fees based on discounted total
+  // Calculate VAT based only on the invoice portion of the discounted total
   const vatRate = 0.16;
-  // If VAT is inclusive, we extract it from the total for display: Base = Total / (1 + Rate)
-  const vatAmount = vatEnabled ? (discountedTotal - (discountedTotal / (1 + vatRate))) : 0; 
+  let vatAmount = 0;
+
+  if (vatEnabled && totalAmount > 0) {
+    const invoiceRatio = invoiceTotal / totalAmount;
+    const discountedInvoicePortion = discountedTotal * invoiceRatio;
+    // Extract inclusive VAT: Base = Total / (1 + Rate)
+    vatAmount = discountedInvoicePortion - (discountedInvoicePortion / (1 + vatRate));
+  }
+
   const serviceFee = discountedTotal * 0.02; // 2% service fee
   const finalAmount = discountedTotal + serviceFee; // VAT is already inclusive
   const serviceCount = checkoutServices.length;
 
   const toggleDiscount = (id: string) => {
-    setSelectedDiscountIds(prev => 
-      prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
-    );
+    const discount = availableDiscounts.find(d => d.discount_id === id);
+    if (!discount) return;
+
+    const isEligible = isDiscountEligible(discount);
+
+    setSelectedDiscountIds(prev => {
+      const isAlreadySelected = prev.includes(id);
+
+      if (isAlreadySelected) {
+        return prev.filter(d => d !== id);
+      } else {
+        // Only allow selecting if eligible
+        if (!isEligible) {
+          toast.error("You are not eligible for this discount.");
+          return prev;
+        }
+        return [...prev, id];
+      }
+    });
   };
 
   // Get unique student names from checkout services
@@ -508,7 +657,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                         <path d="M3.33337 8H12.6667" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
                         <path d="M8 3.33301V12.6663" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      <span className="text-black text-[12px] font-medium">Add Discounts (0 Selected)</span>
+                      <span className="text-black text-[12px] font-medium">Add Discounts ({selectedDiscountIds.length} Selected)</span>
                     </div>
                     <ChevronDown size={14} className="text-[#445552]" />
                   </button>
@@ -544,42 +693,63 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                       ) : availableDiscounts.length === 0 ? (
                         <div className="self-stretch py-4 text-center text-zinc-400 text-xs">No discounts available</div>
                       ) : (
-                        availableDiscounts.map(discount => (
-                          <button 
-                            key={discount.discount_id}
-                            onClick={() => toggleDiscount(discount.discount_id)}
-                            className="self-stretch p-3 bg-white rounded-2xl flex flex-col justify-start items-start gap-2.5 hover:bg-zinc-50 transition-colors text-left"
-                          >
-                            <div className="self-stretch inline-flex justify-end items-start gap-2.5">
-                              <div className="flex-1 py-px inline-flex flex-col justify-start items-start gap-1">
-                                <div className="text-black text-xs font-normal font-['Inter']">{discount.name}</div>
-                                {discount.description && (
-                                  <div className="text-zinc-600 text-[8px] font-normal font-['Inter'] leading-tight">
-                                    {discount.description}
+                        availableDiscounts.map(discount => {
+                          const isEligible = isDiscountEligible(discount);
+                          const isOnlyDebt = invoiceTotal <= 0 && totalAmount > 0;
+
+                          // Hide staff discounts if user is not staff
+                          const isStaffDiscount = getDiscountDescription(discount).includes("staff");
+                          if (isStaffDiscount && !isStaff) return null;
+
+                          const isSelectable = isEligible && !isOnlyDebt;
+                          const isSelected = selectedDiscountIds.includes(discount.discount_id);
+
+                          return (
+                            <button
+                              key={discount.discount_id}
+                              disabled={!isSelectable && !isSelected}
+                              onClick={() => toggleDiscount(discount.discount_id)}
+                              className={`self-stretch p-3 bg-white rounded-2xl flex flex-col justify-start items-start gap-2.5 transition-all text-left ${!isSelectable && !isSelected ? 'opacity-40 grayscale cursor-not-allowed' : 'hover:bg-zinc-50'
+                                }`}
+                            >
+                              <div className="self-stretch inline-flex justify-end items-start gap-2.5">
+                                <div className="flex-1 py-px inline-flex flex-col justify-start items-start gap-1">
+                                  <div className="text-black text-xs font-normal font-['Inter']">{discount.name}</div>
+                                  <div className="flex items-center gap-2">
+                                    {discount.description && (
+                                      <div className="text-zinc-600 text-[8px] font-normal font-['Inter'] leading-tight">
+                                        {discount.description}
+                                      </div>
+                                    )}
+                                    {!isEligible && !isOnlyDebt && (
+                                      <span className="text-[8px] text-red-500 font-bold uppercase tracking-wider bg-red-50 px-1 rounded">Not Eligible</span>
+                                    )}
+                                    {isOnlyDebt && (
+                                      <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider bg-zinc-100 px-1 rounded"> unavailable</span>
+                                    )}
                                   </div>
-                                )}
-                              </div>
-                              <div className="flex justify-end items-center gap-4">
-                                <div className="text-black text-xs font-normal font-['Inter']">
-                                  {discount.discount_type === 'percentage' ? `-${discount.amount}%` : `-K${discount.amount}`} Off
                                 </div>
-                                <div className="w-6 h-6 flex justify-center items-center">
-                                  {selectedDiscountIds.includes(discount.discount_id) ? (
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                      <rect width="24" height="24" rx="12" fill="#003129"/>
-                                      <path d="M17 9.5L10.5 16L7.5 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  ) : (
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                      <rect width="16" height="16" rx="6" fill="white"/>
-                                      <rect x="0.5" y="0.5" width="15" height="15" rx="5.5" stroke="#C1BEBE"/>
-                                    </svg>
-                                  )}
+                                <div className="flex justify-end items-center gap-4">
+                                  <div className="text-black text-xs font-normal font-['Inter']">
+                                    {discount.discount_type === 'percentage' ? `-${discount.amount}%` : `-K${discount.amount}`} Off
+                                  </div>
+                                  <div className="w-6 h-6 flex justify-center items-center">
+                                    {isSelected ? (
+                                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <rect width="20" height="20" rx="6" fill="#95E36C" />
+                                        <path d="M17 9.5L10.5 16L7.5 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    ) : (
+                                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <rect x="0.5" y="0.5" width="23" height="23" rx="6" stroke="#E5E7EB" strokeWidth="1.5" fill="white" />
+                                      </svg>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </button>
-                        ))
+                            </button>
+                          );
+                        })
                       )}
                     </div>
                   </div>

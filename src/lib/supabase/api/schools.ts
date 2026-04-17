@@ -47,10 +47,18 @@ export async function getSchools(): Promise<School[]> {
     return (cachedSchools as School[]) || [];
 }
 
+const sessionSchoolCache = new Map<string, { data: School; timestamp: number }>();
+
 /**
  * Fetch a specific school by name.
  */
 export async function getSchoolByName(name: string): Promise<School | null> {
+    const cached = sessionSchoolCache.get(name);
+    // Cache remains valid for 5 minutes of session lifetime to ensure instant popups
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+        return cached.data;
+    }
+
     const isOnline = navigator.onLine;
 
     if (isOnline) {
@@ -156,14 +164,15 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                 const fetchedOtherServices = items
                     .filter(i => {
                         const cat = (i.category as any)?.category;
-                        return cat === 'other' || !['tuition', 'transport', 'canteen', 'boarding'].includes(cat);
+                        return cat === 'other' || !['tuition', 'transport', 'canteen'].includes(cat);
                     })
                     .map(i => ({
                         id: i.id,
                         name: i.name,
                         description: i.billing_cycle || '',
                         price: Number(i.amount),
-                        category: (i.category as any)?.category || 'other'
+                        category: (i.category as any)?.category || 'other',
+                        category_name: (i.category as any)?.name || 'Other'
                     }));
 
                 // Build category names map
@@ -194,6 +203,7 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                     category_names,
                     vat_enabled: data.vat || false,
                 };
+                sessionSchoolCache.set(name, { data: school, timestamp: Date.now() });
                 return school;
             } // Close the 'else' block
         } catch (e) {
@@ -204,6 +214,7 @@ export async function getSchoolByName(name: string): Promise<School | null> {
     // Offline fallback
     const cachedSchools = await offlineDB.getAll('schools');
     const school = (cachedSchools as School[]).find(s => s.name === name);
+    if (school) sessionSchoolCache.set(name, { data: school, timestamp: Date.now() });
     return school || null;
 }
 

@@ -179,3 +179,41 @@ export async function logDispute(studentId: string, parentId: string, notes: str
         throw error;
     }
 }
+/**
+ * Check if the given phone number belongs to a staff member.
+ * Checks both the 'profiles' table (roles) and 'parents' table (is_staff flag).
+ */
+export async function checkIfStaff(phone: string): Promise<boolean> {
+    try {
+        const cleanPhone = phone.replace(/\D/g, '');
+        
+        // 1. Check profiles table for privileged roles
+        const profileQuery = phoneOrFilter('phone', cleanPhone);
+        const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .or(profileQuery)
+            .eq('status', 'verified');
+
+        if (!profileError && profileData?.some(p => p.role === 'staff' || p.role === 'admin' || p.role === 'manager')) {
+            return true;
+        }
+
+        // 2. Check parents table for is_staff boolean flag
+        const parentQuery = phoneOrFilter('phone_number', cleanPhone);
+        const { data: parentData, error: parentError } = await supabase
+            .from('parents')
+            .select('is_staff')
+            .or(parentQuery)
+            .maybeSingle();
+
+        if (!parentError && parentData?.is_staff) {
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('[checkIfStaff] Catch Error:', error);
+        return false;
+    }
+}

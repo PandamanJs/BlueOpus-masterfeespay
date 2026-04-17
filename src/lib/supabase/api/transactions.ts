@@ -479,6 +479,18 @@ export async function getStudentsUnpaidInvoicesCount(studentIds: string[]): Prom
     } catch { return Object.fromEntries(studentIds.map(id => [id, 0])); }
 }
 
+export interface FinancialSummary {
+    student: {
+        id: string;
+        name: string;
+        admission_number?: string;
+        grade?: string;
+    };
+    items: any[];
+    totalBalance: number;
+    transactions: any[];
+}
+
 /**
  * Get a complete financial summary for a student, including:
  * 1. Base Tuition (expected and paid)
@@ -527,7 +539,6 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
 
         const items: any[] = [];
 
-        // Add Tuition Item
         items.push({
             type: 'tuition',
             category: 'tuition',
@@ -536,7 +547,9 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
             collected: 0,
             invoiced: 0,
             balance: tuitionPrice,
-            status: 'unpaid'
+            status: 'unpaid',
+            term: 1, // Fallback for estimated items
+            academic_year: new Date().getFullYear()
         });
 
         // 2. Add Subscription Items from Enrollments
@@ -580,6 +593,8 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
                 invoiced: total,
                 balance: total,
                 status: inv.status,
+                term: inv.term,
+                academic_year: inv.year || inv.academic_year,
                 initiated_at: (inv as any).created_at || (inv as any).issued_at || (inv as any).date_issued || null,
                 transactions: [] // We'll fill this specifically
             };

@@ -16,6 +16,7 @@ import DynamicIsland, { useDynamicIsland } from "./components/DynamicIsland";
 import { getSchools } from "./lib/supabase/api/schools";
 import { hapticFeedback } from "./utils/haptics";
 import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent } from "./lib/supabase/api/transactions";
+import { checkIfStaff } from "./lib/supabase/api/parents";
 
 import { UpdateNotification } from "./components/UpdateNotification";
 import { useOfflineManager } from "./hooks/useOfflineManager";
@@ -890,13 +891,17 @@ export default function App() {
   const lastCompletedPaymentTimestamp = useAppStore((state) => state.lastCompletedPaymentTimestamp);
   const paymentInProgress = useAppStore((state) => state.paymentInProgress);
   const hasHydrated = useAppStore((state) => state.hasHydrated);
+  const students = useAppStore((state) => state.students);
+  const isStaff = useAppStore((state) => state.isStaff);
 
   // iOS Features Demo state
   const [showIOSDemo, setShowIOSDemo] = useState(false);
 
   // Students data from Supabase
-  const [students, setStudents] = useState<any[]>([]);
-  const [studentsLoading, setStudentsLoading] = useState(false);
+  const studentsLoading = useAppStore((state) => state.studentsLoading || false); // Added if not exist, else keep as is
+  const setStudents = useAppStore((state) => state.setStudents);
+  const setIsStaff = useAppStore((state) => state.setIsStaff);
+  const [studentsLoadingLocal, setStudentsLoading] = useState(false);
   const [studentsError, setStudentsError] = useState<string | null>(null);
 
   // Dynamic Island for payment status
@@ -936,20 +941,29 @@ export default function App() {
   const fetchStudents = async (phone: string) => {
     if (!phone) {
       setStudents([]);
+      setIsStaff(false);
       return;
     }
-    console.log('[App] Fetching students for phone:', phone);
+    console.log('[App] Fetching students and staff status for phone:', phone);
     setStudentsLoading(true);
     setStudentsError(null);
     try {
-      const studentData = await getStudentsByPhone(phone);
-      console.log('[App] Successfully fetched students:', studentData.length);
+      // Parallel fetch for students and staff status
+      const [studentData, staffStatus] = await Promise.all([
+        getStudentsByPhone(phone),
+        checkIfStaff(phone)
+      ]);
+      
+      console.log('[App] Successfully fetched:', { students: studentData.length, isStaff: staffStatus });
+      
       setStudents(studentData);
+      setIsStaff(staffStatus);
+      
       return studentData;
     } catch (error) {
-      console.error('[App] Error fetching students:', error);
-      setStudentsError('Failed to load student data. Please try again.');
-      toast.error('Failed to load student data');
+      console.error('[App] Error fetching user data:', error);
+      setStudentsError('Failed to load user data. Please try again.');
+      toast.error('Failed to load user data');
       return [];
     } finally {
       setStudentsLoading(false);
@@ -1235,7 +1249,8 @@ export default function App() {
           term: inv.term,
           academicYear: inv.academic_year,
           grade: student.grade,
-          schoolId: student.schoolId
+          schoolId: student.schoolId,
+          isDebt: true
         }));
         balanceServices = [...balanceServices, ...servicesValue];
 
@@ -1267,7 +1282,8 @@ export default function App() {
               term: tx.meta_data?.['term'],
               academicYear: tx.meta_data?.['year'] || tx.meta_data?.['academicYear'],
               grade: student.grade,
-              schoolId: student.schoolId
+              schoolId: student.schoolId,
+              isDebt: true
             };
           });
 
@@ -1286,7 +1302,8 @@ export default function App() {
           term: undefined,
           academicYear: undefined,
           grade: student.grade,
-          schoolId: student.schoolId
+          schoolId: student.schoolId,
+          isDebt: true
         });
       }
     }
@@ -1620,6 +1637,7 @@ export default function App() {
         {currentPage === "add-services" && (
           <motion.div
             key="add-services"
+            className="absolute inset-0 w-full h-full"
             variants={pageVariants}
             initial="initial"
             animate="animate"

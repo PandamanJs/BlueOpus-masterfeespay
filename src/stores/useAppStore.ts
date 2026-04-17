@@ -63,6 +63,8 @@ export interface CheckoutService {
   academicYear?: number; // Optional: The academic year this service is for
   grade?: string;       // Optional: The grade of the student
   schoolId?: string;    // Optional: The UUID of the school
+  isDebt?: boolean;     // Optional: Whether this item is considered debt (VAT excluded)
+  categoryId?: string;  // Optional: The UUID of the fee category (used for category-specific discounts)
 }
 
 
@@ -92,9 +94,11 @@ interface AppState {
   userPhone: string;
   userEmail: string;
   userId: string;
+  isStaff: boolean; // Flag to track if the current parent is a school staff member
 
   // Student Selection State
   selectedStudentIds: string[];
+  students: any[]; // The list of students for the current user
 
   // Checkout State
   checkoutServices: CheckoutService[];
@@ -130,6 +134,8 @@ interface AppState {
   setUserEmail: (email: string) => void;
   setUserId: (id: string) => void;
   setUserInfo: (name: string, phone: string, email?: string, id?: string) => void;
+  setIsStaff: (val: boolean) => void;
+  setStudents: (students: any[]) => void;
 
   // Student Selection Actions
   setSelectedStudentIds: (ids: string[]) => void;
@@ -192,7 +198,9 @@ export const useAppStore = create<AppState>()(
       userPhone: '',
       userEmail: '',
       userId: '',
+      isStaff: false,
       selectedStudentIds: [],
+      students: [],
       checkoutServices: [],
       paymentAmount: 0,
       paymentReference: null,
@@ -233,6 +241,10 @@ export const useAppStore = create<AppState>()(
       setUserId: (id) => set({ userId: id }),
 
       setUserInfo: (name, phone, email = '', id = '') => set({ userName: name, userPhone: phone, userEmail: email, userId: id }),
+
+      setIsStaff: (val) => set({ isStaff: val }),
+
+      setStudents: (students) => set({ students }),
 
       // Student Selection Actions
       setSelectedStudentIds: (ids) => set({ selectedStudentIds: ids }),

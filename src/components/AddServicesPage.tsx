@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, Fragment } from "react";
 import { getStudentsByPhone, getInstitutionType } from "../data/students";
 import type { Student } from "../data/students";
 import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "../lib/supabase/api/transactions";
@@ -8,7 +8,7 @@ import type { PaymentHistoryRecord } from "../lib/supabase/types";
 
 
 import { haptics } from "../utils/haptics";
-import { Trash2, AlertCircle, AlertTriangle } from "lucide-react";
+import { Trash2, AlertCircle, AlertTriangle, Shirt, Bus, Users, Home, Package, BookOpen, Coffee, Dumbbell, Tag, Layers, MapPin, Plane } from "lucide-react";
 import { toast } from "sonner";
 import LogoHeader from "./common/LogoHeader";
 import { getSchoolByName } from "../lib/supabase/api/schools";
@@ -35,6 +35,7 @@ interface Service {
     grade?: string;
     pricing_id?: string;
     invoice_id?: string; // Add this too for consistency
+    categoryId?: string; // Link to fee category ID
 }
 
 
@@ -86,7 +87,7 @@ function StudentInfo({ student, serviceTotal, onClearBalances }: { student: Stud
 
                 <div className="flex flex-col items-end gap-1">
                     <p className="font-['Inter:Bold',sans-serif] text-[19px] text-[#003630] leading-none">
-                        ZMW {serviceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ZMW {serviceTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </p>
                     <span className="text-[9px] text-[#9ca3af] font-black uppercase tracking-[1px] leading-none">Adding to cart</span>
                 </div>
@@ -109,7 +110,7 @@ function StudentInfo({ student, serviceTotal, onClearBalances }: { student: Stud
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="font-['Inter:Bold',sans-serif] text-[15px] text-red-600">
-                            ZMW {student.balances.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ZMW {student.balances.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-red-400 transition-transform group-hover:translate-x-0.5">
                             <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -194,7 +195,7 @@ function ServiceTable({ services, onRemoveItem }: { services: Service[]; onRemov
                             </div>
                             <div className="box-border content-stretch flex gap-[10px] items-center justify-end px-[10px] py-[4px] relative shrink-0 w-[100px]">
                                 <div className="flex flex-col font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[12px] text-black text-nowrap">
-                                    <p className="leading-[1.4] whitespace-pre">K{service.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="leading-[1.4] whitespace-pre">K{service.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
                                 </div>
                             </div>
                             <div
@@ -306,7 +307,8 @@ export default function AddServicesPage({
             'fees': [] as Service[],
             'transport': [] as Service[],
             'cafeteria': [] as Service[],
-            'uniforms': [] as Service[]
+            'uniforms': [] as Service[],
+            'boarding': [] as Service[]
         };
 
         if (!activeStudentId) return summary;
@@ -319,6 +321,7 @@ export default function AddServicesPage({
             const explicitCat = (item.category || item.service_category || '').toLowerCase();
             if (explicitCat === 'transport' || explicitCat === 'bus') return 'transport';
             if (explicitCat === 'cafeteria' || explicitCat === 'canteen' || explicitCat === 'meal' || explicitCat === 'lunch') return 'cafeteria';
+            if (explicitCat === 'boarding' || explicitCat === 'hostel' || explicitCat === 'bed') return 'boarding';
             if (explicitCat === 'uniforms' || explicitCat === 'uniform') return 'uniforms';
 
             // Priority 2: Scan nested services (for invoices/aggregate items)
@@ -328,11 +331,13 @@ export default function AddServicesPage({
                     const sCat = (svc.category || svc.service_category || '').toLowerCase();
                     if (sCat === 'transport' || sCat === 'bus') return 'transport';
                     if (sCat === 'cafeteria' || sCat === 'canteen' || sCat === 'meal' || sCat === 'lunch') return 'cafeteria';
+                    if (sCat === 'boarding' || sCat === 'hostel' || sCat === 'bed') return 'boarding';
                     if (sCat === 'uniforms' || sCat === 'uniform') return 'uniforms';
 
                     const sName = (svc.name || svc.description || '').toLowerCase();
                     if (sName.includes('transport') || sName.includes('bus') || sName.includes('shuttle') || sName.includes('route') || sName.includes('zone') || sName.includes('fare')) return 'transport';
                     if (sName.includes('canteen') || sName.includes('lunch') || sName.includes('cafeteria') || sName.includes('meal') || sName.includes('food')) return 'cafeteria';
+                    if (sName.includes('boarding') || sName.includes('hostel') || sName.includes('room') || sName.includes('bed')) return 'boarding';
                     if (sName.includes('uniform') || sName.includes('crest') || sName.includes('blazer') || sName.includes('tracksuit') || sName.includes('tie') || sName.includes('badge')) return 'uniforms';
                 }
             }
@@ -345,6 +350,7 @@ export default function AddServicesPage({
 
             if (desc.includes('transport') || desc.includes('bus') || desc.includes('shuttle') || desc.includes('route') || desc.includes('zone') || desc.includes('fare') || ref.startsWith('tr-')) return 'transport';
             if (desc.includes('canteen') || desc.includes('lunch') || desc.includes('cafeteria') || desc.includes('meal') || desc.includes('food') || ref.startsWith('cn-')) return 'cafeteria';
+            if (desc.includes('boarding') || desc.includes('hostel') || desc.includes('room') || desc.includes('bed') || ref.startsWith('bd-')) return 'boarding';
             if (desc.includes('uniform') || desc.includes('crest') || desc.includes('blazer') || desc.includes('tracksuit') || desc.includes('tie') || desc.includes('badge')) return 'uniforms';
             return 'fees';
         };
@@ -490,7 +496,8 @@ export default function AddServicesPage({
                     invoiceNo: tx.reference,
                     invoice_id: tx.id || undefined,  // actual UUID for DB linkage
                     term: term,
-                    academicYear: year
+                    academicYear: year,
+                    isDebt: true
                 });
             }
         });
@@ -518,7 +525,8 @@ export default function AddServicesPage({
                     invoiceNo: inv.reference,
                     invoice_id: inv.id || undefined,  // actual UUID for DB linkage
                     term: term,
-                    academicYear: year
+                    academicYear: year,
+                    isDebt: true
                 });
             }
         });
@@ -538,7 +546,8 @@ export default function AddServicesPage({
                     description: `${studentName} - ${gradeContext}Outstanding Fees`,
                     amount: activeStudent.balances,
                     invoiceNo: `BAL-${activeStudent.admissionNumber || activeStudentId.slice(0, 4)}`,
-                    academicYear: new Date().getFullYear()
+                    academicYear: new Date().getFullYear(),
+                    isDebt: true
                 });
             }
         }
@@ -642,7 +651,8 @@ export default function AddServicesPage({
                         amount: isTx ? (relevantDebt as any).total_amount : (relevantDebt as any).balance_remaining,
                         invoiceNo: relevantDebt.reference,
                         term: isTx ? (metadata?.term || (relevantDebt as any).term) : (relevantDebt as any).term,
-                        academicYear: isTx ? (metadata?.academicYear || (relevantDebt as any).academicYear) : (relevantDebt as any).academic_year
+                        academicYear: isTx ? (metadata?.academicYear || (relevantDebt as any).academicYear) : (relevantDebt as any).academic_year,
+                        isDebt: true
                     };
                 }
 
@@ -751,6 +761,8 @@ export default function AddServicesPage({
                     studentId: studentId,
                     term: s.term,
                     academicYear: s.academicYear,
+                    isDebt: s.isDebt,
+                    categoryId: s.categoryId,
                     grade: s.grade || student?.grade
                 });
             });
@@ -839,7 +851,7 @@ export default function AddServicesPage({
                                 <div className="flex items-center justify-between px-2 py-2">
                                     <p className="font-['Inter',sans-serif] font-black text-[20px] text-bold tracking-tight">Subtotal</p>
                                     <p className="font-['Inter',sans-serif] font-black text-[20px] text-bold tracking-tight">
-                                        K{(studentServices[activeStudentId] || []).reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        K{(studentServices[activeStudentId] || []).reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                                     </p>
                                 </div>
                                 <div className="w-full">
@@ -877,7 +889,7 @@ export default function AddServicesPage({
                                 </div>
                                 <div className="flex flex-col">
                                     <p className="font-['Inter',sans-serif] font-bold text-[18px] text-black leading-none tracking-tight">
-                                        K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                        K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                                     </p>
                                     <p className="font-['Inter',sans-serif] text-[10px] text-[#a1a1a1] font-light uppercase tracking-[0.8px] mt-1">GRAND TOTAL</p>
                                 </div>
@@ -1021,47 +1033,68 @@ function UnifiedServicesPopup({
 
     // Dynamically build tabs based on non-empty services in schoolData
     const tabs = useMemo(() => {
-        const t: { id: string; label: string; icon?: boolean; count?: number }[] = [
-            {
-                id: 'fees',
-                label: schoolData?.category_names?.tuition || 'School Fees',
-                icon: true,
-                count: stagedItems.filter(s => s.id.includes('fee') || invoices.some(inv => inv.id === s.id)).length
-            }
-        ];
+        const simplify = (name: string) => {
+            if (!name) return "";
+            const lower = name.toLowerCase();
+            if (lower.includes('tuition')) return 'School Fees';
+            if (lower.includes('transport')) return 'Transport';
+            if (lower.includes('cafeteria') || lower.includes('meals')) return 'Cafeteria';
+            if (lower.includes('uniform')) return 'Uniforms';
+            if (lower.includes('trip') || lower.includes('tour')) return 'Tours';
+            if (lower.includes('sport') || lower.includes('club')) return 'Clubs';
+            if (lower.includes('boarding')) return 'Boarding';
+            return name;
+        };
 
-        if (schoolData?.bus_routes && schoolData.bus_routes.length > 0) {
-            t.push({
-                id: 'transport',
-                label: schoolData?.category_names?.transport || 'Transport',
-                count: stagedItems.filter(s => s.id.includes('route')).length
-            });
-        }
-        if (schoolData?.canteen_plans && schoolData.canteen_plans.length > 0) {
-            t.push({
-                id: 'cafeteria',
-                label: schoolData?.category_names?.canteen || 'Cafeteria',
-                count: stagedItems.filter(s => s.id.includes('canteen')).length
-            });
-        }
+        const t: { id: string; label: string; count?: number }[] = [];
 
-        // Check for Uniforms specifically or a general 'Others'
-        const hasUniforms = schoolData?.other_services?.some(s => s.category?.toLowerCase() === 'uniforms');
-        const otherCount = stagedItems.filter(s => s.id.includes('other')).length;
+        // 1. School Fees
+        t.push({
+            id: 'fees',
+            label: simplify(schoolData?.category_names?.tuition || 'School Fees'),
+            count: stagedItems.filter(s => s.id.includes('fee')).length
+        });
 
-        if (hasUniforms) {
-            t.push({
-                id: 'uniforms',
-                label: schoolData?.category_names?.uniforms || schoolData?.category_names?.other || 'Uniforms',
-                count: otherCount
-            });
-        } else if (schoolData?.other_services && schoolData.other_services.length > 0) {
-            t.push({
-                id: 'uniforms',
-                label: 'Others',
-                count: otherCount
-            });
-        }
+        // 2. Transport
+        t.push({
+            id: 'transport',
+            label: simplify(schoolData?.category_names?.transport || 'Transport'),
+            count: stagedItems.filter(s => s.id.includes('route')).length
+        });
+
+        // 3. Cafeteria
+        t.push({
+            id: 'cafeteria',
+            label: simplify(schoolData?.category_names?.canteen || 'Cafeteria'),
+            count: stagedItems.filter(s => s.id.includes('canteen')).length
+        });
+
+        // 4. Uniforms
+        t.push({
+            id: 'uniforms',
+            label: 'Uniforms',
+            count: stagedItems.filter(s => s.category?.toLowerCase() === 'uniform').length
+        });
+
+        // 5. Tours/Trips
+        t.push({
+            id: 'trips',
+            label: 'Tours',
+            count: stagedItems.filter(s => s.category?.toLowerCase() === 'trips').length
+        });
+
+        // 6. Clubs/Sports
+        t.push({
+            id: 'sports',
+            label: 'Clubs',
+            count: stagedItems.filter(s => s.category?.toLowerCase() === 'sports').length
+        });
+
+        // 7. Boarding
+        t.push({
+            id: 'boarding',
+            label: 'Boarding',
+        });
 
         return t;
     }, [schoolData, stagedItems, invoices]);
@@ -1089,16 +1122,30 @@ function UnifiedServicesPopup({
     // Cafeteria specific state
     const [selectedCanteenPlanId, setSelectedCanteenPlanId] = useState<string>("");
     const [isCanteenDropdownOpen, setIsCanteenDropdownOpen] = useState(false);
+    const [isOtherDropdownOpen, setIsOtherDropdownOpen] = useState(false);
+    const [isOthersMenuOpen, setIsOthersMenuOpen] = useState(false);
+    const [selectedOtherCategory, setSelectedOtherCategory] = useState<string>("All");
+    const [otherQuantities, setOtherQuantities] = useState<Record<string, number>>({});
 
+    const extraCategories = useMemo(() => {
+        if (!schoolData?.other_services) return ['All'];
+        const cats = new Set(schoolData.other_services.map(s => s.category).filter(Boolean));
+        return ['All', ...Array.from(cats)];
+    }, [schoolData]);
     const selectedCanteenPlan = schoolData?.canteen_plans?.find(p => p.id === selectedCanteenPlanId);
 
     // Subscription Frequency state
+
+    // Boarding specific state
+    const [selectedBoardingRoomId, setSelectedBoardingRoomId] = useState<string>("");
+    const [isBoardingDropdownOpen, setIsBoardingDropdownOpen] = useState(false);
+    const selectedBoardingRoom = schoolData?.boarding_rooms?.find(r => r.id === selectedBoardingRoomId);
+    const [boardingFrequency, setBoardingFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
     const [transportFrequency, setTransportFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
     const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
 
     // Uniforms/Other state
     const [selectedOtherId, setSelectedOtherId] = useState<string>("");
-    const [isOtherDropdownOpen, setIsOtherDropdownOpen] = useState(false);
     const selectedOther = schoolData?.other_services?.find(s => s.id === selectedOtherId);
 
     // Auto-select the student's grade when data loads or changes
@@ -1203,24 +1250,24 @@ function UnifiedServicesPopup({
     return (
         <>
             <motion.div
-                className="fixed inset-0 z-[9999] bg-white flex flex-col overflow-hidden"
+                className="absolute inset-0 w-full h-full z-[9999] bg-white flex flex-col overflow-hidden rounded-t-[40px] shadow-[0px_-20px_50px_rgba(0,0,0,0.1)]"
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 32, stiffness: 350, mass: 0.8 }}
             >
-                {/* Scrollable Content Container */}
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    {/* Header Section */}
-                    <div className="relative px-6 pt-8 pb-4 bg-white">
+                {/* Single Scrollable container for the entire page to let browser handle scroll native mapping */}
+                <div className="flex-1 min-h-0 overflow-y-auto bg-[#fdfdfd] scroll-smooth touch-pan-y relative pb-2 rounded-t-[40px]">
+
+                    {/* Sticky Header Section */}
+                    <div
+                        className="sticky top-0 px-6 pt-8 pb-4 bg-white border-b border-gray-100/60 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]"
+                        style={{ zIndex: 99999, isolation: 'isolate' }}
+                    >
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center size-8 rounded-full border-[1.5px] border-black">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M12 5v14M5 12h14" />
-                                    </svg>
-                                </div>
-                                <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] font-bold text-black tracking-tight">
+
+                                <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] font-bold text-black tracking-tight">
                                     Add Products/Services
                                 </h2>
                             </div>
@@ -1232,61 +1279,80 @@ function UnifiedServicesPopup({
                                     haptics.selection();
                                     onClose();
                                 }}
-                                className="w-[44px] h-[44px] flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-700 active:scale-90 transition-all z-50 pointer-events-auto cursor-pointer"
-                                style={{ boxShadow: '0px 4px 12px rgba(0,0,0,0.12), 0px 2px 4px rgba(0,0,0,0.08)' }}
+                                className="w-[28px] h-[28px] flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-700 active:scale-90 transition-all pointer-events-auto cursor-pointer"
+                                style={{ boxShadow: '0px 4px 12px rgba(0,0,0,0.12), 0px 2px 4px rgba(0,0,0,0.08)', zIndex: 999999 }}
                             >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M18 6 6 18M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
 
-                        {/* Tab Selector */}
-                        <div
-                            className="bg-[#f5f7f9] p-2 h-[68px] rounded-full flex items-center justify-between border-[1.5px] border-gray-300 transform-gpu overflow-visible relative"
-                            style={{ boxShadow: 'inset 0px 8px 16px rgba(0,0,0,0.1), inset 0px 2px 4px rgba(0,0,0,0.06)' }}
-                        >
-                            {tabs.map((tab) => {
-                                const isActive = activeTab === tab.id;
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => {
-                                            haptics.selection();
-                                            setActiveTab(tab.id);
-                                        }}
-                                        className={`relative flex items-center justify-center h-full flex-1 transition-all duration-300 cursor-pointer z-30 pointer-events-auto ${isActive ? 'text-[#003630]' : 'text-gray-400 hover:text-[#003630]'}`}
-                                    >
-                                        <div
-                                            className={`flex items-center justify-center gap-3 w-full transition-all duration-300 rounded-full transform-gpu z-20 ${isActive ? 'h-[52px]' : 'h-full'}`}
+                        {/* Multi-Row Tab Selector */}
+                        <div className="self-stretch p-2 bg-[#FAFAFA] rounded-[20px] outline outline-[0.50px] outline-offset-[-0.50px] outline-[#E6E6E6] flex flex-col justify-start items-start gap-2 overflow-hidden"
+                            style={{ boxShadow: 'inset 0px 4px 12px rgba(0,0,0,0.08), inset 0px 8px 24px rgba(0,0,0,0.05), inset 0px 1px 4px rgba(0,0,0,0.1)' }}>
+                            {/* Row 1 */}
+                            <div className="w-full h-12 relative flex">
+                                {tabs.slice(0, 4).map((tab, idx) => {
+                                    const isActive = activeTab === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => {
+                                                haptics.selection();
+                                                setActiveTab(tab.id);
+                                            }}
+                                            className={`flex-1 flex justify-center items-center h-full relative z-10`}
                                         >
                                             {isActive && (
                                                 <motion.div
                                                     layoutId="activeTabPill"
-                                                    className="absolute inset-0 bg-white rounded-full border border-gray-200/60 shadow-[0px_4px_12px_rgba(0,0,0,0.15),0px_8px_16px_rgba(0,0,0,0.1)]"
+                                                    className="absolute inset-0 bg-white rounded-[12px] shadow-[0px_8px_24px_rgba(0,0,0,0.12),0px_2px_4px_rgba(0,0,0,0.08)] border-[1.5px] border-[#95e36c]"
                                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                                 />
                                             )}
-                                            <div className="flex items-center gap-3 pointer-events-none z-10">
-                                                {(tab.count !== undefined && tab.count > 0) && (
-                                                    <div className={`size-[20px] rounded-full flex items-center justify-center border ${isActive ? 'bg-[#95e36c]/10 border-[#95e36c]/40' : 'bg-gray-100 border-gray-200'}`}>
-                                                        <span className={`text-[9px] font-black ${isActive ? 'text-[#003630]' : 'text-gray-400'}`}>
-                                                            {tab.count}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                <span className={`font-['IBM_Plex_Sans_Devanagari',sans-serif] text-[10px] uppercase tracking-[0.14em] transition-all ${isActive ? 'text-[#003630] font-black' : 'text-gray-400 font-medium'}`}>
-                                                    {tab.label}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </button>
-                                );
-                            })}
+                                            <span className={`relative z-20 text-center text-[11px] font-['Inter',sans-serif] tracking-tight ${isActive ? 'text-black font-bold' : 'text-[#686868] font-normal'}`}>
+                                                {tab.label}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {/* Row 2 */}
+                            <div className="w-full h-12 relative flex">
+                                {tabs.slice(4).map((tab, idx) => {
+                                    const isActive = activeTab === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => {
+                                                haptics.selection();
+                                                setActiveTab(tab.id);
+                                            }}
+                                            className={`flex-1 flex justify-center items-center h-full relative z-10`}
+                                        >
+                                            {isActive && (
+                                                <motion.div
+                                                    layoutId="activeTabPill"
+                                                    className="absolute inset-0 bg-white rounded-[12px] shadow-[0px_2px_4px_0px_rgba(0,0,0,0.15)] border-[1.5px] border-[#95e36c]"
+                                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                                />
+                                            )}
+                                            <span className={`relative z-20 text-center text-[11px] font-['Inter',sans-serif] tracking-tight ${isActive ? 'text-black font-bold' : 'text-[#686868] font-normal'}`}>
+                                                {tab.label}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                                {/* Empty filler if row is not full */}
+                                {tabs.slice(4).length < 4 && Array.from({ length: 4 - tabs.slice(4).length }).map((_, i) => (
+                                    <div key={`filler-${i}`} className="flex-1 h-full" />
+                                ))}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-6 pt-4 pb-[260px] bg-[#fdfdfd] scroll-smooth touch-pan-y">
+                    <div className="px-6 pt-4" style={{ position: 'relative', zIndex: 1, isolation: 'isolate' }}>
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={activeTab}
@@ -1307,7 +1373,7 @@ function UnifiedServicesPopup({
                                                 <div className="flex items-start gap-3">
                                                     <AlertCircle className="text-[#FF4D4F] shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
                                                     <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] text-[#262626] leading-relaxed">
-                                                        You have a balance for {schoolData?.category_names?.tuition?.toLowerCase() || 'school fees'} of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.fees.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        You have a balance for {schoolData?.category_names?.tuition?.toLowerCase() || 'school fees'} of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.fees.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                                                     </p>
                                                 </div>
 
@@ -1335,7 +1401,7 @@ function UnifiedServicesPopup({
                                         {/* Available Fees for Selection - Gated */}
                                         {!isTabLocked && (
                                             <div className="flex flex-col gap-2">
-                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Grade</label>
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Select Grade</label>
 
                                                 <div className="relative">
                                                     <button
@@ -1406,7 +1472,7 @@ function UnifiedServicesPopup({
                                                         className="flex flex-col"
                                                     >
                                                         <div className="mt-2 flex flex-col gap-3">
-                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Academic Year</label>
+                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Academic Year</label>
                                                             <div className="relative">
                                                                 <button
                                                                     onClick={(e) => {
@@ -1460,7 +1526,7 @@ function UnifiedServicesPopup({
                                                         <div className="h-8" aria-hidden="true" />
 
                                                         <div className="mb-6">
-                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Please Select the Periods to pay for</h3>
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Please Select the Periods to pay for</h3>
                                                         </div>
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
@@ -1484,7 +1550,8 @@ function UnifiedServicesPopup({
                                                                                 invoiceNo: `T${term}-${selectedAcademicYear}`,
                                                                                 term: term,
                                                                                 academicYear: selectedAcademicYear,
-                                                                                pricing_id: selectedFee.value
+                                                                                pricing_id: selectedFee.value,
+                                                                                categoryId: schoolData?.category_ids?.tuition
                                                                             };
 
                                                                             setStagedItems(prev => {
@@ -1544,7 +1611,7 @@ function UnifiedServicesPopup({
                                                 <div className="flex items-start gap-3">
                                                     <AlertTriangle style={{ color: '#FF4D4F' }} className="shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
                                                     <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] leading-relaxed" style={{ color: '#262626' }}>
-                                                        You have an outstanding balance for {schoolData?.category_names?.transport?.toLowerCase() || 'transport'} of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.transport.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        You have an outstanding balance for {schoolData?.category_names?.transport?.toLowerCase() || 'transport'} of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.transport.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                                                     </p>
                                                 </div>
 
@@ -1571,7 +1638,7 @@ function UnifiedServicesPopup({
                                         )}
                                         {!isTabLocked && (
                                             <>
-                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Route</label>
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Select Route</label>
                                                 <div className="relative">
                                                     <button
                                                         onClick={(e) => {
@@ -1651,7 +1718,7 @@ function UnifiedServicesPopup({
                                                         className="flex flex-col"
                                                     >
                                                         <div className="mt-2 flex flex-col gap-3">
-                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Academic Year</label>
+                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Academic Year</label>
                                                             <div className="relative">
                                                                 <button
                                                                     onClick={(e) => {
@@ -1703,8 +1770,8 @@ function UnifiedServicesPopup({
                                                         </div>
 
                                                         <div className="mt-8 flex flex-col gap-3">
-                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Subscription Frequency</h3>
-                                                            <div className="flex flex-wrap gap-3 mb-4">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
+                                                            <div className="grid grid-cols-2 gap-3 mb-4">
                                                                 {['monthly', 'termly', 'yearly'].map((freq) => (
                                                                     <button
                                                                         key={freq}
@@ -1713,7 +1780,7 @@ function UnifiedServicesPopup({
                                                                             haptics.selection();
                                                                             setTransportFrequency(freq as any);
                                                                         }}
-                                                                        className={`h-[48px] px-5 rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center gap-3 ${transportFrequency === freq
+                                                                        className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${transportFrequency === freq
                                                                             ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                             : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
                                                                             }`}
@@ -1736,7 +1803,7 @@ function UnifiedServicesPopup({
                                                         <div className="h-8" aria-hidden="true" />
 
                                                         <div className="mb-6">
-                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">
                                                                 {transportFrequency === 'monthly' ? 'Select Month' :
                                                                     transportFrequency === 'yearly' ? 'Confirm Academic Year' :
                                                                         transportFrequency === 'weekly' ? 'Select Week' :
@@ -1767,7 +1834,8 @@ function UnifiedServicesPopup({
                                                                                     invoiceNo: "203",
                                                                                     term: term,
                                                                                     academicYear: selectedAcademicYear,
-                                                                                    pricing_id: selectedRouteId
+                                                                                    pricing_id: selectedRouteId,
+                                                                                    categoryId: schoolData?.category_ids?.transport
                                                                                 };
 
                                                                                 setStagedItems(prev => {
@@ -1832,7 +1900,8 @@ function UnifiedServicesPopup({
                                                                                     invoiceNo: "203",
                                                                                     term: monthMap[month],
                                                                                     academicYear: selectedAcademicYear,
-                                                                                    pricing_id: selectedRouteId
+                                                                                    pricing_id: selectedRouteId,
+                                                                                    categoryId: schoolData?.category_ids?.transport
                                                                                 };
 
                                                                                 setStagedItems(prev => {
@@ -1870,7 +1939,8 @@ function UnifiedServicesPopup({
                                                                             amount: selectedRoute.price * 9, // 9 months per year
                                                                             invoiceNo: "203",
                                                                             academicYear: selectedAcademicYear,
-                                                                            pricing_id: selectedRouteId
+                                                                            pricing_id: selectedRouteId,
+                                                                            categoryId: schoolData?.category_ids?.transport
                                                                         };
                                                                         setStagedItems(prev => {
                                                                             const exists = prev.some(s => s.id === termId);
@@ -1891,6 +1961,377 @@ function UnifiedServicesPopup({
                                                                         )}
                                                                     </div>
                                                                     <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] ${isStaged(`route-${selectedRouteId}-yearly-${selectedAcademicYear}`) ? 'text-white' : 'text-gray-900'}`}>
+                                                                        Full Year ({selectedAcademicYear})
+                                                                    </span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                ) : activeTab === 'boarding' ? (
+                                    <div className="flex flex-col gap-2">
+                                        {debtSummary.boarding.some(d => !isStaged(d.id)) && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 5 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="rounded-[24px] p-5 flex flex-col gap-4 border mb-6"
+                                                style={{ backgroundColor: '#FFF1F0', borderColor: 'rgba(255, 204, 199, 0.6)' }}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <AlertTriangle style={{ color: '#FF4D4F' }} className="shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
+                                                    <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] leading-relaxed" style={{ color: '#262626' }}>
+                                                        You have an outstanding balance for {schoolData?.category_names?.boarding?.toLowerCase() || 'boarding'} of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.boarding.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        haptics.success();
+                                                        const itemsToAdd = debtSummary.boarding;
+                                                        setStagedItems(prev => {
+                                                            const existingIds = new Set(prev.map(p => p.id));
+                                                            const newItems = itemsToAdd.filter(item => !existingIds.has(item.id));
+                                                            return [...prev, ...newItems];
+                                                        });
+                                                        toast.success(`Staged ${itemsToAdd.length} ${schoolData?.category_names?.boarding?.toLowerCase() || 'boarding'} balance items`);
+                                                    }}
+                                                    className="w-full h-[52px] gap-2 bg-transparent border-[1.5px] rounded-[16px] flex items-center justify-center gap-2.5 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[15px] active:scale-[0.98] transition-all hover:bg-[#FF4D4F]/5"
+                                                    style={{ borderColor: 'rgba(255, 77, 79, 0.8)', color: '#FF4D4F' }}
+                                                >
+                                                    <div className="size-[20px] gap-3 rounded-full border flex items-center justify-center" style={{ borderColor: 'rgba(255, 77, 79, 0.4)' }}>
+                                                        <span className="text-[18px] leading-none mb-0.5">+</span>
+                                                    </div>
+                                                    <span>Add All Arrears to Cart</span>
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                        {!isTabLocked && (
+                                            <>
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Select Room</label>
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setIsBoardingDropdownOpen(!isBoardingDropdownOpen);
+                                                        }}
+                                                        className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                    >
+                                                        <div className="flex flex-col items-start overflow-hidden">
+                                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900 truncate">
+                                                                {selectedBoardingRoom
+                                                                    ? `${selectedBoardingRoom.name} - K${selectedBoardingRoom.price.toLocaleString()}`
+                                                                    : "Choose a Room..."
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isBoardingDropdownOpen ? 'rotate-180' : ''}`}>
+                                                            <path d="m6 9 6 6 6-6" />
+                                                        </svg>
+                                                    </button>
+
+                                                    <AnimatePresence>
+                                                        {isBoardingDropdownOpen && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: -10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
+                                                            >
+                                                                <div className="p-3 flex flex-col gap-1">
+                                                                    {schoolData?.boarding_rooms?.map((room) => (
+                                                                        <button
+                                                                            key={room.id}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                setSelectedBoardingRoomId(room.id);
+                                                                                setIsBoardingDropdownOpen(false);
+
+                                                                                // Restricted to termly/yearly for boarding
+                                                                                const detected = detectFrequency(room.name);
+                                                                                if (['termly', 'yearly'].includes(detected)) {
+                                                                                    setBoardingFrequency(detected as any);
+                                                                                } else {
+                                                                                    setBoardingFrequency('termly');
+                                                                                }
+
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedBoardingRoomId === room.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] ${selectedBoardingRoomId === room.id ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                    {room.name}
+                                                                                </span>
+                                                                                <span className={`text-[12px] ${selectedBoardingRoomId === room.id ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                                    Boarding Service
+                                                                                </span>
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] ${selectedBoardingRoomId === room.id ? 'text-white' : 'text-[#003630]'}`}>
+                                                                                K{room.price.toLocaleString()}
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+
+                                                {!isBoardingDropdownOpen && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="flex flex-col"
+                                                    >
+                                                        <div className="mt-2 flex flex-col gap-3">
+                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Academic Year</label>
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        setIsYearDropdownOpen(!isYearDropdownOpen);
+                                                                    }}
+                                                                    className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
+                                                                >
+                                                                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900">
+                                                                        {selectedAcademicYear}
+                                                                    </span>
+                                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isYearDropdownOpen ? 'rotate-180' : ''}`}>
+                                                                        <path d="m6 9 6 6 6-6" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                <AnimatePresence>
+                                                                    {isYearDropdownOpen && (
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: -10 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            exit={{ opacity: 0, y: -10 }}
+                                                                            className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden pointer-events-auto"
+                                                                        >
+                                                                            <div className="p-3 flex flex-col gap-1">
+                                                                                {[new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => (
+                                                                                    <button
+                                                                                        key={year}
+                                                                                        onClick={(e) => {
+                                                                                            e.preventDefault();
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedAcademicYear(year);
+                                                                                            setIsYearDropdownOpen(false);
+                                                                                            haptics.selection();
+                                                                                        }}
+                                                                                        className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedAcademicYear === year ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
+                                                                                    >
+                                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${selectedAcademicYear === year ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
+                                                                                            {year}
+                                                                                        </span>
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-8 flex flex-col gap-3">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
+                                                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                                                {['termly', 'yearly'].map((freq) => (
+                                                                    <button
+                                                                        key={freq}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            haptics.selection();
+                                                                            setBoardingFrequency(freq as any);
+                                                                        }}
+                                                                        className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${boardingFrequency === freq
+                                                                            ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                            : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                            }`}
+                                                                    >
+                                                                        <div className={`size-3.5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${boardingFrequency === freq ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                            {boardingFrequency === freq && (
+                                                                                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] capitalize ${boardingFrequency === freq ? 'text-white' : 'text-gray-900'}`}>
+                                                                            {freq}
+                                                                        </span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="h-8" aria-hidden="true" />
+
+                                                        <div className="mb-6">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">
+                                                                {boardingFrequency === 'monthly' ? 'Select Month' :
+                                                                    boardingFrequency === 'yearly' ? 'Confirm Academic Year' :
+                                                                        boardingFrequency === 'weekly' ? 'Select Week' :
+                                                                            boardingFrequency === 'daily' ? 'Select Day' :
+                                                                                'Please Select the Periods to pay for'}
+                                                            </h3>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-3 gap-4 mb-8">
+                                                            {boardingFrequency === 'termly' ? (
+                                                                [1, 2, 3].map((term) => {
+                                                                    const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-term-${term}` : `room-term-${term}`;
+                                                                    const isTermStaged = isStaged(termId);
+
+                                                                    return (
+                                                                        <button
+                                                                            key={term}
+                                                                            disabled={!selectedBoardingRoom}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                if (!selectedBoardingRoom) return;
+
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedBoardingRoom.name} - Term ${term}`,
+                                                                                    amount: selectedBoardingRoom.price * 3, // 3 months per term
+                                                                                    invoiceNo: "203",
+                                                                                    term: term,
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedBoardingRoomId,
+                                                                                    categoryId: schoolData?.category_ids?.boarding
+                                                                                };
+
+                                                                                setStagedItems(prev => {
+                                                                                    const isAlreadyStaged = prev.some(s => s.id === termId);
+                                                                                    const filtered = prev.filter(s => {
+                                                                                        if (!s.id.startsWith("room-")) return true;
+                                                                                        return s.id.startsWith(`room-${selectedBoardingRoomId}-`);
+                                                                                    });
+
+                                                                                    if (isAlreadyStaged) {
+                                                                                        return filtered.filter(s => s.id !== termId);
+                                                                                    } else {
+                                                                                        return [...filtered, newService];
+                                                                                    }
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
+                                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                                } ${!selectedBoardingRoom ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'
+                                                                                }`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'
+                                                                                }`}>
+                                                                                Term {term}
+                                                                            </span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : boardingFrequency === 'monthly' ? (
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                    const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-month-${month}` : `room-month-${month}`;
+                                                                    const isTermStaged = isStaged(termId);
+
+                                                                    // Map month to term for invoice metadata
+                                                                    const monthMap: Record<string, number> = {
+                                                                        'Jan': 1, 'Feb': 1, 'Mar': 1,
+                                                                        'May': 2, 'Jun': 2, 'Jul': 2,
+                                                                        'Sep': 3, 'Oct': 3, 'Nov': 3
+                                                                    };
+
+                                                                    return (
+                                                                        <button
+                                                                            key={month}
+                                                                            disabled={!selectedBoardingRoom}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (!selectedBoardingRoom) return;
+
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedBoardingRoom.name} - ${month} ${selectedAcademicYear}`,
+                                                                                    amount: selectedBoardingRoom.price, // Base monthly price
+                                                                                    invoiceNo: "203",
+                                                                                    term: monthMap[month],
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedBoardingRoomId,
+                                                                                    categoryId: schoolData?.category_ids?.boarding
+                                                                                };
+
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
+                                                                            }}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
+                                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                                } ${!selectedBoardingRoom ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                                {isTermStaged && (
+                                                                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <button
+                                                                    disabled={!selectedBoardingRoom}
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        if (!selectedBoardingRoom) return;
+                                                                        const termId = `room-${selectedBoardingRoomId}-yearly-${selectedAcademicYear}`;
+                                                                        const newService = {
+                                                                            id: termId,
+                                                                            description: `${selectedBoardingRoom.name} - Full Year ${selectedAcademicYear}`,
+                                                                            amount: selectedBoardingRoom.price * 9, // 9 months per year
+                                                                            invoiceNo: "203",
+                                                                            academicYear: selectedAcademicYear,
+                                                                            pricing_id: selectedBoardingRoomId,
+                                                                            categoryId: schoolData?.category_ids?.boarding
+                                                                        };
+                                                                        setStagedItems(prev => {
+                                                                            const exists = prev.some(s => s.id === termId);
+                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                        });
+                                                                        haptics.selection();
+                                                                    }}
+                                                                    className={`h-[60px] col-span-3 rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isStaged(`room-${selectedBoardingRoomId}-yearly-${selectedAcademicYear}`)
+                                                                        ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                        : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                        } ${!selectedBoardingRoom ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                >
+                                                                    <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isStaged(`room-${selectedBoardingRoomId}-yearly-${selectedAcademicYear}`) ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                        {isStaged(`room-${selectedBoardingRoomId}-yearly-${selectedAcademicYear}`) && (
+                                                                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <polyline points="20 6 9 17 4 12" />
+                                                                            </svg>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] ${isStaged(`room-${selectedBoardingRoomId}-yearly-${selectedAcademicYear}`) ? 'text-white' : 'text-gray-900'}`}>
                                                                         Pay Full Year ({selectedAcademicYear})
                                                                     </span>
                                                                 </button>
@@ -1912,7 +2353,7 @@ function UnifiedServicesPopup({
                                                 <div className="flex items-start gap-3">
                                                     <AlertCircle className="text-[#FF4D4F] shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
                                                     <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] text-[#262626] leading-relaxed">
-                                                        You have an outstanding balance for cafeteria of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.cafeteria.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        You have an outstanding balance for cafeteria of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.cafeteria.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                                                     </p>
                                                 </div>
 
@@ -1938,7 +2379,7 @@ function UnifiedServicesPopup({
                                         )}
                                         {!isTabLocked && (
                                             <>
-                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Meal Plan</label>
+                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Select Meal Plan</label>
                                                 <div className="relative">
                                                     <button
                                                         onClick={(e) => {
@@ -2018,7 +2459,7 @@ function UnifiedServicesPopup({
                                                         className="flex flex-col"
                                                     >
                                                         <div className="mt-2 flex flex-col gap-3">
-                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Academic Year</label>
+                                                            <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Academic Year</label>
                                                             <div className="relative">
                                                                 <button
                                                                     onClick={(e) => {
@@ -2070,8 +2511,8 @@ function UnifiedServicesPopup({
                                                         </div>
 
                                                         <div className="mt-8 flex flex-col gap-3">
-                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Subscription Frequency</h3>
-                                                            <div className="flex flex-wrap gap-3 mb-4">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
+                                                            <div className="grid grid-cols-2 gap-3 mb-4">
                                                                 {['daily', 'weekly', 'monthly', 'termly'].map((freq) => (
                                                                     <button
                                                                         key={freq}
@@ -2080,7 +2521,7 @@ function UnifiedServicesPopup({
                                                                             haptics.selection();
                                                                             setCafeteriaFrequency(freq as any);
                                                                         }}
-                                                                        className={`h-[48px] px-5 rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center gap-3 ${cafeteriaFrequency === freq
+                                                                        className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${cafeteriaFrequency === freq
                                                                             ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                             : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
                                                                             }`}
@@ -2103,7 +2544,7 @@ function UnifiedServicesPopup({
                                                         <div className="h-4" aria-hidden="true" />
 
                                                         <div className="mb-6">
-                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">
                                                                 {cafeteriaFrequency === 'monthly' ? 'Select Month' :
                                                                     cafeteriaFrequency === 'weekly' ? 'Select Week' :
                                                                         cafeteriaFrequency === 'daily' ? 'Select Day' :
@@ -2133,7 +2574,8 @@ function UnifiedServicesPopup({
                                                                                     invoiceNo: "204",
                                                                                     term: term,
                                                                                     academicYear: selectedAcademicYear,
-                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                    pricing_id: selectedCanteenPlanId,
+                                                                                    categoryId: schoolData?.category_ids?.canteen
                                                                                 };
 
                                                                                 setStagedItems(prev => {
@@ -2188,7 +2630,8 @@ function UnifiedServicesPopup({
                                                                                     amount: selectedCanteenPlan.price / 4,
                                                                                     invoiceNo: "204",
                                                                                     academicYear: selectedAcademicYear,
-                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                    pricing_id: selectedCanteenPlanId,
+                                                                                    categoryId: schoolData?.category_ids?.canteen
                                                                                 };
                                                                                 setStagedItems(prev => {
                                                                                     const exists = prev.some(s => s.id === termId);
@@ -2226,7 +2669,8 @@ function UnifiedServicesPopup({
                                                                                     amount: selectedCanteenPlan.price / 20,
                                                                                     invoiceNo: "204",
                                                                                     academicYear: selectedAcademicYear,
-                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                    pricing_id: selectedCanteenPlanId,
+                                                                                    categoryId: schoolData?.category_ids?.canteen
                                                                                 };
                                                                                 setStagedItems(prev => {
                                                                                     const exists = prev.some(s => s.id === termId);
@@ -2274,7 +2718,8 @@ function UnifiedServicesPopup({
                                                                                     invoiceNo: "204",
                                                                                     term: monthMap[month],
                                                                                     academicYear: selectedAcademicYear,
-                                                                                    pricing_id: selectedCanteenPlanId
+                                                                                    pricing_id: selectedCanteenPlanId,
+                                                                                    categoryId: schoolData?.category_ids?.canteen
                                                                                 };
 
                                                                                 setStagedItems(prev => {
@@ -2306,206 +2751,365 @@ function UnifiedServicesPopup({
                                             </>
                                         )}
                                     </div>
-                                ) : activeTab === 'uniforms' ? (
-                                    <div className="flex flex-col gap-2">
-                                        {debtSummary.uniforms.some(d => !isStaged(d.id)) && (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 5 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                className="bg-[#FFF1F0] rounded-[24px] p-5 flex flex-col gap-4 border border-[#FFCCC7]/60 mb-6"
-                                            >
-                                                <div className="flex items-start gap-3">
-                                                    <AlertCircle className="text-[#FF4D4F] shrink-0 mt-0.5" size={20} strokeWidth={2.5} />
-                                                    <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[15px] text-[#262626] leading-relaxed">
-                                                        You have an outstanding balance for uniforms of <span className="font-bold font-['Inter:Bold',sans-serif]">K{debtSummary.uniforms.reduce((acc, d) => acc + d.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                    </p>
-                                                </div>
+                                ) : ['uniforms', 'trips', 'sports'].includes(activeTab) ? (
+                                    <div className="flex flex-col gap-4">
+                                        {/* Top Label */}
+                                        <div className="flex items-center justify-between px-1">
+                                            <span className="text-[#808080] text-[12px] font-['Inter',sans-serif] font-bold">
+                                                Select Product Type - {Object.values(otherQuantities).filter(q => q > 0).length} Selected
+                                            </span>
+                                        </div>
 
-                                                <button
-                                                    onClick={() => {
-                                                        haptics.success();
-                                                        const itemsToAdd = debtSummary.uniforms;
-                                                        setStagedItems(prev => {
-                                                            const existingIds = new Set(prev.map(p => p.id));
-                                                            const newItems = itemsToAdd.filter(item => !existingIds.has(item.id));
-                                                            return [...prev, ...newItems];
-                                                        });
-                                                        toast.success(`Staged ${itemsToAdd.length} uniform items`);
-                                                    }}
-                                                    className="w-full h-[52px] bg-transparent border-[1.5px] border-[#FF4D4F]/80 text-[#FF4D4F] rounded-[16px] flex items-center justify-center gap-2.5 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[15px] active:scale-[0.98] transition-all hover:bg-[#FF4D4F]/5"
-                                                >
-                                                    <div className="size-[22px] rounded-full border border-[#FF4D4F]/40 flex items-center justify-center">
-                                                        <span className="text-[18px] leading-none mb-0.5">+</span>
+                                        {(() => {
+                                            const filtered = schoolData?.other_services?.filter(s => {
+                                                const cat = s.category?.toLowerCase() || '';
+                                                if (activeTab === 'uniforms') return cat.includes('uniform');
+                                                if (activeTab === 'trips') return cat.includes('trip') || cat.includes('tour');
+                                                if (activeTab === 'sports') return cat.includes('sport') || cat.includes('club');
+                                                if (activeTab === 'boarding') return cat.includes('boarding');
+                                                return true;
+                                            }) || [];
+
+                                            const grouped = filtered.reduce((acc, s) => {
+                                                const name = s.category_name || 'Other';
+                                                if (!acc[name]) acc[name] = [];
+                                                acc[name].push(s);
+                                                return acc;
+                                            }, {} as Record<string, any[]>);
+
+                                            if (filtered.length === 0) {
+                                                return (
+                                                    <div className="w-full bg-white rounded-[20px] outline outline-[1px] outline-offset-[-1px] outline-gray-200 p-8 flex flex-col items-center justify-center gap-3">
+                                                        <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-400">
+                                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                                <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" /><path d="M4 6v12c0 1.1.9 2 2 2h14v-4" /><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z" />
+                                                            </svg>
+                                                        </div>
+                                                        <span className="text-gray-400 text-sm font-medium">No items available</span>
                                                     </div>
-                                                    <span>Add All Arrears to Cart</span>
-                                                </button>
-                                            </motion.div>
-                                        )}
+                                                );
+                                            }
 
-                                        {!isTabLocked && (
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1">Select Product/Service</label>
-                                                <div className="relative">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            setIsOtherDropdownOpen(!isOtherDropdownOpen);
+                                            return Object.entries(grouped).map(([catName, items]) => {
+                                                const hasActiveItems = items.some(svc => (otherQuantities[svc.id] || 0) > 0);
+
+                                                if (activeTab === 'trips') {
+                                                    return (
+                                                        <div key={`trips-${catName}`} className="w-full flex flex-col gap-5">
+                                                            {items.map((svc) => {
+                                                                const qty = otherQuantities[svc.id] || 0;
+                                                                const itemId = `other-${svc.id}`;
+
+                                                                const handleQtyChange = (newQty: number) => {
+                                                                    setOtherQuantities(prev => ({ ...prev, [svc.id]: newQty }));
+                                                                    haptics.selection();
+                                                                    if (newQty === 0) {
+                                                                        setStagedItems(prev => prev.filter(p => p.id !== itemId));
+                                                                    } else {
+                                                                        setStagedItems(prev => {
+                                                                            const exists = prev.find(p => p.id === itemId);
+                                                                            if (exists) {
+                                                                                return prev.map(p => p.id === itemId ? { ...p, amount: svc.price * newQty, quantity: newQty } : p);
+                                                                            }
+                                                                            return [...prev, {
+                                                                                id: itemId,
+                                                                                description: svc.name,
+                                                                                amount: svc.price * newQty,
+                                                                                quantity: newQty,
+                                                                                invoiceNo: "205",
+                                                                                pricing_id: svc.id,
+                                                                                categoryId: schoolData?.category_ids?.trips || schoolData?.category_ids?.other
+                                                                            }];
+                                                                        });
+                                                                    }
+                                                                };
+
+                                                                return (
+                                                                    <div key={svc.id} className="relative w-full bg-white rounded-[20px] shadow-[0_4px_24px_rgba(0,0,0,0.06)] border border-gray-100 flex flex-row items-stretch overflow-visible transition-all active:scale-[0.98]">
+                                                                        {/* Left Side: Destination Info */}
+                                                                        <div className="flex-1 p-5 flex flex-col justify-center">
+                                                                            <div className="flex items-center gap-4 mb-2.5">
+                                                                                <Plane className="text-[#003630] shrink-0" size={14} strokeWidth={2.5} />
+                                                                                <span className="text-[13px] uppercase tracking-widest text-[#003630] font-bold font-['Inter',sans-serif]">Trip Destination</span>
+                                                                            </div>
+                                                                            <h3 className="text-black text-[10px] font-bold font-['Inter',sans-serif] leading-tight mb-1.5 pr-2">{svc.name}</h3>
+                                                                            <div className="flex items-center gap-3">
+                                                                                <MapPin className="text-gray-400 shrink-0" size={12} />
+                                                                                <span className="text-gray-500 text-[10px] font-medium font-['Inter',sans-serif]">{catName}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Right Side: The stub */}
+                                                                        <div className="w-[110px] bg-[#f8f8f8] border-l-[2px] border-dashed border-gray-200 flex flex-col items-center justify-center p-3 relative rounded-r-[20px]">
+                                                                            {/* Semi-circle cutouts (Boarding Pass effect) */}
+                                                                            <div className="absolute -top-[11px] -left-[11px] w-[20px] h-[20px] bg-[#fdfdfd] rounded-full border-b border-gray-100 shadow-inner" style={{ clipPath: 'inset(50% 0 0 50%)' }} />
+                                                                            <div className="absolute -bottom-[11px] -left-[11px] w-[20px] h-[20px] bg-[#fdfdfd] rounded-full border-t border-gray-100 shadow-inner" style={{ clipPath: 'inset(0 0 50% 50%)' }} />
+
+                                                                            <span className="text-black font-extrabold font-['Inter',sans-serif] text-[12px] mb-3">K{svc.price.toLocaleString()}</span>
+
+                                                                            {qty === 0 ? (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); handleQtyChange(1); }}
+                                                                                    className="w-full h-9 rounded-[12px] bg-[#003630] text-white text-[12px] font-bold shadow-[0_4px_12px_rgba(0,54,48,0.2)] active:opacity-80"
+                                                                                >
+                                                                                    Book
+                                                                                </button>
+                                                                            ) : (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); handleQtyChange(0); }}
+                                                                                    className="w-full h-9 rounded-[12px] bg-white border-[1.5px] border-[#95e36c] text-[#003630] text-[12px] font-bold shadow-[0_2px_8px_rgba(149,227,108,0.1)] active:opacity-80 flex items-center justify-center gap-2"
+                                                                                >
+
+                                                                                    Booked
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                }
+
+                                                if (activeTab === 'sports') {
+                                                    return (
+                                                        <div key={`sports-${catName}`} className="w-full flex flex-col gap-3 mb-6">
+                                                            <div className="flex items-center px-2 mb-1">
+                                                                <span className="text-black text-[14px] font-['Space_Grotesk',sans-serif] font-bold tracking-tight">
+                                                                    {catName}
+                                                                </span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3 w-full">
+                                                                {items.map((svc) => {
+                                                                    const qty = otherQuantities[svc.id] || 0;
+                                                                    const itemId = `other-${svc.id}`;
+                                                                    const isSelected = qty > 0;
+
+                                                                    const handleQtyChange = (newQty: number) => {
+                                                                        setOtherQuantities(prev => ({ ...prev, [svc.id]: newQty }));
+                                                                        haptics.selection();
+                                                                        if (newQty === 0) {
+                                                                            setStagedItems(prev => prev.filter(p => p.id !== itemId));
+                                                                        } else {
+                                                                            setStagedItems(prev => {
+                                                                                const exists = prev.find(p => p.id === itemId);
+                                                                                if (exists) {
+                                                                                    return prev.map(p => p.id === itemId ? { ...p, amount: svc.price * newQty, quantity: newQty } : p);
+                                                                                }
+                                                                                return [...prev, {
+                                                                                    id: itemId,
+                                                                                    description: svc.name,
+                                                                                    amount: svc.price * newQty,
+                                                                                    quantity: newQty,
+                                                                                    invoiceNo: "205",
+                                                                                    pricing_id: svc.id,
+                                                                                    categoryId: schoolData?.category_ids?.other
+                                                                                }];
+                                                                            });
+                                                                        }
+                                                                    };
+
+                                                                    return (
+                                                                        <div key={svc.id} className={`relative flex flex-col p-4 rounded-[20px] transition-all duration-300 ${isSelected ? 'bg-[#f8fcf4] border-2 border-[#95e36c] shadow-[0_8px_20px_rgba(149,227,108,0.15)]' : 'bg-white border-[1px] border-gray-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)]'}`}>
+                                                                            <div className="flex items-start justify-between w-full mb-3">
+                                                                                <div className={`w-[36px] h-[36px] flex items-center justify-center rounded-[12px] transition-colors ${isSelected ? 'bg-[#95e36c] text-[#003630]' : 'bg-[#FAFAFA] text-gray-400'}`}>
+                                                                                    <Users size={16} strokeWidth={2.5} />
+                                                                                </div>
+                                                                                <div className={`font-['Inter',sans-serif] text-[12px] font-bold mt-1 ${isSelected ? 'text-[#003630]' : 'text-gray-500'}`}>
+                                                                                    K{svc.price.toLocaleString()}
+                                                                                </div>
+                                                                            </div>
+                                                                            <h4 className="flex-1 font-['Inter',sans-serif] text-[12px] font-bold tracking-tight leading-[1.3] text-black pr-1 mb-4 flex items-center">
+                                                                                {svc.name}
+                                                                            </h4>
+                                                                            <div className="w-full">
+                                                                                {qty === 0 ? (
+                                                                                    <button onClick={(e) => { e.stopPropagation(); handleQtyChange(1); }} className="w-full h-8 rounded-[10px] bg-[#FAFAFA] border border-gray-200 text-black text-[12px] font-bold active:scale-95 transition-all outline-none">
+                                                                                        Join Club
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <button onClick={(e) => { e.stopPropagation(); handleQtyChange(0); }} className="w-full h-8 rounded-[10px] bg-white border-[1.5px] border-[#95e36c] text-[#003630] text-[12px] font-bold active:scale-95 transition-all outline-none flex items-center justify-center gap-2 shadow-[0_2px_8px_rgba(149,227,108,0.1)]">
+                                                                                        <div className="w-[16px] h-[16px] shrink-0 rounded-full bg-[#95e36c] text-[#003630] flex items-center justify-center">
+                                                                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                                                        </div>
+                                                                                        Joined
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                // Default Standard Category List Layout
+                                                return (
+                                                    <div
+                                                        key={catName}
+                                                        className="w-full bg-[#fdfdfd] rounded-[24px] outline outline-[1px] outline-offset-[-1px] outline-[#e6e6e6] p-5 flex flex-col gap-5 transition-all duration-300"
+                                                        style={{
+                                                            boxShadow: hasActiveItems ? '0 12px 32px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.03)' : '0 4px 12px rgba(0,0,0,0.03)'
                                                         }}
-                                                        className="w-full h-[60px] bg-white border border-gray-100 rounded-[24px] px-6 flex items-center justify-between shadow-[0px_4px_16px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-all group pointer-events-auto cursor-pointer"
                                                     >
-                                                        <div className="flex flex-col items-start overflow-hidden">
-                                                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-gray-900 truncate">
-                                                                {selectedOther
-                                                                    ? `${selectedOther.name} - K${selectedOther.price.toLocaleString()}`
-                                                                    : "Choose an Item..."
-                                                                }
+                                                        <div className="flex items-center px-1">
+                                                            <span className="text-black text-[13px] font-['Inter',sans-serif] font-normal">
+                                                                {catName}
                                                             </span>
                                                         </div>
-                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 group-hover:text-black transition-transform duration-300 ${isOtherDropdownOpen ? 'rotate-180' : ''}`}>
-                                                            <path d="m6 9 6 6 6-6" />
-                                                        </svg>
-                                                    </button>
 
-                                                    <AnimatePresence>
-                                                        {isOtherDropdownOpen && (
-                                                            <motion.div
-                                                                initial={{ opacity: 0, y: -10 }}
-                                                                animate={{ opacity: 1, y: 0 }}
-                                                                exit={{ opacity: 0, y: -10 }}
-                                                                className="absolute top-full mt-3 left-0 right-0 bg-white border border-gray-100 rounded-[24px] shadow-[0px_20px_50px_rgba(0,0,0,0.18)] z-[90] overflow-hidden max-h-[300px] overflow-y-auto pointer-events-auto"
-                                                            >
-                                                                <div className="p-3 flex flex-col gap-1">
-                                                                    {schoolData?.other_services?.map((svc) => (
-                                                                        <button
-                                                                            key={svc.id}
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                setSelectedOtherId(svc.id);
-                                                                                setIsOtherDropdownOpen(false);
-                                                                                haptics.selection();
-                                                                            }}
-                                                                            className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedOtherId === svc.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
-                                                                        >
-                                                                            <div className="flex flex-col">
-                                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[10px] ${selectedOtherId === svc.id ? 'text-white' : 'text-gray-900 group-hover:text-[#003630]'}`}>
-                                                                                    {svc.name}
-                                                                                </span>
-                                                                                <span className={`text-[12px] ${selectedOtherId === svc.id ? 'text-white/60' : 'text-gray-400'}`}>
-                                                                                    {svc.category || 'Institutional Product'}
-                                                                                </span>
+                                                        <div className="flex flex-col gap-2">
+                                                            {items.map((svc, idx, arr) => {
+                                                                const qty = otherQuantities[svc.id] || 0;
+                                                                return (
+                                                                    <Fragment key={svc.id}>
+                                                                        <div className="flex items-start gap-3 w-full pl-1">
+                                                                            <div className="pt-0.5 shrink-0">
+                                                                                {(() => {
+                                                                                    const catLower = catName.toLowerCase();
+                                                                                    const svcNameLower = svc.name.toLowerCase();
+                                                                                    let IconComponent = Package;
+                                                                                    const iconColor = "#8C8C8C"; // Medium Grey color matching the required aesthetic
+                                                                                    const shadowColor = "transparent";
+
+                                                                                    if (catLower.includes('jersey') || catLower.includes('uniform') || catLower.includes('shirt')) {
+                                                                                        IconComponent = Shirt;
+                                                                                    } else if (catLower.includes('trip') || catLower.includes('bus') || catLower.includes('transport')) {
+                                                                                        IconComponent = Bus;
+                                                                                    } else if (catLower.includes('club') || catLower.includes('activities') || catLower.includes('sport')) {
+                                                                                        IconComponent = Users;
+                                                                                    } else if (catLower.includes('board') || catLower.includes('hostel') || catLower.includes('bed')) {
+                                                                                        IconComponent = Home;
+                                                                                    } else if (catLower.includes('book') || catLower.includes('stationery')) {
+                                                                                        IconComponent = BookOpen;
+                                                                                    } else if (catLower.includes('meal') || catLower.includes('canteen') || catLower.includes('food') || catLower.includes('lunch')) {
+                                                                                        IconComponent = Coffee;
+                                                                                    }
+
+                                                                                    return <IconComponent
+                                                                                        strokeWidth={2}
+                                                                                        size={22}
+                                                                                        color={iconColor}
+                                                                                        style={shadowColor !== 'transparent' ? { filter: `drop-shadow(0px 3px 6px ${shadowColor})` } : undefined}
+                                                                                    />;
+                                                                                })()}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] ${selectedOtherId === svc.id ? 'text-white' : 'text-[#003630]'}`}>
-                                                                                K{svc.price.toLocaleString()}
-                                                                            </span>
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
 
-                                                {!isOtherDropdownOpen && selectedOther && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, y: 10 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        className="flex flex-col mt-4"
-                                                    >
-                                                        <div className="h-4" aria-hidden="true" />
-                                                        <div className="mb-6">
-                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100">Price Confirmation</h3>
+                                                                            <div className="flex-1 flex flex-col justify-center items-start">
+                                                                                <div className="flex flex-row items-baseline gap-2 flex-wrap">
+                                                                                    <div className="text-black text-[12px] font-normal leading-tight font-['Inter',sans-serif]">
+                                                                                        {svc.name}
+                                                                                    </div>
+                                                                                    <div className="text-black text-[12px] font-bold font-['Inter',sans-serif]">
+                                                                                        K{svc.price.toLocaleString()}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className="mt-4 rounded-[2px] inline-flex items-center justify-between h-7 px-1 min-w-[72px]">
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            const newQty = Math.max(0, qty - 1);
+                                                                                            setOtherQuantities(prev => ({ ...prev, [svc.id]: newQty }));
+                                                                                            haptics.selection();
+                                                                                            const itemId = `other-${svc.id}`;
+                                                                                            if (newQty === 0) {
+                                                                                                setStagedItems(prev => prev.filter(p => p.id !== itemId));
+                                                                                            } else {
+                                                                                                setStagedItems(prev => {
+                                                                                                    const exists = prev.find(p => p.id === itemId);
+                                                                                                    if (exists) {
+                                                                                                        return prev.map(p => p.id === itemId ? { ...p, amount: svc.price * newQty, quantity: newQty } : p);
+                                                                                                    }
+                                                                                                    return [...prev, {
+                                                                                                        id: itemId,
+                                                                                                        description: svc.name,
+                                                                                                        amount: svc.price * newQty,
+                                                                                                        quantity: newQty,
+                                                                                                        invoiceNo: "205",
+                                                                                                        pricing_id: svc.id,
+                                                                                                        categoryId: svc.category_name?.toLowerCase() === 'uniforms' ? schoolData?.category_ids?.uniforms : (svc.category_name?.toLowerCase() === 'trips' ? schoolData?.category_ids?.trips : schoolData?.category_ids?.other)
+                                                                                                    }];
+                                                                                                });
+                                                                                            }
+                                                                                        }}
+                                                                                        className="w-[22px] h-[22px] flex items-center justify-center text-[#95e36c] active:scale-[0.85] transition-all"
+                                                                                    >
+                                                                                        <span className="font-['Inter',sans-serif] font-bold text-[18px] leading-none mb-[2px] block">-</span>
+                                                                                    </button>
+                                                                                    <div className="flex-1 flex items-center justify-center font-['Inter',sans-serif] font-bold text-[13px] text-black shrink-0 px-2 leading-none">
+                                                                                        {qty}
+                                                                                    </div>
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            const newQty = qty + 1;
+                                                                                            setOtherQuantities(prev => ({ ...prev, [svc.id]: newQty }));
+                                                                                            haptics.selection();
+                                                                                            const itemId = `other-${svc.id}`;
+                                                                                            setStagedItems(prev => {
+                                                                                                const exists = prev.find(p => p.id === itemId);
+                                                                                                if (exists) {
+                                                                                                    return prev.map(p => p.id === itemId ? { ...p, amount: svc.price * newQty, quantity: newQty } : p);
+                                                                                                }
+                                                                                                return [...prev, {
+                                                                                                    id: itemId,
+                                                                                                    description: svc.name,
+                                                                                                    amount: svc.price * newQty,
+                                                                                                    quantity: newQty,
+                                                                                                    invoiceNo: "205",
+                                                                                                    pricing_id: svc.id,
+                                                                                                    categoryId: svc.category_name?.toLowerCase() === 'uniforms' ? schoolData?.category_ids?.uniforms : (svc.category_name?.toLowerCase() === 'trips' ? schoolData?.category_ids?.trips : schoolData?.category_ids?.other)
+                                                                                                }];
+                                                                                            });
+                                                                                        }}
+                                                                                        className="w-[22px] h-[22px] flex items-center justify-center text-[#003630] active:scale-[0.85] transition-all"
+                                                                                    >
+                                                                                        <span className="font-['Inter',sans-serif] font-bold text-[16px] leading-none mb-[2px] block">+</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        {idx < items.length - 1 && (
+                                                                            <div className="h-[12px]" />
+                                                                        )}
+                                                                    </Fragment>
+                                                                );
+                                                            })}
                                                         </div>
+                                                    </div>
+                                                );
+                                            });
 
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                const itemId = `other-${selectedOtherId}`;
-                                                                const newService = {
-                                                                    id: itemId,
-                                                                    description: selectedOther.name,
-                                                                    amount: selectedOther.price,
-                                                                    invoiceNo: "205",
-                                                                    pricing_id: selectedOtherId
-                                                                };
-                                                                setStagedItems(prev => {
-                                                                    const exists = prev.some(s => s.id === itemId);
-                                                                    return exists ? prev.filter(s => s.id !== itemId) : [...prev, newService];
-                                                                });
-                                                                haptics.selection();
-                                                            }}
-                                                            className={`h-[60px] rounded-[24px] border-[1.5px] px-8 flex items-center justify-between transition-all active:scale-[0.98] ${isStaged(`other-${selectedOtherId}`)
-                                                                ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_30px_rgba(0,54,48,0.2)]'
-                                                                : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.04)]'
-                                                                }`}
-                                                        >
-                                                            <div className="flex flex-col items-start">
-                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] ${isStaged(`other-${selectedOtherId}`) ? 'text-white' : 'text-gray-900'}`}>
-                                                                    Add to Staging
-                                                                </span>
-                                                                <span className={`text-[12px] ${isStaged(`other-${selectedOtherId}`) ? 'text-white/60' : 'text-gray-400'}`}>
-                                                                    Unit Price
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center gap-4">
-                                                                <span className={`font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] ${isStaged(`other-${selectedOtherId}`) ? 'text-[#95e36c]' : 'text-[#003630]'}`}>
-                                                                    K{selectedOther.price.toLocaleString()}
-                                                                </span>
-                                                                <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all ${isStaged(`other-${selectedOtherId}`) ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
-                                                                    {isStaged(`other-${selectedOtherId}`) && (
-                                                                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <polyline points="20 6 9 17 4 12" />
-                                                                        </svg>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </button>
-                                                    </motion.div>
-                                                )}
-                                            </div>
-                                        )}
+                                        })()}
                                     </div>
                                 ) : null}
                             </motion.div>
                         </AnimatePresence>
+
+                    </div>
+                </div>
+
+                {/* Standard Flex Footer - High Fidelity Design */}
+                <div className="w-full shrink-0 bg-white pt-5 border-t border-gray-100 shadow-[0px_-20px_50px_rgba(0,0,0,0.05)] z-[80] pb-[env(safe-area-inset-bottom)] pb-6 relative">
+                    <div className="flex items-center justify-between mb-5 px-6">
+                        <span className="text-[17px] font-bold text-black tracking-tight font-['Inter',sans-serif]">Subtotal</span>
+                        <span className="text-[17px] font-bold text-black tracking-tight uppercase font-['Inter',sans-serif]">
+                            K{stagedItems.reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </span>
                     </div>
 
-                    {/* Fixed Sidebar/Drawer Footer - High Fidelity Design */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-white px-6 pt-6 pb-12 border-t border-gray-100 shadow-[0px_-20px_50px_rgba(0,0,0,0.05)] z-[80]">
-                        <div className="flex items-center justify-between mb-6 px-2">
-                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] font-bold text-black tracking-tight">Subtotal</span>
-                            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] font-bold text-black tracking-tight uppercase">
-                                K{stagedItems.reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                        </div>
-
+                    <div className="px-6">
                         <button
                             onClick={() => {
                                 console.log("[UnifiedServicesPopup] Confirming staged selection of", stagedItems.length, "items");
                                 haptics.success();
                                 onConfirm(stagedItems);
                             }}
-                            className="w-full h-[60px] bg-[#003630] text-white rounded-[12px] flex items-center justify-between px-6 active:scale-[0.97] transition-all shadow-[0px_20px_40px_rgba(0,54,48,0.2)] group pointer-events-auto"
+                            className="w-full h-[60px] bg-[#003630] text-white flex items-center justify-center rounded-[20px] active:scale-[0.98] transition-all pointer-events-auto shadow-[0px_8px_24px_rgba(0,54,48,0.2)]"
                         >
-                            <div className="size-6 text-white/90">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
-                                </svg>
-                            </div>
-
-                            <div className="flex flex-col items-center">
-                                <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-white h-6">
-                                    Confirm & Add {stagedItems.length === 1 ? '1 Item' : `${stagedItems.length} Items`}
-                                </span>
-                                <span className="text-[10px] text-white/50 uppercase tracking-widest font-bold"></span>
-                            </div>
-
-                            <div className="size-6 text-[#95e36c]">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                            </div>
+                            <span className="font-['Inter',sans-serif] font-bold text-[15px]">
+                                Confirm & Add {stagedItems.length} {stagedItems.length === 1 ? 'Item' : 'Items'}
+                            </span>
                         </button>
                     </div>
                 </div>
