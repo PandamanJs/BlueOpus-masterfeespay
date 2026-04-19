@@ -609,48 +609,7 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
             };
         });
 
-        // 4. Fallbacks
-        const fallbackItems: any[] = [];
-        const hasTuitionInvoice = invoiceItems.some(ii => {
-            const n = ii.name.toLowerCase();
-            return n.includes('tuition') || n.includes('school fees') || n.includes('academic');
-        });
-        if (!hasTuitionInvoice && tuitionPrice > 0) {
-            fallbackItems.push({
-                type: 'tuition',
-                name: `${activeGradeName} Tuition Fees`,
-                expected: tuitionPrice,
-                collected: 0,
-                invoiced: 0,
-                balance: tuitionPrice,
-                status: 'unpaid',
-                initiated_at: null,
-                transactions: []
-            });
-        }
-
-        enrollments.forEach((en: any) => {
-            const item = en.fee_items;
-            const itemName = (item?.name || 'Service').toLowerCase();
-            const isCovered = invoiceItems.some(ii => ii.name.toLowerCase().includes(itemName));
-            if (!isCovered) {
-                const price = en.override_amount !== null ? Number(en.override_amount) : Number(item?.amount || 0);
-                fallbackItems.push({
-                    type: 'subscription',
-                    id: en.id,
-                    name: item?.name || 'Service',
-                    expected: price,
-                    collected: 0,
-                    invoiced: 0,
-                    balance: price,
-                    status: 'unpaid',
-                    initiated_at: null,
-                    transactions: []
-                });
-            }
-        });
-
-        const allItems = [...invoiceItems, ...fallbackItems];
+        const allItems = [...invoiceItems];
 
         // 5. Attribute payments — match each transaction to exactly ONE item
         let unallocatedPaymentsTotal = 0;
