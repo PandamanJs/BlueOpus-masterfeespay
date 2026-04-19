@@ -167,4 +167,3 @@ export function getInstitutionType(_schoolName: string): 'school' | 'university'
 export function canSelectTerm(_schoolName: string): boolean {
   return true;
 }
-r
