@@ -1382,10 +1382,30 @@ export default function App() {
   };
 
   const handleProceedToServices = async (name: string, phone: string, id: string) => {
-    setUserInfo(name, phone, '', id);
-    // Explicitly fetch students to ensure they are loaded when entering services
-    await fetchStudents(phone);
-    navigateToPage("services");
+    setStudentsLoading(true);
+    try {
+      // 1. Fetch students first to verify they exist at this school
+      const studentsData = await fetchStudents(phone);
+      
+      // 2. Check if they are staff (fetchStudents already sets this in store)
+      const staffStatus = useAppStore.getState().isStaff;
+
+      // 3. SECURE GATE: If no students found AND not staff, block access
+      if ((!studentsData || studentsData.length === 0) && !staffStatus) {
+        toast.error(`No records found for this number at ${selectedSchool || 'this school'}. Please verify the number or register.`);
+        // Note: we don't navigate or set user info here
+        return;
+      }
+
+      // 4. Success! Now set identity and proceed
+      setUserInfo(name, phone, '', id);
+      navigateToPage("services");
+    } catch (e) {
+      console.error('Login error:', e);
+      toast.error('An error occurred during verification. Please try again.');
+    } finally {
+      setStudentsLoading(false);
+    }
   };
 
   const handleBackToDetails = () => {
