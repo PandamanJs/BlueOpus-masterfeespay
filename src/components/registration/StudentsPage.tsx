@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, X, Loader2, Pencil, ChevronDown, User, Sparkles, UserRoundPlus, ChevronRight, Info, AlertTriangle } from 'lucide-react';
 import { type ParentData } from './ParentInformationPage';
-import { type StudentData, getGradesWithStreams, type SchoolGrade } from '../../lib/supabase/api/registration';
+import { type StudentData, getGradesWithStreams, getClassesByGrade, type SchoolGrade } from '../../lib/supabase/api/registration';
 import { haptics } from '../../utils/haptics';
 import LogoHeader from '../common/LogoHeader';
 import OnboardingProgressBar from './OnboardingProgressBar';

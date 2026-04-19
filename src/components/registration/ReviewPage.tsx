@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Info, Loader2 } from 'lucide-react';
+import { Info, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { type StudentData, saveLedgerVerification } from '../../lib/supabase/api/registration';
 import { getStudentFinancialSummary } from '../../lib/supabase/api/transactions';
 import { toast } from 'sonner';
@@ -156,40 +156,54 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
               {/* Header Section */}
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#000000] mb-1">
+                  <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#000000] mb-1">
                     {financialData?.student?.name || activeStudent?.name} - School Fees
                   </h2>
                   <p className="text-[11px] text-gray-400 font-medium">
                     Grade {(financialData?.student?.grade || activeStudent?.grade || '...')?.toString().replace(/^(grade\s+)/i, '')}
                   </p>
                 </div>
-                <div className={`px-4 py-1.5 rounded-[12px] ${(financialData?.totalBalance || 0) > 0 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-700 border-green-100'} text-[10px] font-bold whitespace-nowrap border`}>
-                  {(financialData?.totalBalance || 0) > 0 ? `${formatCurrency(financialData.totalBalance)} Balance` : 'CLEAN ACCOUNT'}
+                <div className={`px-4 py-1.5 rounded-[12px] ${(financialData?.totalBalance || 0) > 0 ? 'bg-red-50 text-red-600 ' : 'bg-green-50 text-green-700'} text-[8px] font-bold `}>
+                  {(financialData?.totalBalance || 0) > 0 ? `${formatCurrency(financialData.totalBalance)} Balance` : 'Clear'}
                 </div>
               </div>
 
               {(!financialData || (financialData.items.length === 0 && financialData.totalBalance === 0)) && !isLoading ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-500">
-                  <div className="size-20 rounded-full bg-green-50 flex items-center justify-center mb-6 border border-green-100">
-                    <div className="size-12 rounded-full bg-[#95e36c] flex items-center justify-center shadow-sm">
-                      <Info size={24} className="text-[#003630]" />
+                <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in zoom-in-95 duration-500">
+                  <div className="w-full h-[250px] bg-[#f9fafb] rounded-[12px] p-8  relative overflow-hidden mb-8 shadow-sm">
+
+                    <h3 className="text-[#003630] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] mb-3 tracking-[-0.4px]">
+                      New account Detected
+                    </h3>
+
+                    <p className="text-[11px] text-gray-500 leading-relaxed max-w-[300px] mx-auto">
+                      We've confirmed that <span className="text-[#003630] font-bold">{activeStudent?.name}</span> has a completely fresh account with a <span className="text-[#95e36c] font-black underline decoration-2 underline-offset-4">K0.00 Balance</span>.
+                    </p>
+
+                    <div className="mt-6 pt-6 border-t border-gray-100 flex items-center justify-center gap-2">
+                      <div className="size-1.5 rounded-full bg-[#95e36c]" />
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Fresh Admission</span>
                     </div>
                   </div>
-                  <h3 className="text-[#003630] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] mb-2">New Account Detected</h3>
-                  <p className="text-[14px] text-gray-500 max-w-[280px] leading-relaxed mb-8">
-                    We couldn't find any existing financial history for this child. This is normal for new registrations. Please confirm to proceed.
-                  </p>
+
                   <button
                     onClick={handleToggleConfirm}
                     className={`
-                        h-14 px-10 rounded-[12px] font-bold text-[10px] transition-all uppercase tracking-[1px]
-                        ${confirmedIds.has(activeStudentId)
-                        ? 'bg-[#95e36c] text-[#003630] border-none'
-                        : 'bg-[#003630] text-white shadow-lg hover:bg-[#004d45] active:scale-95'
+                      w-full h-10 rounded-[12px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] transition-all flex items-center justify-center gap-3 active:scale-[0.98] group
+                      ${confirmedIds.has(activeStudentId)
+                        ? 'bg-[#95e36c] text-[#003630] shadow-sm'
+                        : 'bg-[#003630] text-white shadow-[0_12px_30px_rgba(0,54,48,0.2)] hover:shadow-[0_16px_40px_rgba(0,54,48,0.25)]'
                       }
-                      `}
+                    `}
                   >
-                    {confirmedIds.has(activeStudentId) ? 'Record Confirmed' : 'Confirm & Continue'}
+                    {confirmedIds.has(activeStudentId) ? (
+                      <>
+                        <CheckCircle2 size={22} className="text-[#003630]" />
+                        <span className="font-bold -translate-y-0.5">Ready to Review</span>
+                      </>
+                    ) : (
+                      <span className="font-bold -translate-y-0.5">Confirm & Activate Account</span>
+                    )}
                   </button>
                 </div>
               ) : (
