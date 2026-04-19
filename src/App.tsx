@@ -1462,6 +1462,10 @@ export default function App() {
   };
 
   const handleSchoolSelection = (school: School | null) => {
+    // CRITICAL: Always reset the checkout flow when selecting a new school
+    // to prevent service data from bleeding between different institutions.
+    resetCheckoutFlow();
+
     setSelectedSchool(
       school ? school.name : null, 
       school ? school.logo : null, 
@@ -1744,12 +1748,6 @@ export default function App() {
               onViewHistory={handleViewHistory}
               onPayFees={handlePayFees}
               debtCount={students.reduce((sum, s) => sum + s.unpaidInvoicesCount, 0)}
-              onInactivityRefresh={() => {
-                // Re-navigate to services to trigger fresh data load
-                console.log('[App] Services page inactivity refresh triggered');
-                navigateToPage('search');
-                setTimeout(() => navigateToPage('services'), 100);
-              }}
               navigateToPage={navigateToPage}
             />
           </motion.div>

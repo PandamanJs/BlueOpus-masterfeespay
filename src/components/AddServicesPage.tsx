@@ -747,6 +747,12 @@ export default function AddServicesPage({
         const allCheckoutServices: CheckoutService[] = [];
 
         Object.entries(studentServices).forEach(([studentId, services]) => {
+            // Only aggregate services for students currently selected/active in this session
+            if (!selectedStudentIds.includes(studentId)) {
+                console.log(`[AddServicesPage] Skipping student ${studentId} as they are not in selectedStudentIds`);
+                return;
+            }
+
             const student = allStudents.find(s => s.id === studentId);
             const studentName = student ? student.name : "Student";
 
@@ -1782,7 +1788,16 @@ function UnifiedServicesPopup({
                                                                         onClick={(e) => {
                                                                             e.preventDefault();
                                                                             haptics.selection();
-                                                                            setTransportFrequency(freq as any);
+                                                                            const oldFreq = transportFrequency;
+                                                                            const newFreq = freq as any;
+                                                                            if (oldFreq !== newFreq) {
+                                                                                setTransportFrequency(newFreq);
+                                                                                // Clear all TRANSPORT items when switching frequency to ensure exclusivity
+                                                                                setStagedItems(prev => prev.filter(item => 
+                                                                                    !item.id.includes("route-") && 
+                                                                                    !(item.categoryId === schoolData?.category_ids?.transport)
+                                                                                ));
+                                                                            }
                                                                         }}
                                                                         className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${transportFrequency === freq
                                                                             ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2153,7 +2168,16 @@ function UnifiedServicesPopup({
                                                                         onClick={(e) => {
                                                                             e.preventDefault();
                                                                             haptics.selection();
-                                                                            setBoardingFrequency(freq as any);
+                                                                            const oldFreq = boardingFrequency;
+                                                                            const newFreq = freq as any;
+                                                                            if (oldFreq !== newFreq) {
+                                                                                setBoardingFrequency(newFreq);
+                                                                                // Clear all BOARDING items when switching frequency
+                                                                                setStagedItems(prev => prev.filter(item => 
+                                                                                    !item.id.includes("room-") && 
+                                                                                    !(item.categoryId === schoolData?.category_ids?.boarding)
+                                                                                ));
+                                                                            }
                                                                         }}
                                                                         className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${boardingFrequency === freq
                                                                             ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2523,7 +2547,16 @@ function UnifiedServicesPopup({
                                                                         onClick={(e) => {
                                                                             e.preventDefault();
                                                                             haptics.selection();
-                                                                            setCafeteriaFrequency(freq as any);
+                                                                            const oldFreq = cafeteriaFrequency;
+                                                                            const newFreq = freq as any;
+                                                                            if (oldFreq !== newFreq) {
+                                                                                setCafeteriaFrequency(newFreq);
+                                                                                // Clear all CAFETERIA items when switching frequency
+                                                                                setStagedItems(prev => prev.filter(item => 
+                                                                                    !item.id.includes("canteen-") && 
+                                                                                    !(item.categoryId === schoolData?.category_ids?.canteen)
+                                                                                ));
+                                                                            }
                                                                         }}
                                                                         className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${cafeteriaFrequency === freq
                                                                             ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -3301,15 +3334,17 @@ function UnifiedServicesPopup({
 
                     <div className="px-6">
                         <button
+                            disabled={isTabLocked}
                             onClick={() => {
+                                if (isTabLocked) return;
                                 console.log("[UnifiedServicesPopup] Confirming staged selection of", stagedItems.length, "items");
                                 haptics.success();
                                 onConfirm(stagedItems);
                             }}
-                            className="w-full h-[60px] bg-[#003630] text-white flex items-center justify-center rounded-[20px] active:scale-[0.98] transition-all pointer-events-auto shadow-[0px_8px_24px_rgba(0,54,48,0.2)]"
+                            className={`w-full h-[60px] flex items-center justify-center rounded-[20px] transition-all pointer-events-auto ${isTabLocked ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200' : 'bg-[#003630] text-white active:scale-[0.98] shadow-[0px_8px_24px_rgba(0,54,48,0.2)]'}`}
                         >
                             <span className="font-['Inter',sans-serif] font-bold text-[15px]">
-                                Confirm & Add {stagedItems.length} {stagedItems.length === 1 ? 'Item' : 'Items'}
+                                {isTabLocked ? 'Please Settle Arrears First' : `Confirm & Add ${stagedItems.length} ${stagedItems.length === 1 ? 'Item' : 'Items'}`}
                             </span>
                         </button>
                     </div>

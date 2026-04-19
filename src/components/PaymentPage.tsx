@@ -622,12 +622,33 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2 mb-2">
                   <ReceiptItemIcon />
-                  <span className="text-black text-[12px] font-bold">Breakdown</span>
+                  <span className="text-black text-[12px] font-bold">Itemized Breakdown</span>
                 </div>
 
                 <div className="flex flex-col gap-4">
+                  {studentNames.map(name => {
+                    const studentServices = checkoutServices.filter(s => s.studentName === name);
+                    if (studentServices.length === 0) return null;
+                    
+                    return (
+                      <div key={name} className="flex flex-col gap-2 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                        <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1">{name}</div>
+                        {studentServices.map(service => (
+                          <div key={service.id} className="flex justify-between items-center text-[12px]">
+                            <span className="text-gray-600 font-medium">{service.description}</span>
+                            <span className="text-black font-semibold">K{service.amount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="w-full h-[1px] bg-gray-100 my-2" />
+
+                <div className="flex flex-col gap-4">
                   <div className="flex justify-between items-center text-[#585858] text-[12px]">
-                    <span>Cart Total</span>
+                    <span>Subtotal</span>
                     <span>K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                   </div>
 
