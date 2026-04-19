@@ -100,7 +100,12 @@ export interface RegisterParentResult {
 }
 
 export async function registerParent(parentData: ParentData): Promise<RegisterParentResult> {
-    console.log('[Registration] Registering parent:', { phone: parentData.phone });
+    console.log('[Registration] Registering parent:', { phone: parentData.phone, existingId: parentData.parentId });
+
+    // 0. If we already have an ID (from a deliberate UI match), skip detection
+    if (parentData.parentId) {
+        return { parentId: parentData.parentId, isExisting: false };
+    }
     
     // 1. Phone-based duplicate detection (Essential for Zambia)
     const cleanPhone = parentData.phone.replace(/\D/g, '');
@@ -227,6 +232,50 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
             await supabase.from('student_grade').upsert(gradeEntry, { onConflict: 'student_id, academic_year_id' });
         }
     }
+}
+
+export async function getGradesWithStreams(schoolId: string) {
+    const { data, error } = await supabase
+        .from('grades')
+        .select(`
+            grade_id,
+            grade_name,
+            school_streams(stream_name)
+        `)
+        .eq('school_id', schoolId)
+        .eq('is_active', true)
+        .order('display_order');
+
+    if (error) {
+        console.error('[Registration] Error fetching grades with streams:', error);
+        return [];
+    }
+
+    console.log('[Registration] Raw grades/streams data:', data);
+
+    const result: { grade_id: string; grade_name: string; stream_name?: string }[] = [];
+    
+    (data || []).forEach(g => {
+        const streams = (g.school_streams as any[]) || [];
+        
+        if (streams.length > 0) {
+            streams.forEach(s => {
+                result.push({
+                    grade_id: g.grade_id,
+                    grade_name: g.grade_name,
+                    stream_name: s.stream_name
+                });
+            });
+        } else {
+            result.push({
+                grade_id: g.grade_id,
+                grade_name: g.grade_name
+            });
+        }
+    });
+
+    console.log('[Registration] Final availableOptions:', result);
+    return result;
 }
 
 export async function getGradesBySchool(schoolId: string) {

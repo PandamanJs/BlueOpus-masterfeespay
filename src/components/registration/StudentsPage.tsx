@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Search, X, Loader2, Pencil, ChevronDown, User, Sparkles, UserRoundPlus, ChevronRight, Info } from 'lucide-react';
+import { Plus, Search, X, Loader2, Pencil, ChevronDown, User, Sparkles, UserRoundPlus, ChevronRight, Info, AlertTriangle } from 'lucide-react';
 import { type ParentData } from './ParentInformationPage';
-import { type StudentData, getGradesBySchool, getClassesByGrade, type SchoolGrade } from '../../lib/supabase/api/registration';
+import { type StudentData, getGradesWithStreams, type SchoolGrade } from '../../lib/supabase/api/registration';
 import { haptics } from '../../utils/haptics';
 import LogoHeader from '../common/LogoHeader';
 import OnboardingProgressBar from './OnboardingProgressBar';
@@ -127,7 +127,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const [editingId, setEditingId] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  const [availableGrades, setAvailableGrades] = useState<SchoolGrade[]>([]);
+  const [availableOptions, setAvailableOptions] = useState<{ grade_id: string; grade_name: string; stream_name?: string }[]>([]);
   const [availableClasses, setAvailableClasses] = useState<string[]>([]);
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
@@ -148,6 +148,53 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
   const [searchResults, setSearchResults] = useState<StudentData[]>([]);
   const [smartMatchResults, setSmartMatchResults] = useState<StudentData[]>([]);
+  const [gradeSearchQuery, setGradeSearchQuery] = useState('');
+  const [gradeSuggestion, setGradeSuggestion] = useState<string | null>(null);
+  const [showGradeSearch, setShowGradeSearch] = useState(false);
+  // Simple fuzzy search / Levenshtein distance for typos
+  const findClosestOption = (query: string, options: typeof availableOptions) => {
+    if (!query || query.length < 2) return null;
+    const cleanQuery = query.toLowerCase().replace(/\s+/g, '');
+    
+    let bestMatch: (typeof availableOptions)[0] | null = null;
+    let highestScore = 0;
+
+    options.forEach(opt => {
+      const gName = (opt.grade_name + (opt.stream_name ? ' ' + opt.stream_name : '')).toLowerCase().replace(/\s+/g, '');
+      
+      // Basic similarity check
+      let matches = 0;
+      for (let i = 0; i < Math.min(cleanQuery.length, gName.length); i++) {
+        if (cleanQuery[i] === gName[i]) matches++;
+      }
+      
+      const score = matches / Math.max(cleanQuery.length, gName.length);
+      if (score > 0.6 && score > highestScore) {
+        highestScore = score;
+        bestMatch = opt;
+      }
+    });
+
+    return bestMatch;
+  };
+
+  useEffect(() => {
+    if (gradeSearchQuery && availableOptions.length > 0) {
+      const exactMatches = availableOptions.filter(opt => {
+        const combined = opt.grade_name + (opt.stream_name ? ' ' + opt.stream_name : '');
+        return combined.toLowerCase().includes(gradeSearchQuery.toLowerCase());
+      });
+      
+      if (exactMatches.length === 0) {
+        const suggestion = findClosestOption(gradeSearchQuery, availableOptions);
+        setGradeSuggestion(suggestion ? (suggestion.grade_name + (suggestion.stream_name ? ' ' + suggestion.stream_name : '')) : null);
+      } else {
+        setGradeSuggestion(null);
+      }
+    } else {
+      setGradeSuggestion(null);
+    }
+  }, [gradeSearchQuery, availableOptions]);
 
   // ── Back-navigation fix for the Add/Edit form ────────────────────────────
   const showAddFormRef = useRef(showAddForm);
@@ -171,21 +218,20 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   }, [setNavigationDirection]);
 
   useEffect(() => {
-    const fetchGrades = async () => {
+    async function loadData() {
       setIsLoadingMetadata(true);
       try {
-        const grades = await getGradesBySchool(parentData.schoolId);
-        setAvailableGrades(grades);
-      } catch (error) {
-        console.error("Failed to load school grades:", error);
+        const options = await getGradesWithStreams(parentData.schoolId);
+        setAvailableOptions(options);
+      } catch (err) {
+        console.error('Failed to load grade metadata:', err);
       } finally {
         setIsLoadingMetadata(false);
       }
-    };
-    fetchGrades();
+    }
+    loadData();
   }, [parentData.schoolId]);
 
-  // SMART CLASS SELECTION: Dynamic loading based on selected grade
   useEffect(() => {
     const fetchClassesForGrade = async () => {
       if (!newStudent.grade) {
@@ -194,7 +240,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       }
 
       // Find the ID for the currently selected grade name
-      const grade = availableGrades.find(g => g.grade_name === newStudent.grade);
+      const grade = availableOptions.find(g => g.grade_name === newStudent.grade);
       if (!grade) return;
 
       setIsLoadingClasses(true);
@@ -215,7 +261,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       }
     };
     fetchClassesForGrade();
-  }, [newStudent.grade, parentData.schoolId, availableGrades]);
+  }, [newStudent.grade, parentData.schoolId, availableOptions]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -236,6 +282,8 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     return () => clearTimeout(timer);
   }, [searchQuery, parentData.schoolId]);
 
+  const [collisionDetected, setCollisionDetected] = useState<boolean>(false);
+
   useEffect(() => {
     if (!showAddForm || editingId) return; // Only do smart match when adding new manually
     const timer = setTimeout(async () => {
@@ -243,18 +291,30 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
         try {
           const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
           const results = await searchStudentsByName(newStudent.name, parentData.schoolId);
-          // Filter out students already added
-          setSmartMatchResults(results.filter(r => !students.find(s => s.id === r.id)));
+          
+          // Filter out students already added to the list
+          const relevantMatches = results.filter(r => !students.find(s => s.id === r.id));
+          setSmartMatchResults(relevantMatches);
+
+          // Check for exact name + class collision in the database
+          const exactCollision = relevantMatches.some(m => 
+            m.name.trim().toLowerCase() === newStudent.name.trim().toLowerCase() &&
+            m.grade === newStudent.grade &&
+            m.class === newStudent.class
+          );
+          setCollisionDetected(exactCollision);
         } catch (error) {
           setSmartMatchResults([]);
+          setCollisionDetected(false);
         }
       } else {
         setSmartMatchResults([]);
+        setCollisionDetected(false);
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [newStudent.name, parentData.schoolId, showAddForm, editingId, students]);
+  }, [newStudent.name, newStudent.grade, newStudent.class, parentData.schoolId, showAddForm, editingId, students]);
 
   const addStudent = (student: StudentData) => {
     console.log('[Registration] addStudent called:', student);
@@ -304,6 +364,20 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     if (!newStudent.class.trim()) {
       errors.class = 'Required';
       isValid = false;
+    }
+
+    // Check for local duplicates (same name, grade, class in the list already)
+    const isLocalDuplicate = students.some(s => 
+      s.id !== editingId &&
+      s.name.trim().toLowerCase() === newStudent.name.trim().toLowerCase() &&
+      s.grade === newStudent.grade &&
+      s.class === newStudent.class
+    );
+
+    if (isLocalDuplicate) {
+      errors.name = 'Duplicate student in your list';
+      isValid = false;
+      toast.error('You have already added this student to your application.');
     }
 
     setFormErrors(errors);
@@ -376,11 +450,9 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader showBackButton onBack={onBack} />
-
-      <div className="w-full flex justify-center pt-6 pb-2">
-        <OnboardingProgressBar currentStep={2} totalSteps={3} />
-      </div>
+      <LogoHeader showBackButton onBack={onBack}>
+        <OnboardingProgressBar currentStep={2} totalSteps={3} className="py-0" />
+      </LogoHeader>
 
       <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full">
         <motion.div
@@ -501,7 +573,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
             </div>
 
             {/* Students List Box */}
-            <div className="relative min-h-[400px] rounded-[24px] border-[1px] border-[#e5e7eb] p-6 flex flex-col items-start justify-start">
+            <div className={`relative min-h-[400px] rounded-[24px] border-[1px] border-[#e5e7eb] p-6 flex flex-col ${students.length === 0 ? 'items-center justify-center' : 'items-start justify-start'}`}>
               {students.length > 0 ? (
                 <div className="w-full">
                   {students.map((student) => (
@@ -570,6 +642,23 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                         className={inputClasses('name')}
                       />
                     </div>
+                    {/* Identical student collision warning */}
+                    {collisionDetected && !editingId && (
+                      <div className="mt-2 bg-red-50 border-[1.5px] border-red-200 rounded-[16px] p-4 shadow-md animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-start gap-3 text-red-700">
+                          <AlertTriangle size={20} className="shrink-0 mt-0.5" />
+                          <div className="flex flex-col gap-1">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] leading-tight">
+                              Student already exists in this Class
+                            </p>
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[12px] leading-relaxed opacity-90">
+                              A record for <strong>{newStudent.name}</strong> was found in <strong>Grade {newStudent.grade.toString().replace(/^(grade\s+)/i, '')} {newStudent.class}</strong>. 
+                              Please use the "Did you mean..." list above or contact the school if this is a mistake.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {/* Smart Match Suggestions */}
                     {smartMatchResults.length > 0 && !editingId && (
                       <div className="mt-2 bg-amber-50 border-[1.5px] border-amber-200 rounded-[16px] p-3 shadow-sm animate-in fade-in slide-in-from-top-2">
@@ -621,28 +710,115 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     <div className="space-y-2.5">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade</label>
                       <div className="relative group">
-                        <select
-                          value={newStudent.grade}
-                          onFocus={() => { setFocusedField('grade'); haptics.light(); }}
-                          onBlur={() => setFocusedField(null)}
-                          onChange={(e) => setNewStudent({ ...newStudent, grade: e.target.value })}
-                          className={`${inputClasses('grade')} appearance-none pr-12`}
-                          disabled={isLoadingMetadata}
-                        >
-                          {isLoadingMetadata ? (
-                            <option value="">Loading...</option>
-                          ) : availableGrades.length === 0 ? (
-                            <option value="">⚠ No grades found</option>
-                          ) : (
-                            <>
-                              <option value="">Select Grade</option>
-                              {availableGrades.map(g => (
-                                <option key={g.grade_id} value={g.grade_name}>{g.grade_name}</option>
-                              ))}
-                            </>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={gradeSearchQuery}
+                            onFocus={() => {
+                              setFocusedField('grade');
+                              setShowGradeSearch(true);
+                              haptics.light();
+                            }}
+                            onBlur={() => {
+                              setFocusedField(null);
+                              // Delayed hide to allow clicking results
+                              setTimeout(() => setShowGradeSearch(false), 200);
+                            }}
+                            onChange={(e) => {
+                              setGradeSearchQuery(e.target.value);
+                              setNewStudent({ ...newStudent, grade: '' }); // Reset actual value until picked
+                            }}
+                            placeholder="Type to search grade..."
+                            className={inputClasses('grade')}
+                          />
+                          {isLoadingMetadata && (
+                            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                              <Loader2 className="size-5 text-[#95e36c] animate-spin" />
+                            </div>
                           )}
-                        </select>
-                        <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'grade' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
+                        </div>
+
+                        <AnimatePresence>
+                          {showGradeSearch && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              className="absolute z-[100] w-full mt-2 bg-white rounded-[16px] shadow-2xl border border-gray-100 overflow-hidden max-h-[220px] overflow-y-auto"
+                            >
+                              {availableOptions
+                                .filter(opt => {
+                                  const combined = opt.grade_name + (opt.stream_name ? ' ' + opt.stream_name : '');
+                                  return combined.toLowerCase().includes(gradeSearchQuery.toLowerCase());
+                                })
+                                .map((opt) => {
+                                  const label = opt.grade_name + (opt.stream_name ? ' ' + opt.stream_name : '');
+                                  const isSelected = newStudent.grade === opt.grade_name && (opt.stream_name ? newStudent.class === opt.stream_name : newStudent.class === 'General');
+                                  
+                                  return (
+                                    <button
+                                      key={`${opt.grade_id}-${opt.stream_name || 'none'}`}
+                                      type="button"
+                                      onClick={() => {
+                                        setNewStudent({ 
+                                          ...newStudent, 
+                                          grade: opt.grade_name,
+                                          class: opt.stream_name || 'General'
+                                        });
+                                        setGradeSearchQuery(label);
+                                        setShowGradeSearch(false);
+                                        haptics.success();
+                                      }}
+                                      className="w-full px-5 py-3.5 text-left hover:bg-[#f9fafb] transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between group"
+                                    >
+                                      <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-[15px] font-medium transition-colors ${isSelected ? 'text-[#003630] font-bold' : 'text-gray-600'}`}>
+                                            {opt.grade_name}
+                                          </span>
+                                          {opt.stream_name && (
+                                            <span className="px-2 py-0.5 rounded-full bg-[#95e36c]/10 text-[#003630] text-[10px] font-black uppercase tracking-wider">
+                                              {opt.stream_name}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {isSelected && (
+                                        <div className="size-2 rounded-full bg-[#95e36c] shadow-[0_0_8px_#95e36c]" />
+                                      )}
+                                    </button>
+                                  );
+                                })
+                              }
+                              {availableOptions.filter(opt => {
+                                const combined = opt.grade_name + (opt.stream_name ? ' ' + opt.stream_name : '');
+                                return combined.toLowerCase().includes(gradeSearchQuery.toLowerCase());
+                              }).length === 0 && (
+                                <div className="px-5 py-8 text-center">
+                                  {gradeSuggestion ? (
+                                    <div className="space-y-3">
+                                      <p className="text-[13px] text-gray-400">No exact match for "{gradeSearchQuery}"</p>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setNewStudent({ ...newStudent, grade: gradeSuggestion });
+                                          setGradeSearchQuery(gradeSuggestion);
+                                          setGradeSuggestion(null);
+                                          haptics.success();
+                                        }}
+                                        className="px-4 py-2 rounded-full bg-[#95e36c]/10 text-[#003630] text-[12px] font-bold border border-[#95e36c]/20 hover:bg-[#95e36c]/20 transition-all active:scale-95"
+                                      >
+                                        Did you mean <span className="underline italic ml-0.5">{gradeSuggestion}</span>?
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <p className="text-[13px] text-gray-400">No grades matching "{gradeSearchQuery}"</p>
+                                  )}
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
 

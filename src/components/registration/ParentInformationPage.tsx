@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown, CheckCircle2, AlertTriangle, X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown, CheckCircle2, AlertTriangle, X, Info, ChevronRight, Sparkles } from 'lucide-react';
 import { validatePhoneNumber, validateEmail, validateName } from '../../utils/validation';
 import { getSchools } from '../../lib/supabase/api/schools';
 import { verifySchoolCode } from '../../lib/supabase/api/security';
@@ -53,56 +53,102 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
 
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
+  const [showSmartCheckModal, setShowSmartCheckModal] = useState(false);
+  const [smartMatchData, setSmartMatchData] = useState<{ id: string; name: string; type: 'update' | 'retry' } | null>(null);
+
+  // Sync formData to a ref to avoid stale closure issues in async checks
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
+
   // New: Inline availability checking state
   const [availability, setAvailability] = useState<Record<string, { status: 'idle' | 'checking' | 'taken', name?: string }>>({});
 
-  // Effect to check field availability (luxe debounce-like feel)
+  // Effect to check form for existing accounts (Reactive Scanner)
   useEffect(() => {
-    const checkField = async (id: string, value: string) => {
-      if (!value || value.length < 5) return;
-      console.log(`[Registration] Inline check for ${id}:`, value);
+    const runRegistrationScan = async () => {
+      const data = formData; // Use current render cycle data
+      
+      // Minimum requirements to even start checking: at least 2 fields with substantial content
+      const hasName = data.fullName.trim().length >= 5;
+      const hasPhone = data.phone.length >= 10;
+      const hasEmail = data.email.includes('@') && data.email.includes('.');
+      const hasSchool = !!data.schoolId;
 
-      // Only check if it looks complete
-      if (id === 'phone' && value.length === 10) {
-        setAvailability(prev => ({ ...prev, [id]: { status: 'checking' } }));
+      if (!hasSchool) return;
+      if (!hasName && !hasPhone && !hasEmail) return;
+
+      console.log('[Registration] [Scanner] Scanning form state...', { hasName, hasPhone, hasEmail });
+
+      // 1. If we have a Phone or Email, check for existence in background
+      // and set the 'taken' status for same-school collisions
+      
+      if (hasPhone) {
         try {
-          const parent = await getParentByPhone(value);
-          console.log(`[Registration] Phone match result for ${value}:`, !!parent);
+          const parent = await getParentByPhone(data.phone);
           if (parent) {
-            setAvailability(prev => ({ ...prev, [id]: { status: 'taken', name: parent.name } }));
+            const inSameSchool = parent.students.some(s => s.school_id === data.schoolId);
+            const cleanName = parent.name.toLowerCase().replace(/\s+/g, ' ').trim();
+            const cleanInputName = data.fullName.toLowerCase().replace(/\s+/g, ' ').trim();
+            const nameMatches = cleanName === cleanInputName;
+            const emailMatches = parent.email?.toLowerCase().trim() === data.email.toLowerCase().trim();
+
+            // PERFECT MATCH CHECK
+            if (nameMatches && (emailMatches || (hasPhone && data.phone === parent.phone))) {
+               if (!showSmartCheckModal) {
+                 console.log('[Registration] [Scanner] PERFECT MATCH via Phone block. Found ID:', parent.id);
+                 setSmartMatchData({ id: parent.id, name: parent.name, type: 'update' });
+                 setShowSmartCheckModal(true);
+                 toast.success(`Welcome back, ${parent.name}`, { icon: <Sparkles className="text-yellow-500" /> });
+               }
+            } else if (inSameSchool) {
+              setAvailability(prev => ({ ...prev, phone: { status: 'taken', name: parent.name } }));
+            } else {
+              setAvailability(prev => ({ ...prev, phone: { status: 'idle' } }));
+            }
           } else {
-            setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+            setAvailability(prev => ({ ...prev, phone: { status: 'idle' } }));
           }
         } catch (e) {
-          console.error('[Registration] Phone check error:', e);
-          setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+          console.error('[Scanner] Phone error:', e);
         }
       }
 
-      if (id === 'email' && value.includes('@') && value.includes('.')) {
-        setAvailability(prev => ({ ...prev, [id]: { status: 'checking' } }));
+      if (hasEmail) {
         try {
-          const parent = await getParentByEmail(value);
-          console.log(`[Registration] Email match result for ${value}:`, !!parent);
+          const parent = await getParentByEmail(data.email);
           if (parent) {
-            setAvailability(prev => ({ ...prev, [id]: { status: 'taken', name: parent.name } }));
+            const inSameSchool = parent.students.some(s => s.school_id === data.schoolId);
+            const cleanName = parent.name.toLowerCase().replace(/\s+/g, ' ').trim();
+            const cleanInputName = data.fullName.toLowerCase().replace(/\s+/g, ' ').trim();
+            const nameMatches = cleanName === cleanInputName;
+            const phoneMatches = parent.phone.replace(/\D/g, '') === data.phone.replace(/\D/g, '');
+
+            // PERFECT MATCH CHECK
+            if (nameMatches && (phoneMatches || (hasEmail && data.email === parent.email))) {
+               if (!showSmartCheckModal) {
+                 console.log('[Registration] [Scanner] PERFECT MATCH via Email block. Found ID:', parent.id);
+                 setSmartMatchData({ id: parent.id, name: parent.name, type: 'update' });
+                 setShowSmartCheckModal(true);
+                 toast.success(`Welcome back, ${parent.name}`, { icon: <Sparkles className="text-yellow-500" /> });
+               }
+            } else if (inSameSchool) {
+              setAvailability(prev => ({ ...prev, email: { status: 'taken', name: parent.name } }));
+            } else {
+              setAvailability(prev => ({ ...prev, email: { status: 'idle' } }));
+            }
           } else {
-            setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+            setAvailability(prev => ({ ...prev, email: { status: 'idle' } }));
           }
         } catch (e) {
-          console.error('[Registration] Email check error:', e);
-          setAvailability(prev => ({ ...prev, [id]: { status: 'idle' } }));
+          console.error('[Scanner] Email error:', e);
         }
       }
     };
 
-    const timer = setTimeout(() => {
-      checkField('phone', formData.phone);
-      checkField('email', formData.email);
-    }, 600);
-
+    // Debounce slightly to avoid aggressive API hitting while typing
+    const timer = setTimeout(runRegistrationScan, 500);
     return () => clearTimeout(timer);
-  }, [formData.phone, formData.email]);
+  }, [formData.fullName, formData.phone, formData.email, formData.schoolId]);
 
   useEffect(() => {
     async function fetchSchools() {
@@ -176,27 +222,29 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
     onNext(formData);
   };
 
-  const inputClasses = (field: string) => `
-    relative bg-white rounded-[16px] overflow-hidden
-    transition-all duration-300 w-full h-[56px] px-12
-    ${errors[field as keyof typeof errors]
-      ? 'ring-4 ring-red-500/10 border-[1.5px] border-red-500 bg-red-50/20'
-      : focusedField === field
-        ? 'ring-4 ring-[#95e36c]/20 border-[1.5px] border-[#95e36c] shadow-lg'
-        : 'border-[1.5px] border-[#e5e7eb] shadow-sm hover:border-[#d1d5db]'
-    }
-    text-[15px] font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#003630] placeholder:text-gray-300 focus:outline-none
-  `;
+  const inputClasses = (field: string) => {
+    const isInvalid = !!errors[field as keyof typeof errors] || availability[field]?.status === 'taken';
+    return `
+      relative bg-white rounded-[16px] overflow-hidden
+      transition-all duration-300 w-full h-[56px] px-12 border-[1.5px]
+      ${isInvalid
+        ? 'border-red-500 ring-4 ring-red-500/10 bg-red-50/5'
+        : focusedField === field
+          ? 'border-[#95e36c] ring-4 ring-[#95e36c]/10'
+          : 'border-[#e5e7eb] hover:border-gray-300'
+      }
+      text-[15px] font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#003630] 
+      placeholder:text-gray-300 outline-none
+    `;
+  };
 
   const isSubmitDisabled = isVerifying || Object.values(availability).some(a => a.status === 'taken');
 
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader showBackButton={!!onBack} onBack={onBack} />
-
-      <div className="w-full flex justify-center pt-6 pb-2">
-        <OnboardingProgressBar currentStep={1} totalSteps={3} />
-      </div>
+      <LogoHeader showBackButton={!!onBack} onBack={onBack}>
+        <OnboardingProgressBar currentStep={1} totalSteps={3} className="py-0" />
+      </LogoHeader>
 
       <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full relative z-0">
         {/* Header - Matching SearchPage style */}
@@ -217,7 +265,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
         </motion.div>
 
         {/* Form Fields Card */}
-        <div className="space-y-4">
+        <div className="space-y-1">
           {/* Label + Input Wrapper */}
           {[
             { id: 'fullName', label: 'Full Name', icon: User, placeholder: "Enter parent's full name", type: 'text' },
@@ -239,47 +287,79 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                   onChange={(e) => {
                     let value = e.target.value;
                     if (field.id === 'fullName') value = value.replace(/[^a-zA-Z\s.-]/g, '');
-                    if (field.id === 'phone') value = value.replace(/\D/g, '').slice(0, 10);
+                    if (field.id === 'phone') {
+                      value = value.replace(/[^\d+]/g, '').slice(0, 13);
+                      // Real-time "wrong track" validation
+                      const error = validatePhoneNumber(value);
+                      const isLengthError = error.includes('10-digit') || (error === 'Invalid number format' && value.length < 10);
+
+                      if (error && !isLengthError) {
+                        setErrors(prev => ({ ...prev, phone: error }));
+                      } else if (value.replace(/\D/g, '').length > 10 && !value.includes('260')) {
+                        setErrors(prev => ({ ...prev, phone: 'Number is too long' }));
+                      } else {
+                        setErrors(prev => ({ ...prev, phone: '' }));
+                      }
+
+                      // Clear availability if length changes from 10
+                      if (value.length !== 10 && availability.phone?.status !== 'idle') {
+                        setAvailability(prev => ({ ...prev, phone: { status: 'idle' } }));
+                      }
+                    }
                     setFormData({ ...formData, [field.id]: value });
-                    setErrors({ ...errors, [field.id]: '' });
+                    if (field.id !== 'phone') setErrors({ ...errors, [field.id]: '' });
                   }}
                   placeholder={field.placeholder}
                   className={inputClasses(field.id)}
                 />
 
-                {/* Availability Badge */}
+                {/* Inline loading/success indicators */}
                 <AnimatePresence>
-                  {(availability[field.id]?.status === 'taken' || availability[field.id]?.status === 'checking') && (
+                  {availability[field.id]?.status === 'checking' && (
                     <motion.div
-                      key={`${field.id}-status`}
-                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 z-[30] pointer-events-none"
+                      key={`${field.id}-verifying`}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className="absolute inset-y-0 right-0 flex items-center pr-4 z-[30] pointer-events-none"
                     >
-                      {availability[field.id]?.status === 'taken' ? (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f43f5e]/10 border border-[#f43f5e]/20 rounded-[8px] shadow-[0_2px_10px_rgba(244,63,94,0.1)] backdrop-blur-md transition-all duration-300">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
-                          <span 
-                            className="text-[10px] font-black !text-[#f43f5e] uppercase tracking-widest whitespace-nowrap"
-                            style={{ color: '#f43f5e' }}
-                          >
-                            can't use this it's already exists try a different one
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="px-3 py-1.5 flex items-center gap-2 bg-white/50 rounded-xl backdrop-blur-sm">
-                          <Loader2 className="w-3.5 h-3.5 text-[#95e36c] animate-spin" />
-                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Verifying</span>
-                        </div>
-                      )}
+                      <div className="px-3 py-1.5 flex items-center gap-2 bg-white/50 rounded-xl backdrop-blur-sm">
+                        <Loader2 className="w-3.5 h-3.5 text-[#95e36c] animate-spin" />
+                        <span className="text-[8px] uppercase font-bold text-gray-400 tracking-wider">Verifying</span>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
-              {errors[field.id as keyof typeof errors] && (
-                <p className="text-[10px] text-red-500 pl-1 mt-1.5 font-semibold">{errors[field.id as keyof typeof errors]}</p>
-              )}
+              <div className="min-h-[24px] mt-2.5 pl-1 flex items-center">
+                <AnimatePresence mode="wait">
+                  {errors[field.id as keyof typeof errors] ? (
+                    <motion.div
+                      key="field-error"
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-[10px] text-red-500 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] flex items-center gap-2"
+                    >
+                      <div className="size-4 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                        <AlertTriangle size={10} className="text-red-500" />
+                      </div>
+                      <p>{errors[field.id as keyof typeof errors]}</p>
+                    </motion.div>
+                  ) : availability[field.id]?.status === 'taken' ? (
+                    <motion.div
+                      key="availability-error"
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-[10px] text-red-500 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] flex items-center gap-2"
+                    >
+                      <div className="size-4 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                        <AlertTriangle size={10} className="text-red-500" />
+                      </div>
+                      <p>This account already exists. Please try a different one.</p>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
             </div>
           ))}
 
@@ -312,7 +392,23 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 <ChevronDown size={18} />
               </div>
             </div>
-            {errors.schoolId && <p className="text-[10px] text-red-500 pl-1 mt-1 font-semibold">{errors.schoolId}</p>}
+            <div className="min-h-[22px] mt-1 pl-1 flex items-center">
+              <AnimatePresence mode="wait">
+                {errors.schoolId && (
+                  <motion.div
+                    key="school-error"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-[10px] text-red-500 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] flex items-center gap-1.5"
+                  >
+                    <div className="size-3.5 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                      <AlertTriangle size={9} className="text-red-500" />
+                    </div>
+                    {errors.schoolId}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Access Code */}
@@ -342,7 +438,23 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 className={`${inputClasses('accessCode')} tracking-[2px] font-bold text-center pl-4`}
               />
             </div>
-            {errors.accessCode && <p className="text-[10px] text-red-500 pl-1 mt-1 font-semibold">{errors.accessCode}</p>}
+            <div className="min-h-[22px] mt-1 pl-1 flex items-center">
+              <AnimatePresence mode="wait">
+                {errors.accessCode && (
+                  <motion.div
+                    key="access-error"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-[10px] text-red-500 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] flex items-center gap-1.5"
+                  >
+                    <div className="size-3.5 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                      <AlertTriangle size={9} className="text-red-500" />
+                    </div>
+                    {errors.accessCode}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
@@ -451,6 +563,85 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 >
                   Confirm & Next
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Smart Check Modal - Redesigned Edge-to-Edge with 12px corners */}
+        {showSmartCheckModal && (
+          <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+              onClick={() => setShowSmartCheckModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              style={{ borderRadius: '12px 12px 0 0' }}
+              className="relative w-full sm:max-w-[440px] bg-white overflow-hidden shadow-2xl flex flex-col p-6 sm:p-8 sm:!rounded-[12px]"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className="size-12 flex items-center justify-center shrink-0">
+                  <Info size={32} style={{ color: '#a64444' }} />
+                </div>
+                <div>
+                  <h3 className="text-[18px] font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[#003630] leading-tight">
+                    Account Found
+                  </h3>
+                  <p className="text-[13px] text-gray-400 font-medium">Linked to {schools.find(s => s.id.toString() === formData.schoolId)?.name || 'institution'}</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50/80 rounded-[12px] p-5 mb-8 border border-gray-100">
+                <p className="text-[14px] text-[#003630]/80 leading-relaxed">
+                  Hi <strong className="text-[#003630]">{smartMatchData?.name}</strong>, you already have an active profile with us. 
+                  <br /><br />
+                  Would you like to <strong>update your details</strong> or are you restarting a <strong>prior session</strong>?
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    console.log('[Registration] SmartCheck: Update Information clicked');
+                    setShowSmartCheckModal(false);
+                    // Pass the existing parent ID to onNext
+                    onNext({ ...formData, parentId: smartMatchData?.id });
+                  }}
+                  className="w-full h-[56px] rounded-[12px] bg-[#003630] text-white font-bold text-[16px] hover:bg-[#004d45] transition-all active:scale-[0.98] shadow-lg shadow-[#003630]/10 flex items-center justify-center gap-2"
+                >
+                  Update Information
+                  <ChevronRight size={18} />
+                </button>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => {
+                      console.log('[Registration] SmartCheck: Sign up again clicked');
+                      setShowSmartCheckModal(false);
+                      // Treat as retry - we still use the existing ID to avoid collisions
+                      onNext({ ...formData, parentId: smartMatchData?.id });
+                    }}
+                    className="h-[52px] rounded-[12px] bg-white text-[#003630] font-bold text-[14px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-[0.98]"
+                  >
+                    Sign up again
+                  </button>
+                  <button
+                    onClick={() => setShowSmartCheckModal(false)}
+                    className="h-[52px] rounded-[12px] bg-white text-gray-400 font-bold text-[14px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-[0.98]"
+                  >
+                    Go Back
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-center">
+                <div className="w-12 h-1.5 rounded-full bg-gray-100 sm:hidden" />
               </div>
             </motion.div>
           </div>

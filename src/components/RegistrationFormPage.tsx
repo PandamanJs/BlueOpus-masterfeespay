@@ -18,9 +18,24 @@ interface RegistrationFormPageProps {
 type RegistrationStep = 'parent' | 'students' | 'review';
 
 export default function RegistrationFormPage({ onBack, onComplete }: RegistrationFormPageProps) {
-  const [currentStep, setCurrentStep] = useState<RegistrationStep>('parent');
-  const [parentData, setParentData] = useState<ParentData | null>(null);
-  const [studentsData, setStudentsData] = useState<StudentData[]>([]);
+  // ── Persistence Logic ──────────────────────────────────────────────────
+  const PERSISTENCE_KEY = 'masterfees_registration_v1';
+
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>(() => {
+    const saved = localStorage.getItem(`${PERSISTENCE_KEY}_step`);
+    return (saved as RegistrationStep) || 'parent';
+  });
+
+  const [parentData, setParentData] = useState<ParentData | null>(() => {
+    const saved = localStorage.getItem(`${PERSISTENCE_KEY}_parent`);
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [studentsData, setStudentsData] = useState<StudentData[]>(() => {
+    const saved = localStorage.getItem(`${PERSISTENCE_KEY}_students`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [schools, setSchools] = useState<School[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -30,10 +45,23 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
   const [duplicateMatchType, setDuplicateMatchType] = useState<'phone' | 'email' | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    localStorage.setItem(`${PERSISTENCE_KEY}_step`, currentStep);
+    if (parentData) localStorage.setItem(`${PERSISTENCE_KEY}_parent`, JSON.stringify(parentData));
+    if (studentsData.length > 0) localStorage.setItem(`${PERSISTENCE_KEY}_students`, JSON.stringify(studentsData));
+  }, [currentStep, parentData, studentsData]);
+
+  const clearPersistence = () => {
+    localStorage.removeItem(`${PERSISTENCE_KEY}_step`);
+    localStorage.removeItem(`${PERSISTENCE_KEY}_parent`);
+    localStorage.removeItem(`${PERSISTENCE_KEY}_students`);
+  };
+
   // ── Back-navigation fix ──────────────────────────────────────────────────
   // We need a ref so the popstate handler always sees the CURRENT step without
   // needing to re-register the listener on every render.
-  const currentStepRef = useRef<RegistrationStep>('parent');
+  const currentStepRef = useRef<RegistrationStep>(currentStep);
   useEffect(() => { currentStepRef.current = currentStep; }, [currentStep]);
 
   // Capture fires before App.tsx's bubble-phase listener, so we can handle
@@ -142,6 +170,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || "";
         console.log('[Registration] Finalizing with school:', schoolName);
 
+        clearPersistence();
         onComplete({
           name: parentData.fullName,
           phone: parentData.phone,
@@ -233,6 +262,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
           await linkStudentsToParent(newParent.parent_id, studentsData, parentData.schoolId);
           toast.success('Registration completed successfully!');
           const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
+          clearPersistence();
           onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName, userId: newParent.parent_id });
         }
       } catch (err) {

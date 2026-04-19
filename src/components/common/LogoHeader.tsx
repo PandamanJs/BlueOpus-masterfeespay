@@ -42,17 +42,22 @@ export default function LogoHeader({ onBack, showBackButton = false, className, 
 
     return (
         <div className={`h-[66px] w-full sticky top-0 z-[100] bg-white/95 backdrop-blur-[20px] flex items-center px-4 ${className}`}>
-            
-            <button 
-                onClick={handleHomeClick}
-                className="relative flex items-center gap-[12px] touch-manipulation active:scale-95 transition-transform"
-                title="Go to Home"
-            >
-                {showLogo && <Logo />}
-                <p className="font-['Inter:Bold',sans-serif] font-bold leading-[normal] not-italic text-[22px] text-black text-nowrap whitespace-pre tracking-[-0.03em]">masterfees</p>
-            </button>
+            <div className="flex items-center gap-4 flex-1">
+                <button 
+                    onClick={handleHomeClick}
+                    className="relative flex items-center gap-[12px] touch-manipulation active:scale-95 transition-transform shrink-0"
+                    title="Go to Home"
+                >
+                    {showLogo && <Logo />}
+                    <p className="font-['Inter:Bold',sans-serif] font-bold leading-[normal] not-italic text-[22px] text-black text-nowrap whitespace-pre tracking-[-0.03em]">masterfees</p>
+                </button>
 
-            {children}
+                {children && (
+                    <div className="flex-1 flex justify-center pr-[140px]">
+                        {children}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

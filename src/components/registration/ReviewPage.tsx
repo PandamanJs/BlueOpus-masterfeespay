@@ -93,10 +93,9 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
 
   return (
     <div className="bg-white min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader showBackButton onBack={onBack} />
-      <div className="w-full flex justify-center pt-6 pb-2 border-b border-gray-100">
-        <OnboardingProgressBar currentStep={3} totalSteps={3} />
-      </div>
+      <LogoHeader showBackButton onBack={onBack}>
+        <OnboardingProgressBar currentStep={3} totalSteps={3} className="py-0" />
+      </LogoHeader>
 
       <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full">
         {/* Page Header */}
