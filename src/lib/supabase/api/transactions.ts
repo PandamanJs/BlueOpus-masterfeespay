@@ -409,10 +409,17 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
             const invRef = (inv.invoice_number || invId).toLowerCase();
             
             if (!seenIds.has(invId) && !seenRefs.has(invRef)) {
-                let serviceName = "School Fee Payment";
+                const term = inv.term || inv.invoice_items?.meta?.term;
+                const year = inv.year || inv.invoice_items?.meta?.academic_year;
+
+                let serviceName = "School Fees";
                 if (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
                     const firstItem = inv.invoice_items.items[0];
                     serviceName = firstItem.description || firstItem.name || serviceName;
+                } else if (term && year) {
+                    serviceName = `Term ${term} (${year}) School Fees`;
+                } else if (term) {
+                    serviceName = `Term ${term} School Fees`;
                 }
 
                 results.push({
@@ -431,8 +438,8 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
                     parent_id: "",
                     student_id: inv.student_id,
                     school_id: inv.school_id,
-                    term: inv.term || inv.invoice_items?.meta?.term,
-                    academic_year: inv.year || inv.invoice_items?.meta?.academic_year,
+                    term,
+                    academic_year: year,
                     services: inv.invoice_items?.items || [],
                     completed_at: "",
                     initiated_at: inv.created_at,
@@ -584,12 +591,20 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
         //    Fee items/enrollments are only used as fallback for services with no invoice yet.
         const invoiceItems: any[] = invoices.map(inv => {
             const total = Number((inv as any).total_amount_cached || inv.total_amount || 0);
-            let name = inv.service_name;
+            const term = (inv as any).term || inv.invoice_items?.meta?.term;
+            const year = (inv as any).year || inv.invoice_items?.meta?.academic_year;
+
+            let name = (inv as any).service_name;
             if (!name && inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
                 const firstItem = inv.invoice_items.items[0];
                 name = firstItem.description || firstItem.name;
             }
-            if (!name) name = 'School Fee Payment';
+            if (!name && term && year) {
+                name = `Term ${term} (${year}) School Fees`;
+            } else if (!name && term) {
+                name = `Term ${term} School Fees`;
+            }
+            if (!name) name = 'School Fees';
 
             return {
                 type: 'invoice',
