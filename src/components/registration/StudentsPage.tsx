@@ -15,6 +15,26 @@ interface StudentsPageProps {
   initialStudents?: StudentData[];
 }
 
+type GradeClassOption = {
+  gradeId: string;
+  gradeName: string;
+  className: string;
+  label: string;
+};
+
+const normalizeDuplicateText = (value?: string | null) =>
+  (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const isClearDuplicateStudent = (
+  candidate: StudentData,
+  student: { name: string; grade: string; class: string }
+) => {
+  const sameName = normalizeDuplicateText(candidate.name) === normalizeDuplicateText(student.name);
+  const sameGrade = normalizeDuplicateText(candidate.grade) === normalizeDuplicateText(student.grade);
+  const sameClass = normalizeDuplicateText(candidate.class || 'General') === normalizeDuplicateText(student.class || 'General');
+  return sameName && sameGrade && sameClass;
+};
+
 
 
 // REDESIGNED EMPTY STATE
@@ -128,9 +148,32 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const [availableGrades, setAvailableGrades] = useState<SchoolGrade[]>([]);
-  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+  const [gradeClassOptions, setGradeClassOptions] = useState<GradeClassOption[]>([]);
+  const [gradeClassQuery, setGradeClassQuery] = useState('');
+  const [showGradeOptions, setShowGradeOptions] = useState(false);
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
-  const [isLoadingClasses, setIsLoadingClasses] = useState(false);
+  const [pendingManualStudent, setPendingManualStudent] = useState<StudentData | null>(null);
+  const [showSimilarStudentModal, setShowSimilarStudentModal] = useState(false);
+  const [searchResults, setSearchResults] = useState<StudentData[]>([]);
+  const [smartMatchResults, setSmartMatchResults] = useState<StudentData[]>([]);
+  const clearDuplicateMatches = pendingManualStudent
+    ? smartMatchResults.filter(match => isClearDuplicateStudent(match, pendingManualStudent))
+    : [];
+
+  const openManualEntry = (prefillName: string = '') => {
+    haptics.light();
+    setEditingId(null);
+    setNewStudent({
+      name: prefillName.trim(),
+      grade: '',
+      class: 'General',
+      studentId: ''
+    });
+    setGradeClassQuery('');
+    setFormErrors({ name: '', grade: '', class: '', studentId: '' });
+    setShowAddForm(true);
+    window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form');
+  };
 
   const [newStudent, setNewStudent] = useState({
     name: '',
@@ -145,9 +188,6 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     class: '',
     studentId: '',
   });
-
-  const [searchResults, setSearchResults] = useState<StudentData[]>([]);
-  const [smartMatchResults, setSmartMatchResults] = useState<StudentData[]>([]);
 
   // ── Back-navigation fix for the Add/Edit form ────────────────────────────
   const showAddFormRef = useRef(showAddForm);
@@ -176,6 +216,21 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       try {
         const grades = await getGradesBySchool(parentData.schoolId);
         setAvailableGrades(grades);
+        const options = await Promise.all(
+          grades.map(async (grade) => {
+            const classes = await getClassesByGrade(parentData.schoolId, grade.grade_id);
+            const classNames = classes.length > 0 ? classes : ['General'];
+            return classNames.map((className) => ({
+              gradeId: grade.grade_id,
+              gradeName: grade.grade_name,
+              className,
+              label: className && className !== 'General'
+                ? `${grade.grade_name} ${className}`
+                : grade.grade_name,
+            }));
+          })
+        );
+        setGradeClassOptions(options.flat());
       } catch (error) {
         console.error("Failed to load school grades:", error);
       } finally {
@@ -184,38 +239,6 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     };
     fetchGrades();
   }, [parentData.schoolId]);
-
-  // SMART CLASS SELECTION: Dynamic loading based on selected grade
-  useEffect(() => {
-    const fetchClassesForGrade = async () => {
-      if (!newStudent.grade) {
-        setAvailableClasses([]);
-        return;
-      }
-
-      // Find the ID for the currently selected grade name
-      const grade = availableGrades.find(g => g.grade_name === newStudent.grade);
-      if (!grade) return;
-
-      setIsLoadingClasses(true);
-      try {
-        const classes = await getClassesByGrade(parentData.schoolId, grade.grade_id);
-        setAvailableClasses(classes);
-
-        // Auto-select class in background
-        if (classes.length > 0) {
-          setNewStudent(prev => ({ ...prev, class: classes[0] }));
-        } else {
-          setNewStudent(prev => ({ ...prev, class: 'General' }));
-        }
-      } catch (error) {
-        console.error("Failed to load classes for grade:", error);
-      } finally {
-        setIsLoadingClasses(false);
-      }
-    };
-    fetchClassesForGrade();
-  }, [newStudent.grade, parentData.schoolId, availableGrades]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -283,6 +306,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       class: student.class,
       studentId: student.studentId
     });
+    setGradeClassQuery(student.class && student.class !== 'General' ? `${student.grade} ${student.class}` : student.grade);
     setFormErrors({ name: '', grade: '', class: '', studentId: '' });
     setShowAddForm(true);
     // Push a state so "back" can pop it and trigger our interceptor
@@ -310,7 +334,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     return isValid;
   };
 
-  const handleSaveStudent = () => {
+  const saveManualStudent = (allowSimilar: boolean = false) => {
     haptics.buttonPress();
     if (validateNewStudent()) {
       if (editingId) {
@@ -329,6 +353,12 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           class: newStudent.class,
           studentId: 'New Registration',
         };
+        const clearMatches = smartMatchResults.filter(match => isClearDuplicateStudent(match, studentToAdd));
+        if (!allowSimilar && clearMatches.length > 0) {
+          setPendingManualStudent(studentToAdd);
+          setShowSimilarStudentModal(true);
+          return;
+        }
         addStudent(studentToAdd);
         import('sonner').then(({ toast }) => toast.success('New record added to application'));
       }
@@ -336,12 +366,93 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     }
   };
 
+  const handleSaveStudent = () => saveManualStudent(false);
+
+  const handleUseExistingMatch = (student: StudentData) => {
+    addStudent(student);
+    setPendingManualStudent(null);
+    setShowSimilarStudentModal(false);
+    handleCloseForm();
+    import('sonner').then(({ toast }) => toast.success('Existing pupil record added'));
+  };
+
+  const handleCreateNewDespiteSimilar = () => {
+    if (!pendingManualStudent) return;
+    const clearMatches = smartMatchResults.filter(match => isClearDuplicateStudent(match, pendingManualStudent));
+    if (clearMatches.length > 0) {
+      import('sonner').then(({ toast }) => toast.warning('Duplicate student not added', {
+        description: 'This looks like an existing student. Please choose the existing record or ask the school to review it.'
+      }));
+      return;
+    }
+
+    addStudent(pendingManualStudent);
+    setPendingManualStudent(null);
+    setShowSimilarStudentModal(false);
+    handleCloseForm();
+    import('sonner').then(({ toast }) => toast.warning('Possible duplicate student added', {
+      description: 'This new student looks similar to an existing record. The school will review it before payments are unlocked.'
+    }));
+  };
+
+  const handleRequestSchoolReview = () => {
+    if (!pendingManualStudent) return;
+    const match = clearDuplicateMatches[0];
+    if (!match) return;
+
+    const reviewStudent: StudentData = {
+      ...pendingManualStudent,
+      id: `review-${Date.now()}`,
+      studentId: 'School Review',
+      guardianReviewStudentId: match.id,
+      guardianReviewReason: 'duplicate_suspected',
+      guardianReviewEvidence: {
+        duplicateStudentId: match.id,
+        duplicateStudentName: match.name,
+        duplicateStudentGrade: match.grade,
+        duplicateStudentClass: match.class,
+        requestedName: pendingManualStudent.name,
+        requestedGrade: pendingManualStudent.grade,
+        requestedClass: pendingManualStudent.class,
+        source: 'manual_student_duplicate_modal'
+      }
+    };
+
+    addStudent(reviewStudent);
+    setPendingManualStudent(null);
+    setShowSimilarStudentModal(false);
+    handleCloseForm();
+    import('sonner').then(({ toast }) => toast.success('Requested school verification', {
+      description: 'This duplicate-looking student was not created. The school will review whether it is a different child.'
+    }));
+  };
+
   const handleCloseForm = () => {
     setNewStudent({ name: '', grade: '', class: '', studentId: '' });
+    setGradeClassQuery('');
+    setShowGradeOptions(false);
+    setPendingManualStudent(null);
+    setShowSimilarStudentModal(false);
     setFormErrors({ name: '', grade: '', class: '', studentId: '' });
     setEditingId(null);
     setShowAddForm(false);
   };
+
+  const selectGradeClassOption = (option: GradeClassOption) => {
+    haptics.light();
+    setNewStudent(prev => ({
+      ...prev,
+      grade: option.gradeName,
+      class: option.className,
+    }));
+    setGradeClassQuery(option.label);
+    setShowGradeOptions(false);
+    setFormErrors(prev => ({ ...prev, grade: '', class: '' }));
+  };
+
+  const filteredGradeClassOptions = gradeClassOptions.filter(option =>
+    option.label.toLowerCase().includes(gradeClassQuery.trim().toLowerCase())
+  );
 
   const handleCancelAdd = () => {
     haptics.light();
@@ -490,7 +601,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ scale: 1.01, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => { haptics.light(); setShowAddForm(true); window.history.pushState({ page: 'registration-form', subPage: 'add-student' }, '', '#registration-form'); }}
+                onClick={() => openManualEntry(searchQuery)}
                 className="w-full h-[60px] rounded-[16px] bg-[#f9fafb] border-[1.5px] border-dashed border-[#d1d5db] flex items-center justify-center gap-2 hover:border-[#003630] transition-colors group mt-4 shadow-sm"
               >
                 <Plus size={18} className="text-gray-400 group-hover:text-[#003630] transition-colors" />
@@ -619,31 +730,66 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                   {/* Grade & Class Grid */}
                   <div className="space-y-6">
                     <div className="space-y-2.5">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade</label>
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade & Class</label>
                       <div className="relative group">
-                        <select
-                          value={newStudent.grade}
-                          onFocus={() => { setFocusedField('grade'); haptics.light(); }}
-                          onBlur={() => setFocusedField(null)}
-                          onChange={(e) => setNewStudent({ ...newStudent, grade: e.target.value })}
-                          className={`${inputClasses('grade')} appearance-none pr-12`}
+                        <input
+                          type="text"
+                          value={gradeClassQuery}
+                          onFocus={() => {
+                            setFocusedField('grade');
+                            setShowGradeOptions(true);
+                            haptics.light();
+                          }}
+                          onBlur={() => {
+                            setFocusedField(null);
+                            window.setTimeout(() => setShowGradeOptions(false), 160);
+                          }}
+                          onChange={(e) => {
+                            setGradeClassQuery(e.target.value);
+                            setShowGradeOptions(true);
+                            if (!e.target.value.trim()) {
+                              setNewStudent(prev => ({ ...prev, grade: '', class: 'General' }));
+                            }
+                          }}
+                          placeholder={isLoadingMetadata ? 'Loading grades...' : 'Search grade or class, e.g. Grade 7A'}
+                          className={`${inputClasses('grade')} pr-12`}
                           disabled={isLoadingMetadata}
-                        >
-                          {isLoadingMetadata ? (
-                            <option value="">Loading...</option>
-                          ) : availableGrades.length === 0 ? (
-                            <option value="">⚠ No grades found</option>
-                          ) : (
-                            <>
-                              <option value="">Select Grade</option>
-                              {availableGrades.map(g => (
-                                <option key={g.grade_id} value={g.grade_name}>{g.grade_name}</option>
-                              ))}
-                            </>
-                          )}
-                        </select>
+                        />
                         <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'grade' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
+                        <AnimatePresence>
+                          {showGradeOptions && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -6 }}
+                              className="absolute left-0 right-0 top-[68px] z-30 max-h-[260px] overflow-y-auto rounded-[16px] border border-gray-200 bg-white shadow-xl"
+                            >
+                              {isLoadingMetadata ? (
+                                <div className="p-4 text-center text-[12px] font-bold text-gray-400">Loading grades...</div>
+                              ) : filteredGradeClassOptions.length === 0 ? (
+                                <div className="p-4 text-center text-[12px] font-bold text-gray-400">No matching grade or class</div>
+                              ) : (
+                                filteredGradeClassOptions.map(option => (
+                                  <button
+                                    key={`${option.gradeId}-${option.className}`}
+                                    type="button"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => selectGradeClassOption(option)}
+                                    className="w-full px-4 py-3 text-left border-b border-gray-50 hover:bg-[#f9fafb] active:bg-[#95e36c]/10 transition-colors"
+                                  >
+                                    <span className="block font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630]">
+                                      {option.label}
+                                    </span>
+                                  </button>
+                                ))
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
+                      {formErrors.grade && (
+                        <p className="text-[11px] font-bold text-red-500 pl-1">Please select the grade and class.</p>
+                      )}
                     </div>
 
                     {/* Class/Stream is now auto-filled in background */}
@@ -663,6 +809,77 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           </AnimatePresence>
         )}
       </div>
+
+      <AnimatePresence>
+        {showSimilarStudentModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 py-6 sm:py-8"
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              className="w-full max-w-md max-h-[calc(100dvh-48px)] bg-white rounded-[24px] border border-gray-100 shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-5 border-b border-amber-100 bg-amber-50 shrink-0">
+                <div className="size-11 rounded-[14px] bg-amber-100 flex items-center justify-center mb-3">
+                  <Info size={22} className="text-amber-700" />
+                </div>
+                <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.4px]">
+                  Duplicate student found
+                </h3>
+                <p className="text-[13px] text-amber-800/80 leading-relaxed mt-1">
+                  This name, grade, and class already match an existing record. Please use the existing pupil record or ask the school to review it.
+                </p>
+              </div>
+
+              <div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-3 overflow-y-auto">
+                {clearDuplicateMatches.slice(0, 3).map(match => (
+                  <button
+                    key={match.id}
+                    type="button"
+                    onClick={() => handleUseExistingMatch(match)}
+                    className="w-full p-4 rounded-[16px] border border-gray-100 bg-gray-50 hover:bg-white hover:border-[#95e36c] transition-all text-left flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] truncate">
+                        {match.name}
+                      </p>
+                      <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mt-1">
+                        {match.grade}{match.class && match.class !== 'General' ? ` ${match.class}` : ''} {match.studentId ? `- ${match.studentId}` : ''}
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-black text-[#003630] bg-[#95e36c]/30 rounded-full px-3 py-1 whitespace-nowrap">
+                      This is my child
+                    </span>
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSimilarStudentModal(false);
+                    setPendingManualStudent(null);
+                  }}
+                  className="w-full min-h-12 rounded-[14px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-4 active:scale-[0.98] transition-all"
+                >
+                  Go back and edit details
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRequestSchoolReview}
+                  className="w-full min-h-11 rounded-[14px] bg-white text-gray-500 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-4"
+                >
+                  Request school verification
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Fixed Footer */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#f0f1f3] px-[28px] py-8 shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">

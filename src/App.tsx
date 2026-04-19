@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import DynamicIsland, { useDynamicIsland } from "./components/DynamicIsland";
 import { getSchools } from "./lib/supabase/api/schools";
 import { hapticFeedback } from "./utils/haptics";
-import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent } from "./lib/supabase/api/transactions";
+import { getInvoicesWithBalanceForStudent } from "./lib/supabase/api/transactions";
 import { checkIfStaff } from "./lib/supabase/api/parents";
 
 import { UpdateNotification } from "./components/UpdateNotification";
@@ -471,207 +471,22 @@ function Frame4() {
     <div className="bg-[#f5f4f7] box-border content-stretch flex flex-col gap-[20px] items-center justify-end px-0 py-[24px] w-full relative min-h-[280px] sm:min-h-[323px] overflow-hidden">
       <div aria-hidden="true" className="absolute border-[#95e36c] border-[0px_0px_4px] border-solid inset-0 pointer-events-none" />
 
-      {/* Animated Wave Layers - Seamless Continuous Waves */}
+      {/* Static wave layers. Keeping these as plain paths avoids noisy browser errors from animating SVG d attributes. */}
       <motion.div
         className="absolute bottom-0 left-0 h-[150%] pointer-events-none flex"
-        style={{ opacity: 0.2, width: "200%" }}
-        animate={{
-          x: ["0%", "-50%"],
-        }}
-        transition={{
-          x: { duration: 20, repeat: Infinity, ease: "linear" },
-        }}
+        style={{ opacity: 0.22, width: "200%" }}
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ x: { duration: 24, repeat: Infinity, ease: "linear" } }}
       >
-        <svg className="absolute bottom-0 left-0 w-1/2 h-[80%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,100 Q150,150 300,100 T600,100 Q750,50 900,100 T1200,100 Q1350,150 1500,100 T1800,100 Q1950,50 2100,100 T2400,100 L2400,200 L0,200 Z"
-            fill="#95e36c"
-            opacity="0.4"
-            animate={{
-              d: [
-                "M0,100 Q150,150 300,100 T600,100 Q750,50 900,100 T1200,100 Q1350,150 1500,100 T1800,100 Q1950,50 2100,100 T2400,100 L2400,200 L0,200 Z",
-                "M0,100 Q150,60 300,100 T600,100 Q750,140 900,100 T1200,100 Q1350,60 1500,100 T1800,100 Q1950,140 2100,100 T2400,100 L2400,200 L0,200 Z",
-                "M0,100 Q150,150 300,100 T600,100 Q750,50 900,100 T1200,100 Q1350,150 1500,100 T1800,100 Q1950,50 2100,100 T2400,100 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
-        <svg className="absolute bottom-0 left-1/2 w-1/2 h-[80%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,100 Q150,150 300,100 T600,100 Q750,50 900,100 T1200,100 Q1350,150 1500,100 T1800,100 Q1950,50 2100,100 T2400,100 L2400,200 L0,200 Z"
-            fill="#95e36c"
-            opacity="0.4"
-            animate={{
-              d: [
-                "M0,100 Q150,150 300,100 T600,100 Q750,50 900,100 T1200,100 Q1350,150 1500,100 T1800,100 Q1950,50 2100,100 T2400,100 L2400,200 L0,200 Z",
-                "M0,100 Q150,60 300,100 T600,100 Q750,140 900,100 T1200,100 Q1350,60 1500,100 T1800,100 Q1950,140 2100,100 T2400,100 L2400,200 L0,200 Z",
-                "M0,100 Q150,150 300,100 T600,100 Q750,50 900,100 T1200,100 Q1350,150 1500,100 T1800,100 Q1950,50 2100,100 T2400,100 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
+        {[0, 1].map((copy) => (
+          <svg key={copy} className={`absolute bottom-0 ${copy === 0 ? 'left-0' : 'left-1/2'} w-1/2 h-[80%]`} viewBox="0 0 2400 200" preserveAspectRatio="none">
+            <path d="M0,100 Q150,150 300,100 T600,100 Q750,50 900,100 T1200,100 Q1350,150 1500,100 T1800,100 Q1950,50 2100,100 T2400,100 L2400,200 L0,200 Z" fill="#95e36c" opacity="0.36" />
+            <path d="M0,120 Q200,60 400,120 T800,120 Q950,160 1100,120 T1600,120 Q1750,60 1900,120 T2400,120 L2400,200 L0,200 Z" fill="#003630" opacity="0.32" />
+            <path d="M0,140 Q250,90 500,140 T1000,140 Q1100,110 1200,140 T1800,140 Q1900,90 2100,140 T2400,140 L2400,200 L0,200 Z" fill="#95e36c" opacity="0.24" />
+            <path d="M0,130 Q180,170 360,130 T720,130 Q900,80 1080,130 T1440,130 Q1620,170 1800,130 T2400,130 L2400,200 L0,200 Z" fill="#003630" opacity="0.2" />
+          </svg>
+        ))}
       </motion.div>
-
-      <motion.div
-        className="absolute bottom-0 left-0 h-[150%] pointer-events-none flex"
-        style={{ opacity: 0.25, width: "200%" }}
-        animate={{
-          x: ["0%", "-50%"],
-        }}
-        transition={{
-          x: { duration: 25, repeat: Infinity, ease: "linear" },
-        }}
-      >
-        <svg className="absolute bottom-0 left-0 w-1/2 h-[70%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,120 Q200,60 400,120 T800,120 Q950,160 1100,120 T1600,120 Q1750,60 1900,120 T2400,120 L2400,200 L0,200 Z"
-            fill="#003630"
-            opacity="0.5"
-            animate={{
-              d: [
-                "M0,120 Q200,60 400,120 T800,120 Q950,160 1100,120 T1600,120 Q1750,60 1900,120 T2400,120 L2400,200 L0,200 Z",
-                "M0,120 Q200,170 400,120 T800,120 Q950,70 1100,120 T1600,120 Q1750,170 1900,120 T2400,120 L2400,200 L0,200 Z",
-                "M0,120 Q200,60 400,120 T800,120 Q950,160 1100,120 T1600,120 Q1750,60 1900,120 T2400,120 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
-        <svg className="absolute bottom-0 left-1/2 w-1/2 h-[70%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,120 Q200,60 400,120 T800,120 Q950,160 1100,120 T1600,120 Q1750,60 1900,120 T2400,120 L2400,200 L0,200 Z"
-            fill="#003630"
-            opacity="0.5"
-            animate={{
-              d: [
-                "M0,120 Q200,60 400,120 T800,120 Q950,160 1100,120 T1600,120 Q1750,60 1900,120 T2400,120 L2400,200 L0,200 Z",
-                "M0,120 Q200,170 400,120 T800,120 Q950,70 1100,120 T1600,120 Q1750,170 1900,120 T2400,120 L2400,200 L0,200 Z",
-                "M0,120 Q200,60 400,120 T800,120 Q950,160 1100,120 T1600,120 Q1750,60 1900,120 T2400,120 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
-      </motion.div>
-
-      <motion.div
-        className="absolute bottom-0 left-0 h-[150%] pointer-events-none flex"
-        style={{ opacity: 0.3, width: "200%" }}
-        animate={{
-          x: ["0%", "-50%"],
-        }}
-        transition={{
-          x: { duration: 18, repeat: Infinity, ease: "linear" },
-        }}
-      >
-        <svg className="absolute bottom-0 left-0 w-1/2 h-[60%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,140 Q250,90 500,140 T1000,140 Q1100,110 1200,140 T1800,140 Q1900,90 2100,140 T2400,140 L2400,200 L0,200 Z"
-            fill="#95e36c"
-            opacity="0.3"
-            animate={{
-              d: [
-                "M0,140 Q250,90 500,140 T1000,140 Q1100,110 1200,140 T1800,140 Q1900,90 2100,140 T2400,140 L2400,200 L0,200 Z",
-                "M0,140 Q250,170 500,140 T1000,140 Q1100,160 1200,140 T1800,140 Q1900,170 2100,140 T2400,140 L2400,200 L0,200 Z",
-                "M0,140 Q250,90 500,140 T1000,140 Q1100,110 1200,140 T1800,140 Q1900,90 2100,140 T2400,140 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 7,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
-        <svg className="absolute bottom-0 left-1/2 w-1/2 h-[60%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,140 Q250,90 500,140 T1000,140 Q1100,110 1200,140 T1800,140 Q1900,90 2100,140 T2400,140 L2400,200 L0,200 Z"
-            fill="#95e36c"
-            opacity="0.3"
-            animate={{
-              d: [
-                "M0,140 Q250,90 500,140 T1000,140 Q1100,110 1200,140 T1800,140 Q1900,90 2100,140 T2400,140 L2400,200 L0,200 Z",
-                "M0,140 Q250,170 500,140 T1000,140 Q1100,160 1200,140 T1800,140 Q1900,170 2100,140 T2400,140 L2400,200 L0,200 Z",
-                "M0,140 Q250,90 500,140 T1000,140 Q1100,110 1200,140 T1800,140 Q1900,90 2100,140 T2400,140 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 7,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
-      </motion.div>
-
-      <motion.div
-        className="absolute bottom-0 left-0 h-[150%] pointer-events-none flex"
-        style={{ opacity: 0.18, width: "200%" }}
-        animate={{
-          x: ["0%", "-50%"],
-        }}
-        transition={{
-          x: { duration: 30, repeat: Infinity, ease: "linear" },
-        }}
-      >
-        <svg className="absolute bottom-0 left-0 w-1/2 h-[55%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,130 Q180,170 360,130 T720,130 Q900,80 1080,130 T1440,130 Q1620,170 1800,130 T2400,130 L2400,200 L0,200 Z"
-            fill="#003630"
-            opacity="0.35"
-            animate={{
-              d: [
-                "M0,130 Q180,170 360,130 T720,130 Q900,80 1080,130 T1440,130 Q1620,170 1800,130 T2400,130 L2400,200 L0,200 Z",
-                "M0,130 Q180,90 360,130 T720,130 Q900,165 1080,130 T1440,130 Q1620,90 1800,130 T2400,130 L2400,200 L0,200 Z",
-                "M0,130 Q180,170 360,130 T720,130 Q900,80 1080,130 T1440,130 Q1620,170 1800,130 T2400,130 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 9,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
-        <svg className="absolute bottom-0 left-1/2 w-1/2 h-[55%]" viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <motion.path
-            d="M0,130 Q180,170 360,130 T720,130 Q900,80 1080,130 T1440,130 Q1620,170 1800,130 T2400,130 L2400,200 L0,200 Z"
-            fill="#003630"
-            opacity="0.35"
-            animate={{
-              d: [
-                "M0,130 Q180,170 360,130 T720,130 Q900,80 1080,130 T1440,130 Q1620,170 1800,130 T2400,130 L2400,200 L0,200 Z",
-                "M0,130 Q180,90 360,130 T720,130 Q900,165 1080,130 T1440,130 Q1620,90 1800,130 T2400,130 L2400,200 L0,200 Z",
-                "M0,130 Q180,170 360,130 T720,130 Q900,80 1080,130 T1440,130 Q1620,170 1800,130 T2400,130 L2400,200 L0,200 Z",
-              ],
-            }}
-            transition={{
-              duration: 9,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        </svg>
-      </motion.div>
-
       <Group />
       <Frame2 />
     </div>
@@ -1245,11 +1060,7 @@ export default function App() {
     let balanceServices: CheckoutService[] = [];
 
     for (const student of studentsWithBalance) {
-      // Fetch both detailed invoices and pending transactions
-      const [invoices, pendingTxs] = await Promise.all([
-        getInvoicesWithBalanceForStudent(student.id),
-        getPendingTransactionsForStudent(student.id)
-      ]);
+      const invoices = await getInvoicesWithBalanceForStudent(student.id);
 
       if (invoices.length > 0) {
         // Use detailed invoices from payment_history
@@ -1270,43 +1081,8 @@ export default function App() {
         balanceServices = [...balanceServices, ...servicesValue];
 
       }
-
-      // Also include any other pending transactions that aren't necessarily tied to an invoice in payment_history
-      if (pendingTxs.length > 0) {
-        // Simple heuristic: if we already have invoices, maybe don't duplicate pending stuff 
-        // unless they are for different amounts or don't look like invoice payments
-        const invoiceIds = invoices.map(i => i.id);
-
-        const additionalServices = pendingTxs
-          .filter(tx => !invoiceIds.includes(tx.id)) // Avoid double counting if IDs match
-          .map(tx => {
-            let desc = "Outstanding Balance";
-            if (tx.meta_data && (tx.meta_data as any).description) {
-              desc = (tx.meta_data as any).description;
-            } else {
-              desc = `Pending Payment - ${student.name}`;
-            }
-
-            return {
-              id: tx.id || crypto.randomUUID(),
-              description: desc,
-              amount: tx.amount,
-              invoiceNo: tx.reference || `BAL-${student.id.substring(0, 4)}`,
-              studentName: student.name,
-              studentId: student.id,
-              term: tx.meta_data?.['term'],
-              academicYear: tx.meta_data?.['year'] || tx.meta_data?.['academicYear'],
-              grade: student.grade,
-              schoolId: student.schoolId,
-              isDebt: true
-            };
-          });
-
-        balanceServices = [...balanceServices, ...additionalServices];
-      }
-
       // Final fallback if both were empty but student has a balance field > 0
-      if (invoices.length === 0 && pendingTxs.length === 0 && student.balances > 0) {
+      if (invoices.length === 0 && student.balances > 0) {
         balanceServices.push({
           id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7),
           description: `Outstanding Balance`,
@@ -1426,6 +1202,13 @@ export default function App() {
 
   const handleSelectServices = (selectedStudents: string[]) => {
     setNavigationDirection('forward');
+    setCheckoutServices([]);
+    useAppStore.setState({
+      studentServices: {},
+      inputAmounts: {},
+      excludedServiceIds: [],
+      paymentAmount: 0
+    });
     // Track student selections in preferences
     selectedStudents.forEach(studentId => {
       incrementStudentSelection(studentId);
@@ -1919,3 +1702,4 @@ export default function App() {
     </>
   );
 }
+

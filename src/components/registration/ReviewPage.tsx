@@ -77,9 +77,11 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
         return next;
       });
 
-      // If we are confirming (not unconfirming), send to DB
-      if (!isCurrentlyConfirmed) {
-        await saveLedgerVerification({
+      // If we are confirming an existing database student, write a best-effort audit.
+      // New manual registrations still use temporary IDs here, so they cannot be
+      // inserted into ledger_verifications until the final submit creates the row.
+      if (!isCurrentlyConfirmed && !isTemporaryStudentId(activeStudentId)) {
+        const result = await saveLedgerVerification({
           studentId: activeStudentId,
           parentId: parentData.parentId,
           schoolId: parentData.schoolId,
@@ -89,6 +91,10 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
             verified_at: new Date().toISOString()
           }
         });
+
+        if (!result.success) {
+          console.warn('[Registration] Confirmation audit was not saved, continuing with local confirmation.');
+        }
       }
     } catch (error) {
       console.error('Failed to save confirmation:', error);

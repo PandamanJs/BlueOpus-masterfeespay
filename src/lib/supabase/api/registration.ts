@@ -823,6 +823,8 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
     // Class/stream mismatches are treated as non-fatal because many schools
     // have legacy class labels that don't map 1:1 to school_streams.
     for (const student of students) {
+        if (student.guardianReviewStudentId) continue;
+
         const nameParts = student.name.trim().split(' ');
         const firstName = nameParts[0];
         const lastName = nameParts.slice(1).join(' ') || '';

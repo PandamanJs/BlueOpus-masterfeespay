@@ -15,12 +15,73 @@ export interface ParentReviewRequest {
     reviewedAt?: string | null;
 }
 
+export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'resolved' | 'cancelled';
+
+export interface ReviewPerson {
+    id: string;
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+}
+
+export interface ReviewStudent {
+    id: string;
+    name: string;
+    admissionNumber?: string | null;
+    grade?: string | null;
+    className?: string | null;
+}
+
+export interface DuplicateReviewRequest {
+    id: string;
+    type: 'duplicate';
+    status: ReviewStatus | string;
+    reason: string;
+    confidenceScore?: number | null;
+    confidenceBand?: string | null;
+    parent: ReviewPerson;
+    existingStudent: ReviewStudent;
+    requestedStudent: {
+        name?: string | null;
+        grade?: string | null;
+        className?: string | null;
+    };
+    evidence: Record<string, any>;
+    reviewerNote?: string | null;
+    createdAt: string;
+    reviewedAt?: string | null;
+}
+
+export interface BalanceReviewRequest {
+    id: string;
+    type: 'balance';
+    status: ReviewStatus | string;
+    parent: ReviewPerson;
+    student: ReviewStudent;
+    reason?: string | null;
+    amount?: number | null;
+    claimedBalance?: number | null;
+    recordedBalance?: number | null;
+    recordedChargedAmount?: number | null;
+    recordedPaidAmount?: number | null;
+    metaData: Record<string, any>;
+    reviewerNote?: string | null;
+    createdAt: string;
+    updatedAt?: string | null;
+}
+
+export interface SchoolReviewCenterData {
+    duplicates: DuplicateReviewRequest[];
+    balances: BalanceReviewRequest[];
+}
+
 async function fetchStudentsForParentId(parentId: string): Promise<StudentWithSchool[]> {
     const selectClause = `
         *,
         school:schools(*),
         student_grade(
             grade_id,
+            class,
             is_active,
             grade:grades(grade_name)
         )
@@ -75,6 +136,7 @@ async function fetchStudentsForParentId(parentId: string): Promise<StudentWithSc
             id: s.student_id,
             name: `${s.first_name || ''} ${s.last_name || ''}`.trim(),
             grade: activeGrade?.grade?.grade_name || 'Unknown',
+            class: activeGrade?.class,
             gradeId: activeGrade?.grade_id,
             admissionNumber: s.admission_number,
         };
@@ -451,6 +513,233 @@ export async function getDisputesByParent(parentId: string): Promise<any[]> {
         console.error('[getDisputesByParent] Error:', error);
         return [];
     }
+}
+
+function displayName(firstName?: string | null, lastName?: string | null, fallback = 'Unknown') {
+    return `${firstName || ''} ${lastName || ''}`.trim() || fallback;
+}
+
+function activeGradeFromStudent(row: any) {
+    const grades = row?.student_grade || [];
+    return grades.find((sg: any) => sg.is_active) || grades[0] || null;
+}
+
+/**
+ * School-facing review queue for duplicate guardian requests and balance reviews.
+ */
+export async function getSchoolReviewCenterData(schoolId?: string | null): Promise<SchoolReviewCenterData> {
+    try {
+        let guardianQuery = supabase
+            .from('guardian_link_requests')
+            .select('request_id, parent_id, school_id, requested_student_id, request_reason, confidence_score, confidence_band, evidence, status, reviewer_note, reviewed_at, created_at')
+            .order('created_at', { ascending: false });
+
+        let balanceQuery = supabase
+            .from('refund_requests')
+            .select('id, student_id, parent_id, school_id, amount, reason, status, meta_data, created_at, updated_at')
+            .eq('meta_data->>type', 'student_account_dispute')
+            .order('created_at', { ascending: false });
+
+        if (schoolId) {
+            guardianQuery = guardianQuery.eq('school_id', schoolId);
+            balanceQuery = balanceQuery.eq('school_id', schoolId);
+        }
+
+        const [
+            { data: guardianRows, error: guardianError },
+            { data: balanceRows, error: balanceError },
+        ] = await Promise.all([guardianQuery, balanceQuery]);
+
+        if (guardianError) handleSupabaseError(guardianError, 'getSchoolReviewCenterData - guardian requests');
+        if (balanceError) handleSupabaseError(balanceError, 'getSchoolReviewCenterData - balance reviews');
+
+        const parentIds = Array.from(new Set([
+            ...((guardianRows || []).map((row: any) => row.parent_id).filter(Boolean)),
+            ...((balanceRows || []).map((row: any) => row.parent_id).filter(Boolean)),
+        ]));
+        const studentIds = Array.from(new Set([
+            ...((guardianRows || []).map((row: any) => row.requested_student_id).filter(Boolean)),
+            ...((balanceRows || []).map((row: any) => row.student_id).filter(Boolean)),
+        ]));
+
+        const [
+            { data: parentRows, error: parentError },
+            { data: studentRows, error: studentError },
+        ] = await Promise.all([
+            parentIds.length > 0
+                ? supabase.from('parents').select('parent_id, first_name, last_name, phone_number, email').in('parent_id', parentIds)
+                : Promise.resolve({ data: [], error: null } as any),
+            studentIds.length > 0
+                ? supabase
+                    .from('students')
+                    .select(`
+                        student_id,
+                        first_name,
+                        last_name,
+                        admission_number,
+                        student_grade(
+                            class,
+                            is_active,
+                            grade:grades(grade_name)
+                        )
+                    `)
+                    .in('student_id', studentIds)
+                : Promise.resolve({ data: [], error: null } as any),
+        ]);
+
+        if (parentError) handleSupabaseError(parentError, 'getSchoolReviewCenterData - parents');
+        if (studentError) handleSupabaseError(studentError, 'getSchoolReviewCenterData - students');
+
+        const parentsById = new Map((parentRows || []).map((parent: any) => [
+            parent.parent_id,
+            {
+                id: parent.parent_id,
+                name: displayName(parent.first_name, parent.last_name, 'Unknown parent'),
+                phone: parent.phone_number,
+                email: parent.email,
+            } as ReviewPerson,
+        ]));
+
+        const studentsById = new Map((studentRows || []).map((student: any) => {
+            const grade = activeGradeFromStudent(student);
+            return [
+                student.student_id,
+                {
+                    id: student.student_id,
+                    name: displayName(student.first_name, student.last_name, 'Unknown student'),
+                    admissionNumber: student.admission_number,
+                    grade: grade?.grade?.grade_name || null,
+                    className: grade?.class || null,
+                } as ReviewStudent,
+            ];
+        }));
+
+        const duplicates: DuplicateReviewRequest[] = (guardianRows || [])
+            .filter((row: any) => row.request_reason === 'duplicate_suspected')
+            .map((row: any) => {
+                const evidence = row.evidence || {};
+                return {
+                    id: row.request_id,
+                    type: 'duplicate',
+                    status: row.status,
+                    reason: row.request_reason,
+                    confidenceScore: row.confidence_score,
+                    confidenceBand: row.confidence_band,
+                    parent: parentsById.get(row.parent_id) || { id: row.parent_id, name: 'Unknown parent' },
+                    existingStudent: studentsById.get(row.requested_student_id) || {
+                        id: row.requested_student_id,
+                        name: evidence.duplicateStudentName || 'Unknown student',
+                        grade: evidence.duplicateStudentGrade || null,
+                        className: evidence.duplicateStudentClass || null,
+                    },
+                    requestedStudent: {
+                        name: evidence.requestedName || null,
+                        grade: evidence.requestedGrade || null,
+                        className: evidence.requestedClass || null,
+                    },
+                    evidence,
+                    reviewerNote: row.reviewer_note,
+                    createdAt: row.created_at,
+                    reviewedAt: row.reviewed_at,
+                };
+            });
+
+        const balances: BalanceReviewRequest[] = (balanceRows || []).map((row: any) => {
+            const meta = row.meta_data || {};
+            return {
+                id: row.id,
+                type: 'balance',
+                status: row.status,
+                parent: parentsById.get(row.parent_id) || { id: row.parent_id, name: 'Unknown parent' },
+                student: studentsById.get(row.student_id) || { id: row.student_id, name: 'Unknown student' },
+                reason: row.reason,
+                amount: Number(row.amount || 0),
+                claimedBalance: meta.parent_claimed_balance ?? null,
+                recordedBalance: meta.recorded_balance_at_submission ?? null,
+                recordedChargedAmount: meta.recorded_charged_amount ?? null,
+                recordedPaidAmount: meta.recorded_paid_amount ?? null,
+                metaData: meta,
+                reviewerNote: meta.reviewer_note || null,
+                createdAt: row.created_at,
+                updatedAt: row.updated_at,
+            };
+        });
+
+        return { duplicates, balances };
+    } catch (error) {
+        console.error('[getSchoolReviewCenterData] Error:', error);
+        throw error;
+    }
+}
+
+export async function updateGuardianLinkRequestStatus(params: {
+    requestId: string;
+    status: 'approved' | 'rejected' | 'cancelled';
+    reviewerParentId?: string | null;
+    reviewerNote?: string;
+}) {
+    const { data: existing, error: fetchError } = await supabase
+        .from('guardian_link_requests')
+        .select('request_id, parent_id, requested_student_id, request_reason')
+        .eq('request_id', params.requestId)
+        .maybeSingle();
+    if (fetchError) handleSupabaseError(fetchError, 'updateGuardianLinkRequestStatus - fetch');
+
+    const { error } = await supabase
+        .from('guardian_link_requests')
+        .update({
+            status: params.status,
+            reviewer_parent_id: params.reviewerParentId || null,
+            reviewer_note: params.reviewerNote || null,
+            reviewed_at: new Date().toISOString(),
+        })
+        .eq('request_id', params.requestId);
+    if (error) handleSupabaseError(error, 'updateGuardianLinkRequestStatus');
+
+    if (existing && params.status === 'rejected') {
+        const { error: auditError } = await supabase.from('guardian_link_audit').insert({
+            actor_parent_id: params.reviewerParentId || null,
+            actor_role: 'school_admin',
+            action: 'link_rejected',
+            parent_id: (existing as any).parent_id,
+            student_id: (existing as any).requested_student_id,
+            request_id: params.requestId,
+            payload: {
+                requestReason: (existing as any).request_reason,
+                reviewerNote: params.reviewerNote || null,
+            },
+        });
+        if (auditError) console.warn('[ReviewCenter] Failed to write rejection audit:', auditError.message);
+    }
+}
+
+export async function updateBalanceReviewStatus(params: {
+    requestId: string;
+    status: 'resolved' | 'rejected' | 'cancelled';
+    reviewerNote?: string;
+}) {
+    const { data: existing, error: fetchError } = await supabase
+        .from('refund_requests')
+        .select('meta_data')
+        .eq('id', params.requestId)
+        .maybeSingle();
+    if (fetchError) handleSupabaseError(fetchError, 'updateBalanceReviewStatus - fetch');
+
+    const nextMeta = {
+        ...(((existing as any)?.meta_data || {}) as Record<string, any>),
+        reviewer_note: params.reviewerNote || null,
+        reviewed_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+        .from('refund_requests')
+        .update({
+            status: params.status,
+            meta_data: nextMeta,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.requestId);
+    if (error) handleSupabaseError(error, 'updateBalanceReviewStatus');
 }
 
 /**

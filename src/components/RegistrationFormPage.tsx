@@ -147,7 +147,15 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         console.log('[Registration] Students linked successfully');
 
         // Success!
-        toast.success("Registration completed successfully!");
+        const hasSchoolReviewRequests = studentsWithDisputes.some(student => student.guardianReviewStudentId);
+        toast.success(
+          hasSchoolReviewRequests
+            ? "School verification request sent"
+            : "Registration completed successfully!",
+          hasSchoolReviewRequests
+            ? { description: "The duplicate-looking student was not created. The school will review the request." }
+            : undefined
+        );
 
         const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || "";
         console.log('[Registration] Finalizing with school:', schoolName);

@@ -13,8 +13,6 @@ import { getParentByPhone, getStudentsByParentPhone, getStudentsByParentId as ge
 import { supabase } from '../lib/supabase/client';
 import {
   getStudentsOutstandingBalances,
-  getStudentsUnpaidInvoicesCount,
-  getStudentsActualDebt,
   getStudentFinancialSummary
 } from '../lib/supabase/api/transactions';
 import type { StudentWithSchool } from '../lib/supabase/types';
@@ -134,7 +132,7 @@ async function getPendingBalanceReviewMap(studentIds: string[]): Promise<Record<
 
 /**
  * Convert Supabase student data to legacy format
- * Now fetches outstanding balance from payment_history table
+ * Uses the same canonical balance snapshot as history and checkout.
  */
 async function convertToLegacyStudent(
   student: StudentWithSchool,
@@ -207,11 +205,11 @@ export async function getStudentsByPhone(phone: string): Promise<Student[]> {
     console.log(`[getStudentsByPhone] Found ${students.length} students, fetching balances...`);
     // Fetch canonical balances and counts so all fee pages stay in sync.
     const studentIds = students.map(s => s.student_id);
-    const [{ balanceMap, countMap }, actualDebtMap, pendingBalanceReviewMap] = await Promise.all([
+    const [{ balanceMap, countMap }, pendingBalanceReviewMap] = await Promise.all([
       getCanonicalBalanceSnapshot(studentIds),
-      getStudentsActualDebt(studentIds),
       getPendingBalanceReviewMap(studentIds)
     ]);
+    const actualDebtMap = balanceMap;
 
     // Convert all students with their balances and counts
     const convertedStudents = await Promise.all(
@@ -239,11 +237,11 @@ export async function getStudentsByParentId(parentId: string): Promise<Student[]
     }
 
     const studentIds = students.map(s => s.student_id);
-    const [{ balanceMap, countMap }, actualDebtMap, pendingBalanceReviewMap] = await Promise.all([
+    const [{ balanceMap, countMap }, pendingBalanceReviewMap] = await Promise.all([
       getCanonicalBalanceSnapshot(studentIds),
-      getStudentsActualDebt(studentIds),
       getPendingBalanceReviewMap(studentIds)
     ]);
+    const actualDebtMap = balanceMap;
 
     return Promise.all(
       students.map(student => convertToLegacyStudent(student, balanceMap, countMap, actualDebtMap, pendingBalanceReviewMap))
@@ -270,11 +268,11 @@ export async function getParentDataByPhone(phone: string): Promise<ParentData | 
 
     // Fetch canonical balances and counts from the same source used in history.
     const studentIds = parentData.students.map((s: StudentWithSchool) => s.student_id);
-    const [{ balanceMap, countMap }, actualDebtMap, pendingBalanceReviewMap] = await Promise.all([
+    const [{ balanceMap, countMap }, pendingBalanceReviewMap] = await Promise.all([
       getCanonicalBalanceSnapshot(studentIds),
-      getStudentsActualDebt(studentIds),
       getPendingBalanceReviewMap(studentIds)
     ]);
+    const actualDebtMap = balanceMap;
 
     // Convert students with balances and counts
     const convertedStudents = await Promise.all(

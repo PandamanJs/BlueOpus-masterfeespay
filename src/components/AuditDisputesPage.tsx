@@ -1,360 +1,523 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ShieldAlert,
-  ChevronLeft,
-  ChevronDown,
-  Info,
-  History,
+  AlertTriangle,
+  ArrowLeft,
   Check,
+  ChevronRight,
+  ClipboardCheck,
+  FileWarning,
   Loader2,
-  AlertCircle,
-  X,
-  Send,
-  Baby,
-  Plus
+  RefreshCw,
+  ShieldAlert,
+  Users,
+  X
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAppStore } from '../stores/useAppStore';
 import { hapticFeedback } from '../utils/haptics';
-import { toast } from 'sonner';
-import { logDispute, getDisputesByParent } from '../lib/supabase/api/parents';
-import { getStudentsByPhone } from '../data/students';
-import type { Student } from '../data/students';
 import type { PageType } from '../stores/useAppStore';
+import {
+  getSchoolReviewCenterData,
+  updateBalanceReviewStatus,
+  updateGuardianLinkRequestStatus,
+  type BalanceReviewRequest,
+  type DuplicateReviewRequest
+} from '../lib/supabase/api/parents';
+
+type ReviewTab = 'duplicates' | 'balances' | 'history';
+type ActiveReview =
+  | { kind: 'duplicate'; item: DuplicateReviewRequest }
+  | { kind: 'balance'; item: BalanceReviewRequest }
+  | null;
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Not reviewed';
+  return new Date(value).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
+function formatCurrency(value?: number | null) {
+  const amount = Number(value || 0);
+  return `K${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function statusClasses(status: string) {
+  switch (status) {
+    case 'approved':
+    case 'resolved':
+      return 'bg-green-50 text-green-700 border-green-100';
+    case 'rejected':
+    case 'cancelled':
+      return 'bg-red-50 text-red-700 border-red-100';
+    case 'pending':
+      return 'bg-amber-50 text-amber-700 border-amber-100';
+    default:
+      return 'bg-gray-50 text-gray-600 border-gray-100';
+  }
+}
+
+function StatusPill({ status }: { status: string }) {
+  return (
+    <span className={`px-2.5 py-1 rounded-[8px] border text-[10px] font-black uppercase tracking-[0.12em] ${statusClasses(status)}`}>
+      {status}
+    </span>
+  );
+}
+
+function EmptyState({ icon: Icon, title, detail }: { icon: any; title: string; detail: string }) {
+  return (
+    <div className="min-h-[260px] rounded-[16px] border border-dashed border-gray-200 bg-gray-50/40 flex flex-col items-center justify-center text-center px-8">
+      <div className="size-12 rounded-[12px] bg-white border border-gray-100 flex items-center justify-center text-gray-300 mb-4">
+        <Icon size={24} />
+      </div>
+      <p className="text-[14px] font-bold text-[#003630]">{title}</p>
+      <p className="text-[12px] text-gray-500 leading-relaxed mt-1 max-w-[280px]">{detail}</p>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value?: string | number | null }) {
+  return (
+    <div className="py-3 border-b border-gray-100 last:border-b-0">
+      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">{label}</p>
+      <p className="text-[13px] font-bold text-[#003630] mt-1 break-words">{value || 'Not provided'}</p>
+    </div>
+  );
+}
+
+function DuplicateCard({ item, onOpen }: { item: DuplicateReviewRequest; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full text-left rounded-[16px] border border-gray-100 bg-white p-4 shadow-sm active:scale-[0.99] transition-all"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[15px] font-black text-[#003630] truncate">
+            {item.requestedStudent.name || item.existingStudent.name}
+          </p>
+          <p className="text-[11px] text-gray-500 mt-1">
+            Requested by {item.parent.name}
+          </p>
+        </div>
+        <StatusPill status={item.status} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-[12px] bg-gray-50 p-3">
+          <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Existing</p>
+          <p className="text-[12px] font-bold text-gray-900 mt-1">{item.existingStudent.name}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            {item.existingStudent.grade || 'Grade unknown'} {item.existingStudent.className || ''}
+          </p>
+        </div>
+        <div className="rounded-[12px] bg-amber-50 p-3">
+          <p className="text-[10px] text-amber-700 font-black uppercase tracking-[0.12em]">Parent Entered</p>
+          <p className="text-[12px] font-bold text-gray-900 mt-1">{item.requestedStudent.name || 'Unknown'}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            {item.requestedStudent.grade || 'Grade unknown'} {item.requestedStudent.className || ''}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between text-[11px] text-gray-400">
+        <span>{formatDate(item.createdAt)}</span>
+        <span className="flex items-center gap-1 font-bold text-[#003630]">
+          Review <ChevronRight size={14} />
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function BalanceCard({ item, onOpen }: { item: BalanceReviewRequest; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full text-left rounded-[16px] border border-gray-100 bg-white p-4 shadow-sm active:scale-[0.99] transition-all"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[15px] font-black text-[#003630] truncate">{item.student.name}</p>
+          <p className="text-[11px] text-gray-500 mt-1">Submitted by {item.parent.name}</p>
+        </div>
+        <StatusPill status={item.status} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-[12px] bg-gray-50 p-3">
+          <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Recorded</p>
+          <p className="text-[15px] font-black text-gray-900 mt-1">{formatCurrency(item.recordedBalance)}</p>
+        </div>
+        <div className="rounded-[12px] bg-amber-50 p-3">
+          <p className="text-[10px] text-amber-700 font-black uppercase tracking-[0.12em]">Parent Says</p>
+          <p className="text-[15px] font-black text-gray-900 mt-1">{formatCurrency(item.claimedBalance)}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between text-[11px] text-gray-400">
+        <span>{formatDate(item.createdAt)}</span>
+        <span className="flex items-center gap-1 font-bold text-[#003630]">
+          Review <ChevronRight size={14} />
+        </span>
+      </div>
+    </button>
+  );
+}
 
 export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: (page: PageType, direction?: 'forward' | 'back') => void }) {
+  const selectedSchoolId = useAppStore(state => state.selectedSchoolId);
+  const selectedSchool = useAppStore(state => state.selectedSchool);
   const userId = useAppStore(state => state.userId);
-  const userPhone = useAppStore(state => state.userPhone);
-  const userName = useAppStore(state => state.userName);
 
-  const [activeTab, setActiveTab] = useState<'history' | 'raise'>('history');
-  const [disputes, setDisputes] = useState<any[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [activeTab, setActiveTab] = useState<ReviewTab>('duplicates');
+  const [duplicates, setDuplicates] = useState<DuplicateReviewRequest[]>([]);
+  const [balances, setBalances] = useState<BalanceReviewRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showRaiseForm, setShowRaiseForm] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [activeReview, setActiveReview] = useState<ActiveReview>(null);
+  const [reviewerNote, setReviewerNote] = useState('');
 
-  // Form State
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [notes, setNotes] = useState('');
-  const [showStudentDropdown, setShowStudentDropdown] = useState(false);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const data = await getSchoolReviewCenterData(selectedSchoolId);
+      setDuplicates(data.duplicates);
+      setBalances(data.balances);
+    } catch (error) {
+      console.error('[ReviewCenter] Failed to load:', error);
+      toast.error('Could not load review center');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [disputesData, studentsData] = await Promise.all([
-          getDisputesByParent(userId),
-          getStudentsByPhone(userPhone)
-        ]);
-        setDisputes(disputesData);
-        setStudents(studentsData);
-        if (studentsData.length > 0) {
-          setSelectedStudentId(studentsData[0].id);
-        }
-      } catch (err) {
-        console.error('Error fetching data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (userId) fetchData();
-  }, [userId, userPhone]);
+    loadData();
+  }, [selectedSchoolId]);
 
-  const handleRaiseDispute = async () => {
-    if (!selectedStudentId || !notes.trim()) {
-      toast.error('Please fill in all details');
-      return;
-    }
+  const pendingDuplicates = duplicates.filter(item => item.status === 'pending');
+  const pendingBalances = balances.filter(item => item.status === 'pending');
+  const historyItems = useMemo(() => [
+    ...duplicates.filter(item => item.status !== 'pending').map(item => ({ kind: 'duplicate' as const, item })),
+    ...balances.filter(item => item.status !== 'pending').map(item => ({ kind: 'balance' as const, item })),
+  ].sort((a, b) => {
+    const left = 'reviewedAt' in a.item ? a.item.reviewedAt || a.item.createdAt : a.item.updatedAt || a.item.createdAt;
+    const right = 'reviewedAt' in b.item ? b.item.reviewedAt || b.item.createdAt : b.item.updatedAt || b.item.createdAt;
+    return new Date(right || 0).getTime() - new Date(left || 0).getTime();
+  }), [duplicates, balances]);
 
-    setIsSubmitting(true);
-    hapticFeedback('medium');
+  const openReview = (review: ActiveReview) => {
+    hapticFeedback('light');
+    setActiveReview(review);
+    setReviewerNote('');
+  };
 
+  const closeReview = () => {
+    setActiveReview(null);
+    setReviewerNote('');
+  };
+
+  const handleDuplicateAction = async (status: 'approved' | 'rejected') => {
+    if (!activeReview || activeReview.kind !== 'duplicate') return;
+    setIsUpdating(true);
     try {
-      await logDispute(selectedStudentId, userId, notes);
-      toast.success('Dispute logged successfully. School admin notified.');
-      setNotes('');
-      setShowRaiseForm(false);
-      setActiveTab('history');
-      // Refresh list
-      const updatedDisputes = await getDisputesByParent(userId);
-      setDisputes(updatedDisputes);
-    } catch (e) {
-      toast.error('Could not log dispute. Contact support.');
+      await updateGuardianLinkRequestStatus({
+        requestId: activeReview.item.id,
+        status,
+        reviewerParentId: userId || null,
+        reviewerNote,
+      });
+      toast.success(status === 'approved' ? 'Existing student linked' : 'Duplicate request rejected');
+      hapticFeedback('success');
+      closeReview();
+      await loadData();
+    } catch (error) {
+      console.error('[ReviewCenter] Duplicate action failed:', error);
+      toast.error(status === 'approved' ? 'Could not approve request' : 'Could not reject request');
     } finally {
-      setIsSubmitting(false);
+      setIsUpdating(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'resolved': return 'bg-green-100 text-green-700';
-      case 'pending': return 'bg-amber-100 text-amber-700';
-      default: return 'bg-gray-100 text-gray-700';
+  const handleBalanceAction = async (status: 'resolved' | 'rejected') => {
+    if (!activeReview || activeReview.kind !== 'balance') return;
+    setIsUpdating(true);
+    try {
+      await updateBalanceReviewStatus({
+        requestId: activeReview.item.id,
+        status,
+        reviewerNote,
+      });
+      toast.success(status === 'resolved' ? 'Balance review resolved' : 'Balance review rejected');
+      hapticFeedback('success');
+      closeReview();
+      await loadData();
+    } catch (error) {
+      console.error('[ReviewCenter] Balance action failed:', error);
+      toast.error('Could not update balance review');
+    } finally {
+      setIsUpdating(false);
     }
   };
+
+  const tabButton = (tab: ReviewTab, label: string, count: number) => (
+    <button
+      type="button"
+      onClick={() => {
+        hapticFeedback('light');
+        setActiveTab(tab);
+      }}
+      className={`h-11 px-4 rounded-[10px] border text-[12px] font-black transition-all flex items-center gap-2 ${
+        activeTab === tab
+          ? 'bg-[#003630] border-[#003630] text-white'
+          : 'bg-white border-gray-200 text-gray-500'
+      }`}
+    >
+      {label}
+      <span className={`min-w-5 h-5 px-1 rounded-full text-[10px] flex items-center justify-center ${
+        activeTab === tab ? 'bg-[#95e36c] text-[#003630]' : 'bg-gray-100 text-gray-500'
+      }`}>
+        {count}
+      </span>
+    </button>
+  );
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center font-['Inter',sans-serif]">
-      {/* ── Fixed Header ── */}
-      <header className="w-full h-20 px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
+      <header className="w-full h-20 px-6 bg-white border-b border-gray-100 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
               hapticFeedback('medium');
-              if (showRaiseForm) {
-                setShowRaiseForm(false);
-              } else {
-                navigateToPage('services', 'back');
-              }
+              navigateToPage('services', 'back');
             }}
-            className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-black active:scale-90 transition-transform"
+            className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-[#003630] active:scale-95 transition-transform"
           >
-            <ChevronLeft size={20} />
+            <ArrowLeft size={20} />
           </button>
-          <div className="flex items-center gap-3">
-            <div className="size-6 flex items-center justify-center">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 12L12 22L22 12L12 2Z" />
-                <path d="M9 13L12 10L15 13" />
-              </svg>
-            </div>
-            <h1 className="text-black text-[22px] font-bold font-['Inter'] tracking-tight">masterfees</h1>
+          <div>
+            <h1 className="text-[20px] font-black text-[#003630] tracking-[-0.3px]">Review Center</h1>
+            <p className="text-[11px] font-bold text-gray-400">{selectedSchool || 'All schools'}</p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            hapticFeedback('light');
+            loadData();
+          }}
+          className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+        >
+          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+        </button>
       </header>
 
-      <main className="w-full max-w-[600px] flex flex-col pb-32">
-        {/* ── Hero Section ── */}
-        <section className="px-6 py-8 bg-[#f9fafb]">
+      <main className="w-full max-w-[680px] px-5 pt-6 pb-24">
+        <section className="mb-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-black shadow-sm">
-              <ShieldAlert size={22} strokeWidth={2.5} />
+            <div className="size-11 rounded-[12px] bg-[#003630]/5 border border-[#003630]/10 flex items-center justify-center text-[#003630]">
+              <ClipboardCheck size={22} />
             </div>
-            <h2 className="text-xl font-bold font-['Inter'] text-black">Audit & Disputes</h2>
+            <div>
+              <h2 className="text-[22px] font-black text-black tracking-[-0.5px]">Pending Reviews</h2>
+              <p className="text-[12px] text-gray-500">Resolve duplicate pupil requests and balance investigations.</p>
+            </div>
           </div>
-          <p className="text-black text-[13px] leading-relaxed font-normal font-['Inter'] opacity-80 max-w-[340px]">
-            Review active financial investigations and raise discrepancies found in your balance records for further auditing.
-          </p>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-[12px] bg-gray-50 border border-gray-100 p-3">
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Duplicates</p>
+              <p className="text-[22px] font-black text-[#003630] mt-1">{pendingDuplicates.length}</p>
+            </div>
+            <div className="rounded-[12px] bg-gray-50 border border-gray-100 p-3">
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Balances</p>
+              <p className="text-[22px] font-black text-[#003630] mt-1">{pendingBalances.length}</p>
+            </div>
+            <div className="rounded-[12px] bg-gray-50 border border-gray-100 p-3">
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Closed</p>
+              <p className="text-[22px] font-black text-[#003630] mt-1">{historyItems.length}</p>
+            </div>
+          </div>
         </section>
 
-        {/* ── Tabs ── */}
-        {!showRaiseForm && (
-          <div className="px-6 py-6 flex items-center gap-4">
-            <button
-              onClick={() => { hapticFeedback('light'); setActiveTab('history'); }}
-              className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'history' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
-            >
-              {activeTab === 'history' && <div className="w-1.5 h-1.5 bg-[#4FE501] rounded-full" />}
-              <span className={`text-xs font-bold font-['Space_Grotesk'] ${activeTab === 'history' ? 'text-black' : ''}`}>Dispute History</span>
-            </button>
-            <button
-              onClick={() => { hapticFeedback('light'); setActiveTab('raise'); }}
-              className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'raise' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
-            >
-              {activeTab === 'raise' && <div className="w-1.5 h-1.5 bg-[#4FE501] rounded-full" />}
-              <span className={`text-xs font-bold font-['Space_Grotesk'] ${activeTab === 'raise' ? 'text-black' : ''}`}>Raise Dispute</span>
-            </button>
+        <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
+          {tabButton('duplicates', 'Duplicates', pendingDuplicates.length)}
+          {tabButton('balances', 'Balance Reviews', pendingBalances.length)}
+          {tabButton('history', 'History', historyItems.length)}
+        </div>
+
+        {loading ? (
+          <div className="min-h-[360px] flex flex-col items-center justify-center">
+            <Loader2 className="animate-spin text-[#003630] mb-3" size={30} />
+            <p className="text-[13px] text-gray-500 font-bold">Loading review queue...</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {activeTab === 'duplicates' && (
+              pendingDuplicates.length > 0
+                ? pendingDuplicates.map(item => (
+                  <DuplicateCard key={item.id} item={item} onOpen={() => openReview({ kind: 'duplicate', item })} />
+                ))
+                : <EmptyState icon={Users} title="No duplicate requests" detail="When parents submit clear duplicate-looking pupils for school review, they will appear here." />
+            )}
+
+            {activeTab === 'balances' && (
+              pendingBalances.length > 0
+                ? pendingBalances.map(item => (
+                  <BalanceCard key={item.id} item={item} onOpen={() => openReview({ kind: 'balance', item })} />
+                ))
+                : <EmptyState icon={FileWarning} title="No balance reviews" detail="Parent balance disputes and account investigations will appear here." />
+            )}
+
+            {activeTab === 'history' && (
+              historyItems.length > 0
+                ? historyItems.map(entry => entry.kind === 'duplicate'
+                  ? <DuplicateCard key={`d-${entry.item.id}`} item={entry.item} onOpen={() => openReview({ kind: 'duplicate', item: entry.item })} />
+                  : <BalanceCard key={`b-${entry.item.id}`} item={entry.item} onOpen={() => openReview({ kind: 'balance', item: entry.item })} />
+                )
+                : <EmptyState icon={ShieldAlert} title="No closed reviews" detail="Approved, rejected, and resolved reviews will be kept here." />
+            )}
           </div>
         )}
+      </main>
 
-        {/* ── Content ── */}
-        <div className="px-6 space-y-4">
-          {activeTab === 'history' ? (
-            <div className="flex flex-col gap-4 h-full">
-              {/* Info Banner */}
-              <div className="p-4 bg-[#F7F7F7] rounded-xl flex items-center gap-4 border border-neutral-100 shadow-sm">
-                <div className="w-5 h-5 flex items-center justify-center text-neutral-600">
-                  <Info size={18} />
-                </div>
-                <p className="flex-1 text-neutral-600 text-[12px] leading-relaxed font-normal font-['Inter']">
-                  Once a dispute is raised, our team will review the discrepancies with the school administration. You will be notified of the resolution.
-                </p>
-              </div>
-
-              {/* Dispute List Area */}
-              <div className="flex-1 min-h-[400px] flex flex-col gap-4">
-                {loading ? (
-                  <div className="flex-1 flex flex-col items-center justify-center p-8">
-                    <Loader2 className="animate-spin text-teal-600 mb-2" size={32} />
-                    <p className="text-neutral-500 text-sm font-medium">Loading history...</p>
-                  </div>
-                ) : disputes.length > 0 ? (
-                  <div className="space-y-3">
-                    {disputes.map((dispute) => (
-                      <div key={dispute.id} className="p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-2 transition-all hover:border-[#95e36c]/40">
-                        <div className="flex items-center justify-between">
-                          <span className="text-black text-[13px] font-bold font-['Inter']">
-                            {dispute.student ? `${dispute.student.first_name} ${dispute.student.last_name}` : 'Unknown Student'}
-                          </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${getStatusColor(dispute.status)}`}>
-                            {dispute.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-neutral-500 text-[11px]">
-                          <span className="line-clamp-1 flex-1 pr-4">ID: <span className="text-black font-semibold">#{dispute.id.slice(0, 8).toUpperCase()}</span></span>
-                          <span>{new Date(dispute.created_at).toLocaleDateString()}</span>
-                        </div>
-                        {dispute.notes && (
-                          <p className="text-neutral-400 text-[10px] italic border-t border-neutral-50 pt-2 mt-1 line-clamp-2">
-                            "{dispute.notes}"
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex-1 min-h-[300px] rounded-2xl border border-[#E6E6E6] border-dashed bg-gray-50/30 flex flex-col items-center justify-center p-8 text-center">
-                    <div className="size-12 rounded-2xl bg-white border border-neutral-100 flex items-center justify-center text-neutral-300 mb-4 shadow-sm">
-                      <History size={24} />
-                    </div>
-                    <p className="text-neutral-500 text-[12px] font-medium font-['Space_Grotesk'] max-w-[200px]">
-                      Your disputes and audit history will appear here.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : !showRaiseForm ? (
-            <div className="space-y-4">
-              {students.map((student) => (
-                <button
-                  key={student.id}
-                  onClick={() => {
-                    setSelectedStudentId(student.id);
-                    setShowRaiseForm(true);
-                    setNotes('');
-                    hapticFeedback('medium');
-                  }}
-                  className="w-full bg-white rounded-2xl p-5 border border-neutral-100 hover:border-[#95e36c]/40 transition-all flex items-center gap-4 group shadow-sm active:scale-[0.98]"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-[#003630] group-hover:bg-[#95e36c]/10 transition-colors">
-                    <Baby size={24} strokeWidth={2} />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <h4 className="font-bold text-[15px] text-black">
-                      {student.name}
-                    </h4>
-                    <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
-                      {student.grade} • {student.schoolName}
-                    </p>
-                  </div>
-                  <div className="size-8 rounded-full bg-gray-50 flex items-center justify-center text-neutral-300 group-hover:bg-black group-hover:text-white transition-all">
-                    <Plus size={16} />
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            /* ── Raise Dispute Form ── */
+      <AnimatePresence>
+        {activeReview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-black/40 flex items-end sm:items-center justify-center px-0 sm:px-4"
+          >
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col gap-6 pt-4 pb-20"
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              className="w-full sm:max-w-[560px] max-h-[92dvh] bg-white rounded-t-[16px] sm:rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
             >
-              <div className="flex flex-col gap-2">
-                <h3 className="text-black text-base font-bold font-['Inter']">Dispute Details</h3>
-                <p className="text-neutral-500 text-[12px]">Please document the discrepancies found for the selected student.</p>
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-gray-400">
+                    {activeReview.kind === 'duplicate' ? 'Duplicate Review' : 'Balance Review'}
+                  </p>
+                  <h3 className="text-[18px] font-black text-[#003630] mt-1">
+                    {activeReview.kind === 'duplicate'
+                      ? activeReview.item.requestedStudent.name || activeReview.item.existingStudent.name
+                      : activeReview.item.student.name}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeReview}
+                  className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <div className="space-y-6">
-                {/* Select Student (Read only if coming from student selection) */}
-                <div className="flex flex-col gap-2 relative">
-                  <label className="text-zinc-500 text-xs font-normal font-['Inter']">Target Student</label>
-                  <button
-                    onClick={() => setShowStudentDropdown(!showStudentDropdown)}
-                    className="w-full px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 flex items-center justify-between group active:bg-gray-50 transition-colors"
-                  >
-                    <span className="text-black text-xs font-medium font-['Inter']">
-                      {students.find(s => s.id === selectedStudentId)?.name || 'Select a student'}
-                    </span>
-                    <ChevronDown size={16} className={`text-neutral-600 transition-transform ${showStudentDropdown ? 'rotate-180' : ''}`} />
-                  </button>
+              <div className="overflow-y-auto px-5 py-4">
+                {activeReview.kind === 'duplicate' ? (
+                  <>
+                    <div className="rounded-[12px] bg-amber-50 border border-amber-100 p-4 mb-4 flex gap-3">
+                      <AlertTriangle size={20} className="text-amber-700 shrink-0 mt-0.5" />
+                      <p className="text-[12px] text-amber-800 leading-relaxed">
+                        The parent entered details that match an existing pupil. Approving links the parent to the existing record; it does not create a duplicate student.
+                      </p>
+                    </div>
+                    <Field label="Parent" value={`${activeReview.item.parent.name}${activeReview.item.parent.phone ? ` - ${activeReview.item.parent.phone}` : ''}`} />
+                    <Field label="Existing pupil" value={`${activeReview.item.existingStudent.name} (${activeReview.item.existingStudent.grade || 'Grade unknown'} ${activeReview.item.existingStudent.className || ''})`} />
+                    <Field label="Admission number" value={activeReview.item.existingStudent.admissionNumber} />
+                    <Field label="Parent-entered pupil" value={`${activeReview.item.requestedStudent.name || 'Unknown'} (${activeReview.item.requestedStudent.grade || 'Grade unknown'} ${activeReview.item.requestedStudent.className || ''})`} />
+                    <Field label="Submitted" value={formatDate(activeReview.item.createdAt)} />
+                  </>
+                ) : (
+                  <>
+                    <div className="rounded-[12px] bg-[#f9fafb] border border-gray-100 p-4 mb-4">
+                      <p className="text-[12px] text-gray-600 leading-relaxed">
+                        Compare the account snapshot recorded when the parent disputed the balance. Resolving or rejecting unlocks the pupil profile for payments again.
+                      </p>
+                    </div>
+                    <Field label="Parent" value={`${activeReview.item.parent.name}${activeReview.item.parent.phone ? ` - ${activeReview.item.parent.phone}` : ''}`} />
+                    <Field label="Student" value={`${activeReview.item.student.name} (${activeReview.item.student.grade || 'Grade unknown'} ${activeReview.item.student.className || ''})`} />
+                    <Field label="Parent claimed balance" value={formatCurrency(activeReview.item.claimedBalance)} />
+                    <Field label="Recorded balance" value={formatCurrency(activeReview.item.recordedBalance)} />
+                    <Field label="Recorded charges" value={formatCurrency(activeReview.item.recordedChargedAmount)} />
+                    <Field label="Recorded paid" value={formatCurrency(activeReview.item.recordedPaidAmount)} />
+                    <Field label="Parent note" value={activeReview.item.reason} />
+                  </>
+                )}
 
-                  <AnimatePresence>
-                    {showStudentDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-neutral-100 shadow-xl z-50 overflow-hidden"
-                      >
-                        {students.map(student => (
-                          <button
-                            key={student.id}
-                            onClick={() => {
-                              setSelectedStudentId(student.id);
-                              setShowStudentDropdown(false);
-                              hapticFeedback('light');
-                            }}
-                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-neutral-50 last:border-0 text-left"
-                          >
-                            <span className="text-xs font-medium text-black">{student.name}</span>
-                            {selectedStudentId === student.id && <Check size={14} className="text-[#003630]" />}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Observation Notes */}
-                <div className="flex flex-col gap-4">
-                  <label className="text-zinc-500 text-xs font-normal font-['Inter']">Auditor Observation Notes</label>
+                <div className="mt-5">
+                  <label className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Reviewer note</label>
                   <textarea
-                    placeholder="Please state the discrepancy here..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full h-40 px-4 py-4 bg-white rounded-xl shadow-[inset_0px_4px_4px_0px_rgba(0,0,0,0.05)] outline outline-1 outline-offset-[-1px] outline-neutral-200 text-black text-xs font-medium font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all resize-none"
+                    value={reviewerNote}
+                    onChange={(event) => setReviewerNote(event.target.value)}
+                    placeholder="Optional note for the audit trail"
+                    className="mt-2 w-full min-h-[110px] rounded-[12px] border border-gray-200 px-4 py-3 text-[13px] text-[#003630] outline-none focus:border-[#003630] resize-none"
                   />
                 </div>
               </div>
-            </motion.div>
-          )}
-        </div>
-      </main>
 
-      {/* ── Fixed Bottom Action Bar ── */}
-      {(showRaiseForm || (activeTab === 'history' && !loading)) && (
-        <div className="w-full fixed bottom-0 left-0 right-0 px-6 pt-4 pb-6 bg-white border-t border-neutral-100 shadow-[0px_-10px_30px_rgba(0,0,0,0.03)] flex flex-col items-center z-[60]">
-          <div className="w-full max-w-[552px]">
-            {showRaiseForm ? (
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => {
-                    hapticFeedback('light');
-                    setShowRaiseForm(false);
-                  }}
-                  className="flex-1 h-14 bg-transparent border border-neutral-200 text-black rounded-xl flex items-center justify-center gap-4 text-sm font-bold font-['Inter'] active:scale-[0.98] transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={isSubmitting}
-                  onClick={handleRaiseDispute}
-                  style={{ backgroundColor: isSubmitting ? '#E6E6E6' : '#003129' }}
-                  className="flex-1 h-14 text-white rounded-xl flex items-center justify-center text-sm font-medium font-['Inter'] shadow-lg active:scale-[0.98] transition-all disabled:cursor-not-allowed gap-4"
-                >
-                  {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Send size={18} />}
-                  <span>{isSubmitting ? 'Logging...' : 'Initiate Audit'}</span>
-                </button>
+              <div className="px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-gray-100 bg-white shrink-0">
+                {activeReview.kind === 'duplicate' ? (
+                  activeReview.item.status === 'pending' ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        disabled={isUpdating}
+                        onClick={() => handleDuplicateAction('rejected')}
+                        className="h-12 rounded-[10px] border border-red-100 bg-red-50 text-red-700 text-[13px] font-black disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isUpdating}
+                        onClick={() => handleDuplicateAction('approved')}
+                        className="h-12 rounded-[10px] bg-[#003630] text-white text-[13px] font-black disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                        Approve Link
+                      </button>
+                    </div>
+                  ) : (
+                    <StatusPill status={activeReview.item.status} />
+                  )
+                ) : activeReview.item.status === 'pending' ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => handleBalanceAction('rejected')}
+                      className="h-12 rounded-[10px] border border-red-100 bg-red-50 text-red-700 text-[13px] font-black disabled:opacity-50"
+                    >
+                      Reject Claim
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => handleBalanceAction('resolved')}
+                      className="h-12 rounded-[10px] bg-[#003630] text-white text-[13px] font-black disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                      Mark Resolved
+                    </button>
+                  </div>
+                ) : (
+                  <StatusPill status={activeReview.item.status} />
+                )}
               </div>
-            ) : (
-              <button
-                onClick={() => {
-                  hapticFeedback('medium');
-                  setActiveTab('raise');
-                }}
-                style={{ backgroundColor: '#003630' }}
-                className="w-full h-14 text-white rounded-xl flex items-center justify-center text-sm font-semibold font-['Inter'] shadow-xl shadow-teal-950/30 active:scale-[0.98] transition-all gap-2"
-              >
-                <Plus size={18} />
-                Raise New Dispute
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

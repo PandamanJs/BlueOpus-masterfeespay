@@ -15,7 +15,7 @@ import { createTransaction, syncTransactionToQuickBooks } from "../lib/supabase/
 import { getSchools, getDiscountDefinitions } from "../lib/supabase/api/schools";
 import { getParentByPhone } from "../lib/supabase/api/parents";
 import { useAppStore } from "../stores/useAppStore";
-import { DiscountDefinition } from "../types";
+import type { DiscountDefinition } from "../types";
 import { toast } from "sonner";
 import RollingNumber from "./ui/RollingNumber";
 import LogoHeader from "./common/LogoHeader";
