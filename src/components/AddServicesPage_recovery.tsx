@@ -1165,18 +1165,18 @@ function UnifiedServicesPopup({
         
         // Current year: check month index
         if (typeof monthOrTerm === 'number') {
-            // Term 1: Ends when April (index 3) starts
-            if (monthOrTerm === 1 && currentMonth >= 3) return true;
-            // Term 2: Ends when August (index 7) starts
-            if (monthOrTerm === 2 && currentMonth >= 7) return true;
+            // Term 1 (Jan-Apr): Past if we are in May (index 4) or later
+            if (monthOrTerm === 1 && currentMonth > 3) return true;
+            // Term 2 (May-Aug): Past if we are in Sept (index 8) or later
+            if (monthOrTerm === 2 && currentMonth > 7) return true;
             // Term 3 (Sept-Dec): Never past if we are in the current year
             return false;
+        } else {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const targetIndex = months.findIndex(m => m.startsWith(monthOrTerm));
+            if (targetIndex === -1) return false;
+            return currentMonth > targetIndex;
         }
-
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const targetIndex = months.findIndex(m => m.startsWith(monthOrTerm as string));
-        if (targetIndex === -1) return false;
-        return currentMonth > targetIndex;
     };
     const [selectedSportsPlanId, setSelectedSportsPlanId] = useState<string>("");
     const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
@@ -1860,7 +1860,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {transportFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].map((term) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-term-${term}` : `route-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2242,7 +2242,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {boardingFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].map((term) => {
                                                                     const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-term-${term}` : `room-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2622,7 +2622,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {cafeteriaFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].map((term) => {
                                                                     const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-term-${term}` : `canteen-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2860,12 +2860,12 @@ function UnifiedServicesPopup({
                                                 );
                                             }
 
-                                            return Object.entries(grouped).map(([catName, items], catIdx) => {
+                                            return Object.entries(grouped).map(([catName, items]) => {
                                                 const hasActiveItems = items.some(svc => (otherQuantities[svc.id] || 0) > 0);
 
                                                 if (activeTab === 'trips') {
                                                     return (
-                                                        <div key={`trips-${catName}-${catIdx}`} className="w-full flex flex-col gap-5">
+                                                        <div key={`trips-${catName}`} className="w-full flex flex-col gap-5">
                                                             {items.map((svc) => {
                                                                 const qty = otherQuantities[svc.id] || 0;
                                                                 const itemId = `other-${svc.id}`;

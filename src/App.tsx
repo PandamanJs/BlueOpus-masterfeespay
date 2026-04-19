@@ -959,13 +959,18 @@ export default function App() {
       setIsStaff(false);
       return;
     }
-    console.log('[App] Fetching students and staff status for phone:', phone);
+    
+    // Get the current school ID from the store to ensure filtered fetching
+    const storeSchoolId = useAppStore.getState().selectedSchoolId;
+    
+    console.log('[App] Fetching students and staff status for phone:', phone, storeSchoolId ? `(Filtered for School: ${storeSchoolId})` : '(No school filter)');
     setStudentsLoading(true);
     setStudentsError(null);
     try {
       // Parallel fetch for students and staff status
+      // We pass the school ID to ensure you only see students for the school you've selected
       const [studentData, staffStatus] = await Promise.all([
-        getStudentsByPhone(phone),
+        getStudentsByPhone(phone, storeSchoolId || undefined),
         checkIfStaff(phone)
       ]);
       

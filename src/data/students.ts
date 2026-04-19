@@ -75,15 +75,16 @@ async function convertToLegacyStudent(student: StudentWithSchool, balanceMap?: R
  * and return their students.
  * 
  * @param phone - Parent's phone number
+ * @param schoolId - Optional school ID to filter students by
  * @returns Array of students in legacy format
  */
-export async function getStudentsByPhone(phone: string): Promise<Student[]> {
+export async function getStudentsByPhone(phone: string, schoolId?: string): Promise<Student[]> {
   try {
-    console.log('[getStudentsByPhone] Searching for phone:', phone);
-    const students = await getStudentsByParentPhone(phone);
+    console.log('[getStudentsByPhone] Searching for phone:', phone, schoolId ? `(School: ${schoolId})` : '');
+    const students = await getStudentsByParentPhone(phone, schoolId);
 
     if (!students || students.length === 0) {
-      console.warn('[getStudentsByPhone] No students found for phone:', phone);
+      console.warn('[getStudentsByPhone] No students found for phone:', phone, schoolId ? `at school: ${schoolId}` : '');
       return [];
     }
 

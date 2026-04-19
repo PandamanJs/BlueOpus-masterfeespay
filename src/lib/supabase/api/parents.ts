@@ -5,7 +5,7 @@ import { phoneOrFilter } from '../../../utils/reconciliation';
 /**
  * Get parent by phone number — queries `parents` table in Master-fees Database.
  */
-export async function getParentByPhone(phone: string): Promise<ParentWithStudents | null> {
+export async function getParentByPhone(phone: string, schoolId?: string): Promise<ParentWithStudents | null> {
     try {
         const orQuery = phoneOrFilter('phone_number', phone);
         console.log('[getParentByPhone] Querying with:', orQuery);
@@ -35,7 +35,7 @@ export async function getParentByPhone(phone: string): Promise<ParentWithStudent
         } as unknown as Parent;
 
         // Get students for this parent with their school info and current grade
-        const { data: studentsRaw, error: studentsError } = await supabase
+        let studentQuery = supabase
             .from('students')
             .select(`
                 *,
@@ -47,6 +47,14 @@ export async function getParentByPhone(phone: string): Promise<ParentWithStudent
                 )
             `)
             .or(`parent_id.eq.${parent.id},other_parent_id.eq.${parent.id}`);
+
+        // OPTIONAL: Filter by school if provided
+        if (schoolId) {
+            console.log('[getParentByPhone] Applying school filter:', schoolId);
+            studentQuery = studentQuery.eq('school_id', schoolId);
+        }
+
+        const { data: studentsRaw, error: studentsError } = await studentQuery;
 
         if (studentsError) handleSupabaseError(studentsError, 'getParentByPhone - students');
 
@@ -130,8 +138,8 @@ export async function getParentByEmail(email: string): Promise<ParentWithStudent
 /**
  * Get students for a parent by phone number.
  */
-export async function getStudentsByParentPhone(phone: string): Promise<StudentWithSchool[]> {
-    const parentData = await getParentByPhone(phone);
+export async function getStudentsByParentPhone(phone: string, schoolId?: string): Promise<StudentWithSchool[]> {
+    const parentData = await getParentByPhone(phone, schoolId);
     return parentData?.students || [];
 }
 
