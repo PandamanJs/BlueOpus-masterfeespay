@@ -61,8 +61,11 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
         return next;
       });
 
-      // If we are confirming (not unconfirming), send to DB
-      if (!isCurrentlyConfirmed) {
+      // Safety check: is this a temporary string ID?
+      const isTemporaryId = activeStudentId.startsWith('new-');
+
+      // If we are confirming (not unconfirming) AND it's an existing student in DB, send to DB
+      if (!isCurrentlyConfirmed && !isTemporaryId) {
         await saveLedgerVerification({
           studentId: activeStudentId,
           parentId: parentData.parentId,
@@ -156,11 +159,11 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
               {/* Header Section */}
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#000000] mb-1">
-                    {financialData?.student?.name || activeStudent?.name} - School Fees
+                  <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#000000] mb-0.5">
+                    {activeStudent?.name}
                   </h2>
-                  <p className="text-[11px] text-gray-400 font-medium">
-                    Grade {(financialData?.student?.grade || activeStudent?.grade || '...')?.toString().replace(/^(grade\s+)/i, '')}
+                  <p className="text-[12px] text-gray-400 font-medium">
+                    {activeStudent?.grade} {activeStudent?.class ? `• ${activeStudent.class}` : ''}
                   </p>
                 </div>
                 <div className={`px-4 py-1.5 rounded-[12px] ${(financialData?.totalBalance || 0) > 0 ? 'bg-red-50 text-red-600 ' : 'bg-green-50 text-green-700'} text-[8px] font-bold `}>
@@ -254,17 +257,22 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, is
 
                             try {
                               setIsLoading(true); // Small UX feedback
-                              await saveLedgerVerification({
-                                studentId: activeStudentId,
-                                parentId: parentData.parentId,
-                                schoolId: parentData.schoolId,
-                                status: 'disputed',
-                                notes: disputeNotes[activeStudentId] || '',
-                                metadata: {
-                                  balance: financialData?.totalBalance || 0,
-                                  disputed_at: new Date().toISOString()
-                                }
-                              });
+                              
+                              const isTemporaryId = activeStudentId?.startsWith('new-');
+
+                              if (!isTemporaryId && activeStudentId) {
+                                await saveLedgerVerification({
+                                  studentId: activeStudentId,
+                                  parentId: parentData.parentId,
+                                  schoolId: parentData.schoolId,
+                                  status: 'disputed',
+                                  notes: disputeNotes[activeStudentId] || '',
+                                  metadata: {
+                                    balance: financialData?.totalBalance || 0,
+                                    disputed_at: new Date().toISOString()
+                                  }
+                                });
+                              }
 
                               setConfirmedIds(prev => {
                                 const next = new Set(prev);

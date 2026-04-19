@@ -1151,6 +1151,33 @@ function UnifiedServicesPopup({
     const [transportFrequency, setTransportFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
     const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
     const [sportsFrequency, setSportsFrequency] = useState<'monthly' | 'termly' | 'yearly'>('termly');
+
+    // Time-based filtering: Terms and months that have passed should not be visible
+    const isPastDate = (monthOrTerm: string | number, year: number) => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth(); // 0-11
+        
+        // Past years are all past
+        if (year < currentYear) return true;
+        // Future years are never past
+        if (year > currentYear) return false;
+        
+        // Current year: check month index
+        if (typeof monthOrTerm === 'number') {
+            // Term 1 (Jan-Apr): Past if we are in May (index 4) or later
+            if (monthOrTerm === 1 && currentMonth > 3) return true;
+            // Term 2 (May-Aug): Past if we are in Sept (index 8) or later
+            if (monthOrTerm === 2 && currentMonth > 7) return true;
+            // Term 3 (Sept-Dec): Never past if we are in the current year
+            return false;
+        } else {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const targetIndex = months.findIndex(m => m.startsWith(monthOrTerm));
+            if (targetIndex === -1) return false;
+            return currentMonth > targetIndex;
+        }
+    };
     const [selectedSportsPlanId, setSelectedSportsPlanId] = useState<string>("");
     const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
 
@@ -1540,7 +1567,7 @@ function UnifiedServicesPopup({
                                                         </div>
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
-                                                            {[1, 2, 3].map((term) => {
+                                                            {[1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
                                                                 const termId = selectedFee ? `fee-${selectedFee.value}-term-${term}` : `term-${term}`;
                                                                 const isTermStaged = isStaged(termId);
 
@@ -1893,7 +1920,9 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : transportFrequency === 'monthly' ? (
-                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                    .map((month) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-month-${month}` : `route-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2273,7 +2302,9 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : boardingFrequency === 'monthly' ? (
-                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                    .map((month) => {
                                                                     const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-month-${month}` : `room-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2729,7 +2760,9 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'monthly' ? (
-                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                    .map((month) => {
                                                                     const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-month-${month}` : `canteen-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -3073,7 +3106,7 @@ function UnifiedServicesPopup({
 
                                                                         <div className="grid grid-cols-3 gap-4">
                                                                             {sportsFrequency === 'termly' ? (
-                                                                                [1, 2, 3].map((term) => {
+                                                                                [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
                                                                                     const termId = selectedSportsPlan ? `sports-${selectedSportsPlanId}-term-${term}` : `sports-term-${term}`;
                                                                                     const isTermStaged = isStaged(termId);
 
@@ -3109,7 +3142,9 @@ function UnifiedServicesPopup({
                                                                                     );
                                                                                 })
                                                                             ) : sportsFrequency === 'monthly' ? (
-                                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'].map((month) => {
+                                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                                    .map((month) => {
                                                                                     const termId = `sports-${selectedSportsPlanId}-month-${month}`;
                                                                                     const isTermStaged = isStaged(termId);
 

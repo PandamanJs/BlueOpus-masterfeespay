@@ -229,7 +229,7 @@ export async function linkStudentsToParent(parentId: string, students: StudentDa
                 stream_id: targetStreamId
             };
 
-            await supabase.from('student_grade').upsert(gradeEntry, { onConflict: 'student_id, academic_year_id' });
+            await supabase.from('student_grade').upsert(gradeEntry, { onConflict: 'student_id, grade_id, academic_year_id' });
         }
     }
 }
