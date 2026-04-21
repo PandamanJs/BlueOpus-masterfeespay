@@ -267,7 +267,22 @@ export default function HistoryPage({
 
 function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, userName, schoolName, schoolLogo }: { item: any, grade: string, transactions: any[], onPay: () => void, studentName: string, userName: string, schoolName: string, schoolLogo?: string | null }) {
   const [showDetails, setShowDetails] = useState(false);
-  const isCleared = (item.balance || 0) <= 0;
+  const normalizedBalance = Math.max(0, Number(item.balance || 0));
+  const isCleared = normalizedBalance <= 0;
+  const relatedTxs = Array.isArray(item.transactions) && item.transactions.length > 0
+    ? item.transactions
+    : transactions.filter(tx =>
+      tx.invoice_id === item.invoice_id
+      || tx.linked_invoice_id === item.invoice_id
+      || tx.meta_data?.invoice_id === item.invoice_id
+      || tx.meta_data?.invoice_no === item.invoice_number
+      || tx.meta_data?.invoice_number === item.invoice_number
+    );
+  const amountPaid = Number(
+    item.collected
+    ?? relatedTxs.reduce((sum, tx) => sum + Number(tx.amount || 0), 0)
+  );
+  const creditApplied = Number(item.credit_applied || 0);
 
   const extractDate = (obj: any) => {
     if (!obj) return 'N/A';
@@ -280,11 +295,8 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
     return isNaN(parsed.getTime()) ? val : parsed.toLocaleDateString('en-GB');
   };
 
-  const relatedTxs = transactions.filter(tx => tx.invoice_id === item.invoice_id);
-
   const handleDownload = () => {
     try {
-      const amountPaid = (item.expected || 0) - (item.balance || 0);
       generateReceiptPDF({
         schoolName: schoolName,
         totalAmount: amountPaid,
@@ -373,11 +385,21 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
             </div>
           ))}
 
+          {creditApplied > 0 && (
+            <div className="flex items-center justify-between gap-4 text-[12px]">
+              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal w-16 shrink-0">Auto</p>
+              <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
+                Credit applied from previous payments
+              </p>
+              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-K{creditApplied.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+            </div>
+          )}
+
           {/* Balance — from design (Frame19 style) */}
           <div className="mt-1 pt-2 border-t border-[#dad9d9] flex items-center justify-between gap-4">
-            <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[12px] ${!isCleared ? 'text-[#ea3030]' : 'text-[#b3b3b3]'}`}>Balance</p>
+            <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[12px] ${!isCleared ? 'text-[#ea3030]' : 'text-[#b3b3b3]'}`}>{isCleared ? 'Balance Settled' : 'Balance Due'}</p>
             <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-right ${!isCleared ? 'text-[#ea3030]' : 'text-[#b3b3b3]'}`}>
-              {isCleared ? "-" : `K${(item.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+              {`K${normalizedBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
             </p>
           </div>
         </div>

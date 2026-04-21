@@ -4,7 +4,7 @@ import { Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ParentInformationPage, { type ParentData } from './registration/ParentInformationPage';
 import StudentsPage from './registration/StudentsPage';
-import ReviewPage from './registration/ReviewPage';
+import ReviewPage, { type BalanceDisputeDetails } from './registration/ReviewPage';
 import { type StudentData, registerParent, linkStudentsToParent } from '../lib/supabase/api/registration';
 import { getSchools } from '../lib/supabase/api/schools';
 import type { School } from '../types';
@@ -16,9 +16,9 @@ interface RegistrationFormPageProps {
 }
 
 type RegistrationStep = 'parent' | 'students' | 'review';
+type StudentBalanceDispute = BalanceDisputeDetails & { note: string };
 
 export default function RegistrationFormPage({ onBack, onComplete }: RegistrationFormPageProps) {
-  // ── Persistence Logic ──────────────────────────────────────────────────
   const PERSISTENCE_KEY = 'masterfees_registration_v1';
 
   const [currentStep, setCurrentStep] = useState<RegistrationStep>(() => {
@@ -36,6 +36,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [studentBalanceDisputes, setStudentBalanceDisputes] = useState<Record<string, StudentBalanceDispute>>({});
   const [schools, setSchools] = useState<School[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -106,7 +107,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         console.log('[Registration] Existing account detected during Step 1, showing modal');
         setPendingParentId(result.parentId);
         setDuplicateAccountName(result.existingName || 'Unknown');
-        setDuplicateMatchType(result.matchType || null);
+        setDuplicateMatchType(result.matchType || result.duplicateField || null);
         setParentData(data); // Save data temporarily to resume after modal
         setShowDuplicateModal(true);
         return;
@@ -161,11 +162,27 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         console.log('[Registration] Proceeding with parentId:', resolvedParentId);
 
         // 2. Link Students
-        await linkStudentsToParent(resolvedParentId, studentsData, parentData.schoolId);
+        const studentsWithDisputes = studentsData.map((student) => ({
+          ...student,
+          balanceDisputeNote: studentBalanceDisputes[student.id]?.note,
+          balanceDisputeClaimedBalance: studentBalanceDisputes[student.id]?.claimedBalance,
+          balanceDisputeRecordedBalance: studentBalanceDisputes[student.id]?.recordedBalance,
+          balanceDisputeRecordedChargedAmount: studentBalanceDisputes[student.id]?.recordedChargedAmount,
+          balanceDisputeRecordedPaidAmount: studentBalanceDisputes[student.id]?.recordedPaidAmount,
+        }));
+        await linkStudentsToParent(resolvedParentId, studentsWithDisputes, parentData.schoolId);
         console.log('[Registration] Students linked successfully');
 
         // Success!
-        toast.success("Registration completed successfully!");
+        const hasSchoolReviewRequests = studentsWithDisputes.some(student => student.guardianReviewStudentId);
+        toast.success(
+          hasSchoolReviewRequests
+            ? "School verification request sent"
+            : "Registration completed successfully!",
+          hasSchoolReviewRequests
+            ? { description: "The duplicate-looking student was not created. The school will review the request." }
+            : undefined
+        );
 
         const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || "";
         console.log('[Registration] Finalizing with school:', schoolName);
@@ -259,7 +276,15 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
           setCurrentStep('students');
           window.history.pushState({ page: 'registration-form', step: 'students' }, '', '#registration-form');
         } else {
-          await linkStudentsToParent(newParent.parent_id, studentsData, parentData.schoolId);
+          const studentsWithDisputes = studentsData.map((student) => ({
+            ...student,
+            balanceDisputeNote: studentBalanceDisputes[student.id]?.note,
+            balanceDisputeClaimedBalance: studentBalanceDisputes[student.id]?.claimedBalance,
+            balanceDisputeRecordedBalance: studentBalanceDisputes[student.id]?.recordedBalance,
+            balanceDisputeRecordedChargedAmount: studentBalanceDisputes[student.id]?.recordedChargedAmount,
+            balanceDisputeRecordedPaidAmount: studentBalanceDisputes[student.id]?.recordedPaidAmount,
+          }));
+          await linkStudentsToParent(newParent.parent_id, studentsWithDisputes, parentData.schoolId);
           toast.success('Registration completed successfully!');
           const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
           clearPersistence();
@@ -402,6 +427,9 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
             students={studentsData}
             onBack={handleReviewBack}
             onConfirm={handleFinalConfirm}
+            onDisputeSubmit={(studentId, note, details) => {
+              setStudentBalanceDisputes(prev => ({ ...prev, [studentId]: { note, ...details } }));
+            }}
             isSubmitting={isSubmitting}
           />
         </motion.div>

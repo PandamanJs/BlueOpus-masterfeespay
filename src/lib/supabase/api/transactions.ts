@@ -318,6 +318,252 @@ export async function getPendingTransactionsForStudent(studentId: string): Promi
     } catch { return []; }
 }
 
+const SUCCESSFUL_TRANSACTION_STATUSES = ['success', 'successful', 'completed'];
+const CLOSED_INVOICE_STATUSES = ['paid', 'settled', 'cleared', 'void', 'cancelled', 'canceled'];
+const OPEN_INVOICE_STATUSES = ['unpaid', 'partial', 'overdue', 'pending'];
+
+function asAmount(value: any, fallback = 0): number {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : fallback;
+}
+
+function firstDefinedAmount(...values: any[]): number | null {
+    for (const value of values) {
+        if (value === null || value === undefined || value === '') continue;
+        const amount = Number(value);
+        if (Number.isFinite(amount)) return amount;
+    }
+    return null;
+}
+
+function normalizeReference(value: any): string {
+    return String(value || '').trim().toLowerCase();
+}
+
+function getInvoiceId(row: any): string {
+    return String(row?.invoice_id || row?.id || row?.linked_invoice_id || '');
+}
+
+function getInvoiceReference(row: any): string {
+    return String(row?.invoice_number || row?.reference || getInvoiceId(row));
+}
+
+function getInvoiceServices(row: any): any[] {
+    if (Array.isArray(row?.services)) return row.services;
+    if (Array.isArray(row?.invoice_items?.items)) return row.invoice_items.items;
+    if (Array.isArray(row?.items)) return row.items;
+    return [];
+}
+
+function getInvoiceName(row: any): string {
+    const services = getInvoiceServices(row);
+    return row?.service_name || row?.description || services[0]?.description || services[0]?.name || 'School Fee Payment';
+}
+
+function getInvoiceTotal(row: any): number {
+    return firstDefinedAmount(row?.total_amount_cached, row?.total_amount, row?.base_amount, row?.amount, row?.invoice_total) ?? 0;
+}
+
+function getExplicitInvoiceBalance(row: any): number | null {
+    return firstDefinedAmount(row?.balance_remaining, row?.outstanding_balance, row?.balance_due, row?.amount_due);
+}
+
+function getExplicitPaidAmount(row: any): number | null {
+    return firstDefinedAmount(row?.amount_paid, row?.paid_amount, row?.total_paid);
+}
+
+function transactionMatchesInvoice(tx: any, invoice: any): boolean {
+    const invoiceId = getInvoiceId(invoice);
+    const invoiceRef = getInvoiceReference(invoice);
+    const txInvoiceId = String(tx?.invoice_id || tx?.linked_invoice_id || tx?.meta_data?.invoice_id || '');
+    const txInvoiceRef = normalizeReference(tx?.meta_data?.invoice_no || tx?.meta_data?.invoice_number || tx?.reference);
+
+    return Boolean(
+        (invoiceId && txInvoiceId && invoiceId === txInvoiceId) ||
+        (invoiceRef && txInvoiceRef && normalizeReference(invoiceRef) === txInvoiceRef)
+    );
+}
+
+function transactionPaidAmount(tx: any): number {
+    return asAmount(tx?.amount);
+}
+
+function getActiveStudentGrade(student: any) {
+    const grades = (student?.student_grade as any[]) || [];
+    return grades.find(sg => sg.is_active) || grades[grades.length - 1] || null;
+}
+
+function buildInvoiceSummaryItem(row: any, transactions: any[], source: 'invoice' | 'payment_history') {
+    const total = getInvoiceTotal(row);
+    const matchedTransactions = transactions.filter(tx => transactionMatchesInvoice(tx, row));
+    const transactionPaid = matchedTransactions.reduce((sum, tx) => sum + transactionPaidAmount(tx), 0);
+    const explicitPaid = getExplicitPaidAmount(row);
+    const collected = explicitPaid ?? transactionPaid;
+    const explicitBalance = getExplicitInvoiceBalance(row);
+    const status = String(row?.status || '').toLowerCase();
+    const isClosed = CLOSED_INVOICE_STATUSES.includes(status);
+    const computedBalance = Math.max(0, total - collected);
+    const balance = isClosed ? 0 : Math.max(0, explicitBalance ?? computedBalance);
+    const services = getInvoiceServices(row);
+
+    return {
+        type: source,
+        category: row?.category || services[0]?.category || 'fees',
+        id: getInvoiceId(row),
+        invoice_id: getInvoiceId(row),
+        invoice_number: getInvoiceReference(row),
+        name: getInvoiceName(row),
+        description: row?.description || row?.service_name || services[0]?.description || services[0]?.name || getInvoiceName(row),
+        expected: total,
+        collected,
+        invoiced: total,
+        balance,
+        status: balance <= 0 ? 'cleared' : (row?.status || 'unpaid'),
+        raw_status: row?.status || null,
+        term: row?.term || row?.invoice_items?.meta?.term,
+        academic_year: row?.year || row?.academic_year || row?.invoice_items?.meta?.academic_year,
+        initiated_at: row?.created_at || row?.issued_at || row?.date_issued || row?.payment_date || row?.initiated_at || null,
+        student_id: row?.student_id || null,
+        admission_number: row?.admission_number || null,
+        services,
+        transactions: matchedTransactions,
+        source,
+    };
+}
+
+async function getStudentFinancialSnapshot(studentId: string): Promise<any> {
+    const [
+        studentResp,
+        invoicesResp,
+        historyResp,
+        transactionsResp,
+    ] = await Promise.all([
+        supabase
+            .from('students')
+            .select('student_id, school_id, first_name, last_name, admission_number, student_grade(grade_id, is_active, class, grade:grades(grade_name, grade_id))')
+            .eq('student_id', studentId)
+            .single(),
+        supabase
+            .from('invoices')
+            .select('*')
+            .eq('student_id', studentId),
+        supabase
+            .from('payment_history')
+            .select('*')
+            .eq('student_id', studentId),
+        supabase
+            .from('transactions')
+            .select('*')
+            .eq('student_id', studentId)
+            .in('status', SUCCESSFUL_TRANSACTION_STATUSES),
+    ]);
+
+    const student = studentResp.data;
+    if (studentResp.error || !student) {
+        if (studentResp.error) handleSupabaseError(studentResp.error, 'getStudentFinancialSnapshot - student');
+        return null;
+    }
+    if (invoicesResp.error) handleSupabaseError(invoicesResp.error, 'getStudentFinancialSnapshot - invoices');
+    if (historyResp.error) console.warn('[getStudentFinancialSnapshot] payment_history lookup failed:', historyResp.error.message);
+    if (transactionsResp.error) handleSupabaseError(transactionsResp.error, 'getStudentFinancialSnapshot - transactions');
+
+    const transactions = transactionsResp.data || [];
+    const invoices = (invoicesResp.data || []).filter((row: any) => {
+        const status = String(row?.status || '').toLowerCase();
+        return !['void', 'cancelled', 'canceled'].includes(status);
+    });
+    const historyRows = (historyResp.data || []).filter((row: any) => {
+        const status = String(row?.status || '').toLowerCase();
+        const explicitBalance = getExplicitInvoiceBalance(row);
+        return (explicitBalance !== null && explicitBalance > 0) || OPEN_INVOICE_STATUSES.includes(status);
+    });
+
+    const invoiceItems = invoices.map((row: any) => buildInvoiceSummaryItem(row, transactions, 'invoice'));
+    const seenIds = new Set(invoiceItems.map(item => normalizeReference(item.invoice_id)).filter(Boolean));
+    const seenRefs = new Set(invoiceItems.map(item => normalizeReference(item.invoice_number)).filter(Boolean));
+    const historyItems = historyRows
+        .filter((row: any) => {
+            const id = normalizeReference(getInvoiceId(row));
+            const ref = normalizeReference(getInvoiceReference(row));
+            return (!id || !seenIds.has(id)) && (!ref || !seenRefs.has(ref));
+        })
+        .map((row: any) => buildInvoiceSummaryItem(row, transactions, 'payment_history'));
+
+    const items = [...invoiceItems, ...historyItems].sort((a, b) =>
+        String(a.initiated_at || '').localeCompare(String(b.initiated_at || ''))
+    );
+
+    const matchedTxIds = new Set<string>();
+    items.forEach(item => {
+        (item.transactions || []).forEach((tx: any) => {
+            const txId = String(tx.transaction_id || tx.id || tx.reference || '');
+            if (txId) matchedTxIds.add(txId);
+        });
+    });
+
+    let surplus = transactions
+        .filter((tx: any) => {
+            const txId = String(tx.transaction_id || tx.id || tx.reference || '');
+            return txId && !matchedTxIds.has(txId);
+        })
+        .reduce((sum: number, tx: any) => sum + transactionPaidAmount(tx), 0);
+
+    for (const item of items) {
+        if (item.balance > 0 && surplus > 0) {
+            const applied = Math.min(item.balance, surplus);
+            item.balance -= applied;
+            item.credit_applied = applied;
+            surplus -= applied;
+            if (item.balance <= 0) item.status = 'cleared';
+        } else {
+            item.credit_applied = item.credit_applied || 0;
+        }
+    }
+
+    if (surplus > 0) {
+        if (items.length > 0) {
+            const newest = items[items.length - 1];
+            newest.balance -= surplus;
+            newest.credit_applied = (newest.credit_applied || 0) + surplus;
+            newest.status = 'cleared';
+        } else {
+            items.push({
+                type: 'surplus',
+                category: 'credit',
+                id: `credit-${studentId}`,
+                invoice_id: null,
+                invoice_number: 'Account Credit',
+                name: 'Account Credit / Surplus',
+                expected: 0,
+                collected: surplus,
+                invoiced: 0,
+                balance: -surplus,
+                status: 'cleared',
+                initiated_at: new Date().toISOString(),
+                transactions: [],
+            });
+        }
+    }
+
+    const activeGradeData = getActiveStudentGrade(student);
+    const totalBalance = items.reduce((sum, item) => sum + asAmount(item.balance), 0);
+
+    return {
+        student: {
+            id: student.student_id,
+            name: `${student.first_name || ''} ${student.last_name || ''}`.trim(),
+            admission_number: student.admission_number,
+            grade: activeGradeData?.grade?.grade_name || 'Current Grade',
+            class: activeGradeData?.class || null,
+        },
+        items,
+        totalBalance,
+        totalInvoiced: items.reduce((sum, item) => sum + asAmount(item.invoiced || item.expected), 0),
+        totalPaid: transactions.reduce((sum: number, tx: any) => sum + transactionPaidAmount(tx), 0),
+        transactions,
+    };
+}
+
 /**
  * Get student subscriptions from `student_service_subscription`.
  */
@@ -384,123 +630,56 @@ export async function getStudentsActualDebt(studentIds: string[]): Promise<Recor
     return getStudentsOutstandingBalances(studentIds);
 }
 
+
 export async function getInvoicesWithBalanceForStudent(studentId: string): Promise<PaymentHistoryRecord[]> {
     try {
-        // 1. Get raw records and transactions in parallel for reconciliation
-        const [historyResp, freshResp, transactionsResp] = await Promise.all([
-            supabase.from('payment_history').select('*').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue', 'pending']).gt('balance_remaining', 0),
-            supabase.from('invoices').select('*, joined_items:invoice_items(*)').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue', 'pending']),
-            supabase.from('transactions').select('*').eq('student_id', studentId).in('status', ['success', 'successful', 'completed'])
-        ]);
+        const summary = await getStudentFinancialSnapshot(studentId);
+        if (!summary) return [];
 
-        const historyData = historyResp.data || [];
-        const freshInvoices = freshResp.data || [];
-        const transactions = transactionsResp.data || [];
-
-        // 2. Build initial results set
-        const results: PaymentHistoryRecord[] = [...(historyData || [])] as PaymentHistoryRecord[];
-
-        // 3. Merge fresh invoices if they are not already in history
-        const seenIds = new Set(results.map(r => r.id));
-        const seenRefs = new Set(results.map(r => r.reference?.toLowerCase()));
-
-        (freshInvoices || []).forEach(inv => {
-            const invId = inv.invoice_id || inv.id;
-            const invRef = (inv.invoice_number || invId).toLowerCase();
-            
-            if (!seenIds.has(invId) && !seenRefs.has(invRef)) {
-                const term = inv.term || inv.invoice_items?.meta?.term;
-                const year = inv.year || inv.invoice_items?.meta?.academic_year;
-
-                const items = Array.isArray((inv as any).joined_items)
-                    ? (inv as any).joined_items
-                    : (Array.isArray(inv.invoice_items) 
-                        ? inv.invoice_items 
-                        : (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items) ? inv.invoice_items.items : []));
-                
-                let serviceName = "";
-                
-                // Prioritize item description over generic service_name
-                if (items.length > 0) {
-                    const firstItem = items[0];
-                    serviceName = firstItem.description || firstItem.name || "";
-                }
-                
-                // Fallback to top-level service_name if items didn't provide one
-                if (!serviceName) {
-                    serviceName = inv.service_name || "";
-                }
-                
-                // Final fallbacks
-                if (!serviceName && term && year) {
-                    serviceName = `Term ${term} (${year}) School Fees`;
-                } else if (!serviceName && term) {
-                    serviceName = `Term ${term} School Fees`;
-                }
-                
-                if (!serviceName) serviceName = "School Fees";
-
-                results.push({
-                    id: invId,
-                    payment_date: inv.created_at,
-                    reference: inv.invoice_number || invId,
-                    total_amount: inv.total_amount_cached || 0,
-                    base_amount: inv.total_amount_cached || 0,
-                    service_fee: 0,
-                    status: inv.status,
-                    payment_method: 'invoice',
-                    student_name: "",
-                    admission_number: "",
-                    school_name: "",
-                    parent_phone: "",
-                    parent_id: "",
-                    student_id: inv.student_id,
-                    school_id: inv.school_id,
-                    term,
-                    academic_year: year,
-                    services: inv.invoice_items?.items || [],
-                    completed_at: "",
-                    initiated_at: inv.created_at,
-                    balance_remaining: inv.total_amount_cached || 0,
-                    service_name: serviceName,
-                    description: serviceName
-                });
-                
-                seenIds.add(invId);
-                seenRefs.add(invRef);
-            }
-        });
-
-        // 4. PERFORM RECONCILIATION: Subtract actual payments from balance_remaining
-        // This ensures the client-side totals are the source of truth if the view is stale.
-        return results.map(inv => {
-            const paymentsValue = transactions
-                .filter(tx => tx.invoice_id === inv.id || tx.meta_data?.invoice_no === inv.reference)
-                .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
-            
-            const reconciledBalance = Math.max(0, (inv.total_amount || inv.base_amount || 0) - paymentsValue);
-            
-            return {
-                ...inv,
-                balance_remaining: reconciledBalance
-            };
-        }).filter(inv => (inv.balance_remaining || 0) > 0.01);
+        return (summary.items || [])
+            .filter((item: any) => Number(item.balance || 0) > 0.01)
+            .map((item: any) => ({
+                id: item.invoice_id || item.id,
+                payment_date: item.initiated_at || '',
+                reference: item.invoice_number || item.invoice_id || item.id,
+                total_amount: item.expected || item.invoiced || 0,
+                base_amount: item.expected || item.invoiced || 0,
+                service_fee: 0,
+                status: item.status || 'unpaid',
+                payment_method: 'invoice',
+                student_name: summary.student?.name || '',
+                admission_number: summary.student?.admission_number || '',
+                school_name: '',
+                parent_phone: '',
+                parent_id: '',
+                student_id: studentId,
+                school_id: '',
+                term: item.term,
+                academic_year: item.academic_year,
+                services: item.services || [],
+                completed_at: '',
+                initiated_at: item.initiated_at || '',
+                balance_remaining: item.balance || 0,
+                invoice_number: item.invoice_number,
+                service_name: item.name,
+            } as PaymentHistoryRecord));
     } catch (err) { 
         console.error("[getInvoicesWithBalanceForStudent] Reconcile error:", err);
         return []; 
     }
 }
 
+
 export async function getStudentsUnpaidInvoicesCount(studentIds: string[]): Promise<Record<string, number>> {
     if (!studentIds.length) return {};
     try {
-        const { data } = await supabase
-            .from('transactions')
-            .select('student_id')
-            .in('student_id', studentIds)
-            .eq('status', 'pending');
         const map: Record<string, number> = Object.fromEntries(studentIds.map(id => [id, 0]));
-        (data || []).forEach(r => { if (r.student_id) map[r.student_id] = (map[r.student_id] || 0) + 1; });
+        const summaries = await Promise.all(studentIds.map(async id => ({ id, summary: await getStudentFinancialSummary(id) })));
+        summaries.forEach(({ id, summary }) => {
+            map[id] = Array.isArray(summary?.items)
+                ? summary.items.filter((item: any) => Number(item?.balance || 0) > 0.01).length
+                : 0;
+        });
         return map;
     } catch { return Object.fromEntries(studentIds.map(id => [id, 0])); }
 }
@@ -526,6 +705,24 @@ export interface FinancialSummary {
  * This enables the UI to show a unified history that includes non-invoiced items.
  */
 export async function getStudentFinancialSummary(studentId: string): Promise<any> {
+    if (studentId.startsWith('new-') || studentId.startsWith('review-')) {
+        return {
+            student: { id: studentId, name: 'New Student', grade: '...' },
+            items: [],
+            totalBalance: 0,
+            transactions: []
+        };
+    }
+
+    try {
+        return await getStudentFinancialSnapshot(studentId);
+    } catch (e) {
+        console.error('Error in getStudentFinancialSummary:', e);
+        return null;
+    }
+}
+
+async function getStudentFinancialSummaryLegacy(studentId: string): Promise<any> {
     // If it's a temporary local ID, return an empty summary instead of querying Supabase
     if (studentId.startsWith('new-')) {
         return {

@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useMemo, Fragment } from "react";
 import { getStudentsByPhone, getInstitutionType } from "../data/students";
 import type { Student } from "../data/students";
-import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "../lib/supabase/api/transactions";
+import { getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "../lib/supabase/api/transactions";
 import type { Transaction } from "../types";
 import type { PaymentHistoryRecord } from "../lib/supabase/types";
 
@@ -36,6 +36,31 @@ interface Service {
     pricing_id?: string;
     invoice_id?: string; // Add this too for consistency
     categoryId?: string; // Link to fee category ID
+    category?: string;
+    quantity?: number;
+}
+
+function getServiceDedupKey(service: Service, studentId?: string) {
+    const owner = studentId || 'student';
+    if (service.invoice_id) return `${owner}:invoice:${service.invoice_id}`;
+
+    const pricingId = service.pricing_id || service.id;
+    const term = service.term ?? 'none';
+    const year = service.academicYear ?? 'none';
+    const invoiceNo = service.invoiceNo && service.invoiceNo !== '202' ? service.invoiceNo : '';
+    const description = (service.description || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+    return `${owner}:${pricingId}:${term}:${year}:${invoiceNo}:${description}`;
+}
+
+function dedupeServicesForStudent(services: Service[], studentId?: string) {
+    const seen = new Set<string>();
+    return services.filter(service => {
+        const key = getServiceDedupKey(service, studentId);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 
@@ -263,14 +288,12 @@ export default function AddServicesPage({
 
     useEffect(() => {
         if (activeStudentId) {
-            // Fetch all required data in parallel
             Promise.all([
                 getStudentFinancialSummary(activeStudentId),
-                getPendingTransactionsForStudent(activeStudentId),
                 getInvoicesWithBalanceForStudent(activeStudentId)
-            ]).then(([summary, pending, invoices]) => {
+            ]).then(([summary, invoices]) => {
                 setFinancialSummary(summary);
-                setPendingTransactions(pending);
+                setPendingTransactions([]);
                 setInvoicesWithBalance(invoices);
             });
         }
@@ -279,9 +302,10 @@ export default function AddServicesPage({
     // Get services for the active student
     const activeStudentServices = studentServices[activeStudentId] || [];
     const activeCartRefs = new Set(activeStudentServices.map(s => s.invoiceNo));
+    const canonicalOutstandingBalance = Number(financialSummary?.totalBalance ?? activeStudent?.balances ?? 0);
 
     // Determine net credit position
-    const hasNetDebt = (activeStudent?.balances || 0) > 0;
+    const hasNetDebt = canonicalOutstandingBalance > 0;
 
     const hasTuitionDebt = hasNetDebt && (pendingTransactions.some((tx) => {
         const meta_data = tx.meta_data as any;
@@ -542,9 +566,9 @@ export default function AddServicesPage({
             if (isTargetType(name) && !existingInvoices.has(inv.reference)) {
                 let amount = inv.balance_remaining || 0;
 
-                // Ensure we don't bring the full invoice amount if the student has a lower net balance (partial payment exists)
-                if (activeStudent && activeStudent.balances > 0 && amount > activeStudent.balances) {
-                    amount = activeStudent.balances;
+                // Keep invoice-level truth authoritative, but guard against stale student summary totals.
+                if (canonicalOutstandingBalance > 0 && amount > canonicalOutstandingBalance) {
+                    amount = canonicalOutstandingBalance;
                 }
 
                 debtsToAdd.push({
@@ -562,7 +586,7 @@ export default function AddServicesPage({
 
         // 3. Fallback: If the student object shows a balance but we couldn't find line-item matches, 
         // add it as a generic item so they can still pay it
-        if (debtsToAdd.length === 0 && activeStudent && activeStudent.balances > 0) {
+        if (debtsToAdd.length === 0 && activeStudent && canonicalOutstandingBalance > 0) {
             // Check if we already have a balance-related items in the cart
             const hasBalanceItem = Array.from(existingInvoices).some(ref => ref.startsWith('BAL-') || ref.startsWith('tx-') || ref.startsWith('inv-'));
 
@@ -573,7 +597,7 @@ export default function AddServicesPage({
                 debtsToAdd.push({
                     id: `fallback-${activeStudentId}`,
                     description: `${studentName} - ${gradeContext}Outstanding Fees`,
-                    amount: activeStudent.balances,
+                    amount: canonicalOutstandingBalance,
                     invoiceNo: `BAL-${activeStudent.admissionNumber || activeStudentId.slice(0, 4)}`,
                     academicYear: new Date().getFullYear(),
                     isDebt: true
@@ -753,9 +777,10 @@ export default function AddServicesPage({
 
         setStudentServices(prev => {
             const current = (prev[activeStudentId] || []).filter(s => s && s.id);
+            const nextKey = getServiceDedupKey(safeService, activeStudentId);
 
             // Check for duplicates
-            if (current.some(s => s.id === safeService.id)) {
+            if (current.some(s => s.id === safeService.id || getServiceDedupKey(s, activeStudentId) === nextKey)) {
                 console.warn("Item already in cart:", safeService.id);
                 toast.error("Item already in cart");
                 return prev;
@@ -787,16 +812,15 @@ export default function AddServicesPage({
             const student = allStudents.find(s => s.id === studentId);
             const studentName = student ? student.name : "Student";
 
-            services.forEach(s => {
+            dedupeServicesForStudent(services, studentId).forEach(s => {
                 allCheckoutServices.push({
-                    id: s.id,
+                    id: `${studentId}-${s.id}`,
                     description: s.description,
                     amount: s.amount,
                     invoiceNo: s.invoiceNo,
                     invoice_id: s.invoice_id,
                     pricing_id: s.pricing_id,
                     studentName: studentName,
-                    studentId: studentId,
                     term: s.term,
                     academicYear: s.academicYear,
                     isDebt: s.isDebt,
@@ -982,8 +1006,7 @@ export default function AddServicesPage({
                         key="unified-popup"
                         onClose={() => setShowUnifiedPopup(false)}
                         onConfirm={(items) => {
-                            // Ensure items are unique by ID to prevent key clashes
-                            const uniqueItems = Array.from(new Map(items.map(item => [item.id, item])).values());
+                            const uniqueItems = dedupeServicesForStudent(items, activeStudentId);
                             setStudentServices(prev => ({
                                 ...prev,
                                 [activeStudentId]: uniqueItems
@@ -1046,6 +1069,46 @@ function UnifiedServicesPopup({
     financialSummary?: any;
 }) {
     const [stagedItems, setStagedItems] = useState<Service[]>(initialItems);
+    const currentCalendarYear = new Date().getFullYear();
+    const currentMonthIndex = new Date().getMonth();
+    const activeStudentGradeId = activeStudent?.gradeId;
+
+    const MONTHS_BY_TERM = ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'];
+    const MONTH_INDEX: Record<string, number> = {
+        Jan: 0,
+        Feb: 1,
+        Mar: 2,
+        May: 4,
+        Jun: 5,
+        Jul: 6,
+        Sep: 8,
+        Oct: 9,
+        Nov: 10
+    };
+
+    const normalizeLabel = (value?: string | null) =>
+        (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const isPastMonth = (month: string) => {
+        if (selectedAcademicYear > currentCalendarYear) return false;
+        if (selectedAcademicYear < currentCalendarYear) return true;
+        return MONTH_INDEX[month] < currentMonthIndex;
+    };
+
+    const removeStagedByPrefixes = (prefixes: string[]) => {
+        setStagedItems(prev => prev.filter(item => !prefixes.some(prefix => item.id.startsWith(prefix))));
+    };
+
+    const toggleScopedService = (service: Service, prefixes: string[], mode: 'single' | 'multi' = 'multi') => {
+        setStagedItems(prev => {
+            const exists = prev.some(s => s.id === service.id);
+            const scopedOut = prev.filter(item => !prefixes.some(prefix => item.id.startsWith(prefix)));
+            const base = mode === 'single' ? scopedOut : prev;
+            if (exists) return base.filter(s => s.id !== service.id);
+            return [...base, service];
+        });
+        haptics.selection();
+    };
 
     const buildServiceDescription = (s: any) => {
         let desc = s.name || s.description;
@@ -1227,10 +1290,22 @@ function UnifiedServicesPopup({
 
     // Auto-select the student's grade when data loads or changes
     useEffect(() => {
-        if (activeStudent?.grade && !selectedGrade) {
-            setSelectedGrade(activeStudent.grade);
-        }
-    }, [activeStudent, selectedGrade]);
+        const summaryYear = financialSummary?.items
+            ?.map((item: any) => item.academic_year || item.academicYear || item.year)
+            .find((year: any) => Number(year) >= currentCalendarYear);
+        setSelectedAcademicYear(Number(summaryYear) || currentCalendarYear);
+    }, [financialSummary, currentCalendarYear]);
+
+    useEffect(() => {
+        if (!activeStudent || !schoolData?.grade_pricing?.length) return;
+
+        const studentGrade = activeStudent.grade || '';
+        const gradeMatch = schoolData.grade_pricing.find(gp => gp.value === activeStudentGradeId)
+            || schoolData.grade_pricing.find(gp => normalizeLabel(studentGrade).startsWith(normalizeLabel(gp.name)))
+            || schoolData.grade_pricing.find(gp => normalizeLabel(gp.name).includes(normalizeLabel(studentGrade)));
+
+        setSelectedGrade(gradeMatch?.name || studentGrade);
+    }, [activeStudent, activeStudentGradeId, schoolData?.grade_pricing]);
 
     // SMART AUTO-SELECT: Last used Transport & Cafeteria from history
     useEffect(() => {
@@ -1316,9 +1391,9 @@ function UnifiedServicesPopup({
         selectedGrade ? gp.name.toLowerCase().includes(selectedGrade.toLowerCase()) : true
     ) || [];
 
-    const selectedFee = schoolData?.grade_pricing?.find(gp =>
-        gp.name.toLowerCase() === selectedGrade.toLowerCase()
-    );
+    const selectedFee = schoolData?.grade_pricing?.find(gp => gp.value === activeStudentGradeId)
+        || schoolData?.grade_pricing?.find(gp => normalizeLabel(gp.name) === normalizeLabel(selectedGrade))
+        || schoolData?.grade_pricing?.find(gp => normalizeLabel(selectedGrade).startsWith(normalizeLabel(gp.name)));
 
     // Debt Lock Logic: Hide new services if outstanding balance exists for current category
     const activeTabDebts = debtSummary[activeTab as keyof typeof debtSummary] || [];
@@ -1631,24 +1706,7 @@ function UnifiedServicesPopup({
                                                                                 categoryId: schoolData?.category_ids?.tuition
                                                                             };
 
-                                                                            setStagedItems(prev => {
-                                                                                const isAlreadyStaged = prev.some(s => s.id === termId);
-
-                                                                                // Keep everything that isn't a "fee-" item OR is a "fee-" item for the CURRENT grade
-                                                                                const filtered = prev.filter(s => {
-                                                                                    if (!s.id.startsWith("fee-")) return true;
-                                                                                    return s.id.startsWith(`fee-${selectedFee.value}-`);
-                                                                                });
-
-                                                                                if (isAlreadyStaged) {
-                                                                                    // Toggle off
-                                                                                    return filtered.filter(s => s.id !== termId);
-                                                                                } else {
-                                                                                    // Accumulate (Multi-select)
-                                                                                    return [...filtered, newService];
-                                                                                }
-                                                                            });
-                                                                            haptics.selection();
+                                                                            toggleScopedService(newService, [`fee-${selectedFee.value}-`], 'multi');
                                                                         }}
                                                                         className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                             ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -1761,8 +1819,10 @@ function UnifiedServicesPopup({
                                                                                 const detected = detectFrequency(route.name);
                                                                                 if (['monthly', 'termly', 'yearly'].includes(detected)) {
                                                                                     setTransportFrequency(detected as any);
+                                                                                    removeStagedByPrefixes([`route-${route.id}-`]);
                                                                                 } else {
                                                                                     setTransportFrequency('monthly');
+                                                                                    removeStagedByPrefixes([`route-${route.id}-`]);
                                                                                 }
 
                                                                                 haptics.selection();
@@ -1960,11 +2020,10 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : transportFrequency === 'monthly' ? (
-                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
-                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
-                                                                    .map((month) => {
+                                                                MONTHS_BY_TERM.map((month) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-month-${month}` : `route-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
+                                                                    const isPast = isPastMonth(month);
 
                                                                     // Map month to term for invoice metadata
                                                                     const monthMap: Record<string, number> = {
@@ -1976,7 +2035,7 @@ function UnifiedServicesPopup({
                                                                     return (
                                                                         <button
                                                                             key={month}
-                                                                            disabled={!selectedRoute}
+                                                                            disabled={!selectedRoute || isPast}
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (!selectedRoute) return;
@@ -1992,16 +2051,12 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.transport
                                                                                 };
 
-                                                                                setStagedItems(prev => {
-                                                                                    const exists = prev.some(s => s.id === termId);
-                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                });
-                                                                                haptics.selection();
+                                                                                toggleScopedService(newService, [`route-${selectedRouteId}-yearly-`], 'multi');
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                                 : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
-                                                                                } ${!selectedRoute ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                } ${!selectedRoute || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
                                                                             <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
                                                                                 {isTermStaged && (
@@ -2010,7 +2065,7 @@ function UnifiedServicesPopup({
                                                                                     </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}{isPast ? ' passed' : ''}</span>
                                                                         </button>
                                                                     );
                                                                 })
@@ -2030,11 +2085,7 @@ function UnifiedServicesPopup({
                                                                             pricing_id: selectedRouteId,
                                                                             categoryId: schoolData?.category_ids?.transport
                                                                         };
-                                                                        setStagedItems(prev => {
-                                                                            const exists = prev.some(s => s.id === termId);
-                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                        });
-                                                                        haptics.selection();
+                                                                        toggleScopedService(newService, [`route-${selectedRouteId}-term-`, `route-${selectedRouteId}-month-`], 'single');
                                                                     }}
                                                                     className={`h-[60px] col-span-3 rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isStaged(`route-${selectedRouteId}-yearly-${selectedAcademicYear}`)
                                                                         ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2143,8 +2194,10 @@ function UnifiedServicesPopup({
                                                                                 const detected = detectFrequency(room.name);
                                                                                 if (['termly', 'yearly'].includes(detected)) {
                                                                                     setBoardingFrequency(detected as any);
+                                                                                    removeStagedByPrefixes([`room-${room.id}-`]);
                                                                                 } else {
                                                                                     setBoardingFrequency('termly');
+                                                                                    removeStagedByPrefixes([`room-${room.id}-`]);
                                                                                 }
 
                                                                                 haptics.selection();
@@ -2342,11 +2395,10 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : boardingFrequency === 'monthly' ? (
-                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
-                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
-                                                                    .map((month) => {
+                                                                MONTHS_BY_TERM.map((month) => {
                                                                     const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-month-${month}` : `room-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
+                                                                    const isPast = isPastMonth(month);
 
                                                                     // Map month to term for invoice metadata
                                                                     const monthMap: Record<string, number> = {
@@ -2358,7 +2410,7 @@ function UnifiedServicesPopup({
                                                                     return (
                                                                         <button
                                                                             key={month}
-                                                                            disabled={!selectedBoardingRoom}
+                                                                            disabled={!selectedBoardingRoom || isPast}
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (!selectedBoardingRoom) return;
@@ -2374,16 +2426,12 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.boarding
                                                                                 };
 
-                                                                                setStagedItems(prev => {
-                                                                                    const exists = prev.some(s => s.id === termId);
-                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                });
-                                                                                haptics.selection();
+                                                                                toggleScopedService(newService, [`room-${selectedBoardingRoomId}-yearly-`], 'multi');
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                                 : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
-                                                                                } ${!selectedBoardingRoom ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                } ${!selectedBoardingRoom || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
                                                                             <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
                                                                                 {isTermStaged && (
@@ -2392,7 +2440,7 @@ function UnifiedServicesPopup({
                                                                                     </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}{isPast ? ' passed' : ''}</span>
                                                                         </button>
                                                                     );
                                                                 })
@@ -2412,11 +2460,7 @@ function UnifiedServicesPopup({
                                                                             pricing_id: selectedBoardingRoomId,
                                                                             categoryId: schoolData?.category_ids?.boarding
                                                                         };
-                                                                        setStagedItems(prev => {
-                                                                            const exists = prev.some(s => s.id === termId);
-                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                        });
-                                                                        haptics.selection();
+                                                                        toggleScopedService(newService, [`room-${selectedBoardingRoomId}-term-`, `room-${selectedBoardingRoomId}-month-`], 'single');
                                                                     }}
                                                                     className={`h-[60px] col-span-3 rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isStaged(`room-${selectedBoardingRoomId}-yearly-${selectedAcademicYear}`)
                                                                         ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2524,8 +2568,10 @@ function UnifiedServicesPopup({
                                                                                 const detected = detectFrequency(plan.name);
                                                                                 if (['daily', 'weekly', 'monthly', 'termly'].includes(detected)) {
                                                                                     setCafeteriaFrequency(detected as any);
+                                                                                    removeStagedByPrefixes([`canteen-${plan.id}-`]);
                                                                                 } else {
                                                                                     setCafeteriaFrequency('monthly');
+                                                                                    removeStagedByPrefixes([`canteen-${plan.id}-`]);
                                                                                 }
 
                                                                                 haptics.selection();
@@ -2686,20 +2732,7 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
 
-                                                                                setStagedItems(prev => {
-                                                                                    const isAlreadyStaged = prev.some(s => s.id === termId);
-                                                                                    const filtered = prev.filter(s => {
-                                                                                        if (!s.id.startsWith("canteen-")) return true;
-                                                                                        return s.id.startsWith(`canteen-${selectedCanteenPlanId}-`);
-                                                                                    });
-
-                                                                                    if (isAlreadyStaged) {
-                                                                                        return filtered.filter(s => s.id !== termId);
-                                                                                    } else {
-                                                                                        return [...filtered, newService];
-                                                                                    }
-                                                                                });
-                                                                                haptics.selection();
+                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-day-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2741,11 +2774,7 @@ function UnifiedServicesPopup({
                                                                                     pricing_id: selectedCanteenPlanId,
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
-                                                                                setStagedItems(prev => {
-                                                                                    const exists = prev.some(s => s.id === termId);
-                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                });
-                                                                                haptics.selection();
+                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-day-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
@@ -2780,11 +2809,7 @@ function UnifiedServicesPopup({
                                                                                     pricing_id: selectedCanteenPlanId,
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
-                                                                                setStagedItems(prev => {
-                                                                                    const exists = prev.some(s => s.id === termId);
-                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                });
-                                                                                haptics.selection();
+                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
@@ -2800,11 +2825,10 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'monthly' ? (
-                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
-                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
-                                                                    .map((month) => {
+                                                                MONTHS_BY_TERM.map((month) => {
                                                                     const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-month-${month}` : `canteen-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
+                                                                    const isPast = isPastMonth(month);
 
                                                                     // Map month to term for invoice metadata
                                                                     const monthMap: Record<string, number> = {
@@ -2816,7 +2840,7 @@ function UnifiedServicesPopup({
                                                                     return (
                                                                         <button
                                                                             key={month}
-                                                                            disabled={!selectedCanteenPlan}
+                                                                            disabled={!selectedCanteenPlan || isPast}
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (!selectedCanteenPlan) return;
@@ -2832,16 +2856,12 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
 
-                                                                                setStagedItems(prev => {
-                                                                                    const exists = prev.some(s => s.id === termId);
-                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                });
-                                                                                haptics.selection();
+                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-term-`, `canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-day-`], 'multi');
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                                 : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
-                                                                                } ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                } ${!selectedCanteenPlan || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
                                                                             <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
                                                                                 {isTermStaged && (
@@ -2850,7 +2870,7 @@ function UnifiedServicesPopup({
                                                                                     </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}{isPast ? ' passed' : ''}</span>
                                                                         </button>
                                                                     );
                                                                 })
@@ -3124,6 +3144,7 @@ function UnifiedServicesPopup({
                                                                                         e.preventDefault();
                                                                                         haptics.selection();
                                                                                         setSportsFrequency(freq as any);
+                                                                                        if (selectedSportsPlanId) removeStagedByPrefixes([`sports-${selectedSportsPlanId}-`]);
                                                                                     }}
                                                                                     className={`h-[48px] rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-2 ${sportsFrequency === freq
                                                                                         ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -3169,11 +3190,7 @@ function UnifiedServicesPopup({
                                                                                                     categoryId: schoolData?.category_ids?.other
                                                                                                 };
 
-                                                                                                setStagedItems(prev => {
-                                                                                                    const exists = prev.some(s => s.id === termId);
-                                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                                });
-                                                                                                haptics.selection();
+                                                                                                toggleScopedService(newService, [`sports-${selectedSportsPlanId}-month-`, `sports-${selectedSportsPlanId}-year`], 'multi');
                                                                                             }}
                                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-2 flex items-center justify-center gap-2 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                                         >
@@ -3182,16 +3199,15 @@ function UnifiedServicesPopup({
                                                                                     );
                                                                                 })
                                                                             ) : sportsFrequency === 'monthly' ? (
-                                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
-                                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
-                                                                                    .map((month) => {
+                                                                                MONTHS_BY_TERM.map((month) => {
                                                                                     const termId = `sports-${selectedSportsPlanId}-month-${month}`;
                                                                                     const isTermStaged = isStaged(termId);
+                                                                                    const isPast = isPastMonth(month);
 
                                                                                     return (
                                                                                         <button
                                                                                             key={month}
-                                                                                            disabled={!selectedSportsPlan}
+                                                                                            disabled={!selectedSportsPlan || isPast}
                                                                                             onClick={(e) => {
                                                                                                 e.preventDefault();
                                                                                                 if (!selectedSportsPlan) return;
@@ -3206,15 +3222,11 @@ function UnifiedServicesPopup({
                                                                                                     categoryId: schoolData?.category_ids?.other
                                                                                                 };
 
-                                                                                                setStagedItems(prev => {
-                                                                                                    const exists = prev.some(s => s.id === termId);
-                                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                                });
-                                                                                                haptics.selection();
+                                                                                                toggleScopedService(newService, [`sports-${selectedSportsPlanId}-term-`, `sports-${selectedSportsPlanId}-year`], 'multi');
                                                                                             }}
-                                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                                         >
-                                                                                            <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px]">{month}</span>
+                                                                                            <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px]">{month}{isPast ? ' passed' : ''}</span>
                                                                                         </button>
                                                                                     );
                                                                                 })
@@ -3234,11 +3246,7 @@ function UnifiedServicesPopup({
                                                                                             pricing_id: selectedSportsPlanId,
                                                                                             categoryId: schoolData?.category_ids?.other
                                                                                         };
-                                                                                        setStagedItems(prev => {
-                                                                                            const exists = prev.some(s => s.id === termId);
-                                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
-                                                                                        });
-                                                                                        haptics.selection();
+                                                                                        toggleScopedService(newService, [`sports-${selectedSportsPlanId}-term-`, `sports-${selectedSportsPlanId}-month-`], 'single');
                                                                                     }}
                                                                                     className={`col-span-3 h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isStaged(`sports-${selectedSportsPlanId}-year`) ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                                 >
