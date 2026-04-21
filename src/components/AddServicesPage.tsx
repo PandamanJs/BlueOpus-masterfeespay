@@ -63,6 +63,38 @@ function dedupeServicesForStudent(services: Service[], studentId?: string) {
     });
 }
 
+function getWorkDayDates() {
+    const dates: { day: string, dateDisplay: string, fullDate: Date }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const currentDay = today.getDay(); // 0 is Sun, 1 is Mon...
+
+    // Adjust to this week's Monday
+    const monday = new Date(today);
+    let offset = 0;
+    if (currentDay === 0) offset = 1; // Sun -> Mon
+    else if (currentDay === 6) offset = 2; // Sat -> Mon
+    else offset = 1 - currentDay; // Mon -> 0, Tue -> -1...
+
+    monday.setDate(today.getDate() + offset);
+
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    for (let i = 0; i < 5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+
+        const dateNum = d.getDate();
+        let suffix = 'th';
+        if (dateNum === 1 || dateNum === 21 || dateNum === 31) suffix = 'st';
+        else if (dateNum === 2 || dateNum === 22) suffix = 'nd';
+        else if (dateNum === 3 || dateNum === 23) suffix = 'rd';
+
+        dates.push({ day: dayNames[i], dateDisplay: `${dateNum}${suffix}`, fullDate: d });
+    }
+    return dates;
+}
+
 
 
 function ChildPill({ name, isActive, hasBalance, onClick }: { name: string; id: string; admissionNumber?: string; isActive: boolean; hasBalance?: boolean; onClick: () => void }) {
@@ -1069,21 +1101,59 @@ function UnifiedServicesPopup({
     financialSummary?: any;
 }) {
     const [stagedItems, setStagedItems] = useState<Service[]>(initialItems);
+    const [selectedGrade, setSelectedGrade] = useState<string>(activeStudent?.grade || "");
+    const [selectedAcademicYear, setSelectedAcademicYear] = useState<number>(new Date().getFullYear());
+    const [activeTab, setActiveTab] = useState<string>('fees');
+    const [selectedGradeId, setSelectedGradeId] = useState<string>(activeStudent?.gradeId || "");
+    const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
+    const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+
+    // Transport specific state
+    const [selectedRouteId, setSelectedRouteId] = useState<string>("");
+    const [isRouteDropdownOpen, setIsRouteDropdownOpen] = useState(false);
+
+    // Cafeteria specific state
+    const [selectedCanteenPlanId, setSelectedCanteenPlanId] = useState<string>("");
+    const [isCanteenDropdownOpen, setIsCanteenDropdownOpen] = useState(false);
+    const [isOtherDropdownOpen, setIsOtherDropdownOpen] = useState(false);
+    const [isOthersMenuOpen, setIsOthersMenuOpen] = useState(false);
+    const [selectedOtherCategory, setSelectedOtherCategory] = useState<string>("All");
+    const [otherQuantities, setOtherQuantities] = useState<Record<string, number>>({});
+
+    // Boarding specific state
+    const [selectedBoardingRoomId, setSelectedBoardingRoomId] = useState<string>("");
+    const [isBoardingDropdownOpen, setIsBoardingDropdownOpen] = useState(false);
+    const [boardingFrequency, setBoardingFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
+    const [transportFrequency, setTransportFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
+    const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
+    const [sportsFrequency, setSportsFrequency] = useState<'monthly' | 'termly' | 'yearly'>('termly');
+    const [selectedSportsPlanId, setSelectedSportsPlanId] = useState<string>("");
+    const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
+
+    // Uniforms/Other state
+    const [selectedOtherId, setSelectedOtherId] = useState<string>("");
+
+    const selectedRoute = schoolData?.bus_routes?.find(r => r.id === selectedRouteId);
+    const selectedCanteenPlan = schoolData?.canteen_plans?.find(p => p.id === selectedCanteenPlanId);
+    const selectedBoardingRoom = schoolData?.boarding_rooms?.find(r => r.id === selectedBoardingRoomId);
+    const selectedSportsPlan = schoolData?.other_services?.find(p => p.id === selectedSportsPlanId);
+    
+    const extraCategories = useMemo(() => {
+        if (!schoolData?.other_services) return ['All'];
+        const cats = new Set(schoolData.other_services.map(s => s.category).filter(Boolean));
+        return ['All', ...Array.from(cats)];
+    }, [schoolData]);
+
     const currentCalendarYear = new Date().getFullYear();
     const currentMonthIndex = new Date().getMonth();
     const activeStudentGradeId = activeStudent?.gradeId;
 
+    // Derived and helper functions
+    const isGradeMismatch = selectedGrade && activeStudent?.grade && selectedGrade.toLowerCase() !== activeStudent.grade.toLowerCase();
+
     const MONTHS_BY_TERM = ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'];
     const MONTH_INDEX: Record<string, number> = {
-        Jan: 0,
-        Feb: 1,
-        Mar: 2,
-        May: 4,
-        Jun: 5,
-        Jul: 6,
-        Sep: 8,
-        Oct: 9,
-        Nov: 10
+        Jan: 0, Feb: 1, Mar: 2, May: 4, Jun: 5, Jul: 6, Sep: 8, Oct: 9, Nov: 10
     };
 
     const normalizeLabel = (value?: string | null) =>
@@ -1130,15 +1200,31 @@ function UnifiedServicesPopup({
     const handleStageService = (service: Service) => {
         setStagedItems(prev => {
             const exists = prev.some(s => s.id === service.id);
-            if (exists) {
-                return prev.filter(s => s.id !== service.id);
-            }
+            if (exists) return prev.filter(s => s.id !== service.id);
             return [...prev, service];
         });
         haptics.selection();
     };
 
     const isStaged = (id: string) => stagedItems.some(s => s.id === id);
+
+    // Time-based filtering: Terms and months that have passed should not be visible
+    const isPastDate = (monthOrTerm: string | number, year: number) => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth(); 
+        if (year < currentYear) return true;
+        if (year > currentYear) return false;
+        if (typeof monthOrTerm === 'number') {
+            if (monthOrTerm === 1 && currentMonth >= 3) return true;
+            if (monthOrTerm === 2 && currentMonth >= 7) return true;
+            return false;
+        }
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const targetIndex = months.findIndex(m => m.startsWith(monthOrTerm as string));
+        if (targetIndex === -1) return false;
+        return currentMonth > targetIndex;
+    };
 
 
     // Dynamically build tabs based on non-empty services in schoolData
@@ -1209,83 +1295,6 @@ function UnifiedServicesPopup({
         return t;
     }, [schoolData, stagedItems, invoices]);
 
-    const [activeTab, setActiveTab] = useState<string>('fees');
-
-    // Ensure activeTab is valid if tabs change
-    useEffect(() => {
-        if (!tabs.find(t => t.id === activeTab)) {
-            setActiveTab('fees');
-        }
-    }, [tabs, activeTab]);
-
-    const [selectedGrade, setSelectedGrade] = useState<string>(activeStudent?.grade || "");
-    const [selectedAcademicYear, setSelectedAcademicYear] = useState<number>(new Date().getFullYear());
-    const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
-    const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
-
-    // Transport specific state
-    const [selectedRouteId, setSelectedRouteId] = useState<string>("");
-    const [isRouteDropdownOpen, setIsRouteDropdownOpen] = useState(false);
-
-    const selectedRoute = schoolData?.bus_routes?.find(r => r.id === selectedRouteId);
-
-    // Cafeteria specific state
-    const [selectedCanteenPlanId, setSelectedCanteenPlanId] = useState<string>("");
-    const [isCanteenDropdownOpen, setIsCanteenDropdownOpen] = useState(false);
-    const [isOtherDropdownOpen, setIsOtherDropdownOpen] = useState(false);
-    const [isOthersMenuOpen, setIsOthersMenuOpen] = useState(false);
-    const [selectedOtherCategory, setSelectedOtherCategory] = useState<string>("All");
-    const [otherQuantities, setOtherQuantities] = useState<Record<string, number>>({});
-
-    const extraCategories = useMemo(() => {
-        if (!schoolData?.other_services) return ['All'];
-        const cats = new Set(schoolData.other_services.map(s => s.category).filter(Boolean));
-        return ['All', ...Array.from(cats)];
-    }, [schoolData]);
-    const selectedCanteenPlan = schoolData?.canteen_plans?.find(p => p.id === selectedCanteenPlanId);
-
-    // Subscription Frequency state
-
-    // Boarding specific state
-    const [selectedBoardingRoomId, setSelectedBoardingRoomId] = useState<string>("");
-    const [isBoardingDropdownOpen, setIsBoardingDropdownOpen] = useState(false);
-    const selectedBoardingRoom = schoolData?.boarding_rooms?.find(r => r.id === selectedBoardingRoomId);
-    const [boardingFrequency, setBoardingFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
-    const [transportFrequency, setTransportFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
-    const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
-    const [sportsFrequency, setSportsFrequency] = useState<'monthly' | 'termly' | 'yearly'>('termly');
-
-    // Time-based filtering: Terms and months that have passed should not be visible
-    const isPastDate = (monthOrTerm: string | number, year: number) => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth(); // 0-11
-        
-        // Past years are all past
-        if (year < currentYear) return true;
-        // Future years are never past
-        if (year > currentYear) return false;
-        
-        // Current year: check month index
-        if (typeof monthOrTerm === 'number') {
-            // Term 1: Ends when April (index 3) starts
-            if (monthOrTerm === 1 && currentMonth >= 3) return true;
-            // Term 2: Ends when August (index 7) starts
-            if (monthOrTerm === 2 && currentMonth >= 7) return true;
-            // Term 3 (Sept-Dec): Never past if we are in the current year
-            return false;
-        }
-
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const targetIndex = months.findIndex(m => m.startsWith(monthOrTerm as string));
-        if (targetIndex === -1) return false;
-        return currentMonth > targetIndex;
-    };
-    const [selectedSportsPlanId, setSelectedSportsPlanId] = useState<string>("");
-    const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
-
-    // Uniforms/Other state
-    const [selectedOtherId, setSelectedOtherId] = useState<string>("");
     const selectedOther = schoolData?.other_services?.find(s => s.id === selectedOtherId);
 
     // Auto-select the student's grade when data loads or changes
@@ -1616,6 +1625,22 @@ function UnifiedServicesPopup({
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
+
+                                                {isGradeMismatch && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className="mt-4 bg-[#FFFBE6] border border-[#FFE58F] rounded-[18px] p-4 flex gap-3 shadow-sm"
+                                                    >
+                                                        <AlertTriangle className="text-[#FAAD14] shrink-0" size={18} strokeWidth={2.5} />
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#856404]">Careful!</p>
+                                                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] text-[#856404] leading-relaxed">
+                                                                You're selecting <span className="font-bold">{selectedGrade}</span> fees, but {activeStudent?.name.split(' ')[0]} is in <span className="font-bold">{activeStudent?.grade}</span>. Please verify before adding.
+                                                            </p>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
 
                                                 {!isGradeDropdownOpen && (
                                                     <motion.div
@@ -2790,19 +2815,20 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'daily' ? (
-                                                                ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day) => {
+                                                                getWorkDayDates().map(({ day, dateDisplay, fullDate }) => {
                                                                     const termId = `canteen-${selectedCanteenPlanId}-day-${day}`;
                                                                     const isTermStaged = isStaged(termId);
+                                                                    const isPast = fullDate < new Date().setHours(0,0,0,0);
                                                                     return (
                                                                         <button
                                                                             key={day}
-                                                                            disabled={!selectedCanteenPlan}
+                                                                            disabled={!selectedCanteenPlan || isPast}
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (!selectedCanteenPlan) return;
                                                                                 const newService = {
                                                                                     id: termId,
-                                                                                    description: `${selectedCanteenPlan.name} - ${day}`,
+                                                                                    description: `${selectedCanteenPlan.name} - ${day} ${dateDisplay}`,
                                                                                     amount: selectedCanteenPlan.price / 20,
                                                                                     invoiceNo: "204",
                                                                                     academicYear: selectedAcademicYear,
@@ -2811,7 +2837,7 @@ function UnifiedServicesPopup({
                                                                                 };
                                                                                 toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
-                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
                                                                             <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
                                                                                 {isTermStaged && (
@@ -2820,7 +2846,7 @@ function UnifiedServicesPopup({
                                                                                     </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{day}</span>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{day} {dateDisplay}{isPast ? ' (past)' : ''}</span>
                                                                         </button>
                                                                     );
                                                                 })
