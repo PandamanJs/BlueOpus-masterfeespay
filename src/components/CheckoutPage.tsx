@@ -48,6 +48,7 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
   const setExcludedServiceIds = useAppStore(state => state.setExcludedServiceIds);
   const inputAmounts = useAppStore(state => state.inputAmounts);
   const setInputAmounts = useAppStore(state => state.setInputAmounts);
+  const setStudentServices = useAppStore(state => state.setStudentServices);
 
   // Initialize input amounts from services if not already set
   useEffect(() => {
@@ -73,16 +74,37 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
   };
 
   const handleRemoveService = (serviceId: string) => {
+    // 1. Mark as excluded for the current session list
     setExcludedServiceIds(prev => {
       if (prev.includes(serviceId)) return prev;
       return [...prev, serviceId];
     });
+    
+    // 2. Remove from global studentServices state (primary cart source)
+    const serviceToRemove = services.find(s => s.id === serviceId);
+    if (serviceToRemove && serviceToRemove.studentId) {
+      setStudentServices(prev => {
+        const studentId = serviceToRemove.studentId!;
+        const currentItems = prev[studentId] || [];
+        
+        // The serviceId in checkout is prefixed: `${studentId}-${originalId}`
+        // So the original ID in studentServices is serviceId minus the prefix
+        const prefix = `${studentId}-`;
+        const originalId = serviceId.startsWith(prefix) ? serviceId.slice(prefix.length) : serviceId;
+        
+        return {
+          ...prev,
+          [studentId]: currentItems.filter(item => item.id !== originalId)
+        };
+      });
+    }
+
     hapticFeedback('light');
   };
 
   const excludedSet = useMemo(() => new Set(excludedServiceIds), [excludedServiceIds]);
   const activeServices = services.filter(s => !excludedSet.has(s.id));
-  const totalAmountValue = activeServices.reduce((sum, s) => sum + (inputAmounts[s.id] || 0), 0);
+  const totalAmountValue = activeServices.reduce((sum, s) => sum + s.amount, 0);
 
   if (showPayInPart) {
     return (

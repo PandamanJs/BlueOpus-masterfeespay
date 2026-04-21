@@ -1165,6 +1165,17 @@ function UnifiedServicesPopup({
         return MONTH_INDEX[month] < currentMonthIndex;
     };
 
+    const isPastWeek = (weekStr: string) => {
+        if (selectedAcademicYear > currentCalendarYear) return false;
+        if (selectedAcademicYear < currentCalendarYear) return true;
+        
+        // Simple heuristic: compare today's date within the month to 7-day intervals
+        const weekNum = parseInt(weekStr.match(/\d+/)?.[0] || "0");
+        const today = new Date();
+        const currentWeekNum = Math.ceil(today.getDate() / 7);
+        return weekNum < currentWeekNum;
+    };
+
     const removeStagedByPrefixes = (prefixes: string[]) => {
         setStagedItems(prev => prev.filter(item => !prefixes.some(prefix => item.id.startsWith(prefix))));
     };
@@ -2045,7 +2056,7 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : transportFrequency === 'monthly' ? (
-                                                                MONTHS_BY_TERM.map((month) => {
+                                                                MONTHS_BY_TERM.filter(month => !isPastMonth(month)).map((month) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-month-${month}` : `route-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
                                                                     const isPast = isPastMonth(month);
@@ -2420,7 +2431,7 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : boardingFrequency === 'monthly' ? (
-                                                                MONTHS_BY_TERM.map((month) => {
+                                                                MONTHS_BY_TERM.filter(month => !isPastMonth(month)).map((month) => {
                                                                     const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-month-${month}` : `room-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
                                                                     const isPast = isPastMonth(month);
@@ -2780,7 +2791,7 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'weekly' ? (
-                                                                ['Week 1', 'Week 2', 'Week 3', 'Week 4'].map((week) => {
+                                                                ['Week 1', 'Week 2', 'Week 3', 'Week 4'].filter(week => !isPastWeek(week)).map((week) => {
                                                                     const termId = `canteen-${selectedCanteenPlanId}-week-${week}`;
                                                                     const isTermStaged = isStaged(termId);
                                                                     return (
@@ -2815,7 +2826,7 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'daily' ? (
-                                                                getWorkDayDates().map(({ day, dateDisplay, fullDate }) => {
+                                                                getWorkDayDates().filter(({ fullDate }) => fullDate >= new Date().setHours(0,0,0,0)).map(({ day, dateDisplay, fullDate }) => {
                                                                     const termId = `canteen-${selectedCanteenPlanId}-day-${day}`;
                                                                     const isTermStaged = isStaged(termId);
                                                                     const isPast = fullDate < new Date().setHours(0,0,0,0);
@@ -2851,7 +2862,7 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'monthly' ? (
-                                                                MONTHS_BY_TERM.map((month) => {
+                                                                MONTHS_BY_TERM.filter(month => !isPastMonth(month)).map((month) => {
                                                                     const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-month-${month}` : `canteen-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
                                                                     const isPast = isPastMonth(month);
@@ -3225,7 +3236,7 @@ function UnifiedServicesPopup({
                                                                                     );
                                                                                 })
                                                                             ) : sportsFrequency === 'monthly' ? (
-                                                                                MONTHS_BY_TERM.map((month) => {
+                                                                                MONTHS_BY_TERM.filter(month => !isPastMonth(month)).map((month) => {
                                                                                     const termId = `sports-${selectedSportsPlanId}-month-${month}`;
                                                                                     const isTermStaged = isStaged(termId);
                                                                                     const isPast = isPastMonth(month);

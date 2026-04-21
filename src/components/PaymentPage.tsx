@@ -7,7 +7,7 @@
  */
 
 import { motion, AnimatePresence } from "motion/react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronDown, ShieldCheck, CreditCard, Wallet } from "lucide-react";
 import { useLenco } from "../hooks/useLenco";
 import { useOfflineManager } from "../hooks/useOfflineManager";
@@ -136,6 +136,14 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   const vatEnabled = useAppStore((state) => state.vatEnabled);
   const students = useAppStore((state) => state.students);
   const isStaff = useAppStore((state) => state.isStaff);
+  const inputAmounts = useAppStore((state) => state.inputAmounts);
+  const excludedServiceIds = useAppStore((state) => state.excludedServiceIds);
+
+  const excludedSet = useMemo(() => new Set(excludedServiceIds), [excludedServiceIds]);
+  const activeCheckoutServices = useMemo(() => 
+    checkoutServices.filter(s => !excludedSet.has(s.id)),
+    [checkoutServices, excludedSet]
+  );
 
   // Fetch discounts from DB
   useEffect(() => {
@@ -157,7 +165,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   }, [selectedSchoolId]);
 
   // Identify invoice vs debt portions for VAT calculation
-  const invoiceTotal = checkoutServices
+  const invoiceTotal = activeCheckoutServices
     .filter(service => {
       // Primary check: explicit flag from our logic
       if (service.isDebt) return false;
@@ -174,7 +182,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
       return true;
     })
-    .reduce((sum, service) => sum + service.amount, 0);
+    .reduce((sum, service) => sum + (inputAmounts[service.id] || service.amount), 0);
 
   /**
    * CONTEXT-AWARE DISCOUNT LOGIC
@@ -213,11 +221,11 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
     // EARLY BIRD CHECK
     if (fullDesc.includes("early bird")) {
       // 1. Must NOT be an outstanding balance (debt) payment
-      const hasDebtItems = checkoutServices.some(s => s.isDebt);
+      const hasDebtItems = activeCheckoutServices.some(s => s.isDebt);
       if (hasDebtItems) return false;
 
       // 2. Must be a full current fee payment (no keywords suggesting partial payment)
-      const hasPartialKeywords = checkoutServices.some(s =>
+      const hasPartialKeywords = activeCheckoutServices.some(s =>
         s.description.toLowerCase().includes("balance") ||
         s.description.toLowerCase().includes("partial") ||
         s.description.toLowerCase().includes("installment")
@@ -230,7 +238,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
       if (!isStartOfTerm) return false;
 
       // 4. Must be paying for a core fee category (unless it's an "all surfaces" discount handled later)
-      const isPayingCoreFee = checkoutServices.some(s => {
+      const isPayingCoreFee = activeCheckoutServices.some(s => {
         const desc = s.description.toLowerCase();
         return desc.includes("tuition") || desc.includes("school fee") || (discount.fee_category_id && s.categoryId === discount.fee_category_id);
       });
@@ -257,7 +265,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
           return false;
         })
-        .reduce((sum, s) => sum + s.amount, 0);
+        .reduce((sum, s) => sum + (inputAmounts[s.id] || s.amount), 0);
     }
 
     const fullDesc = getDiscountDescription(discount);
@@ -269,13 +277,13 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
     }
 
     // Default: Apply keyword search (Tuition, School Fees)
-    return checkoutServices
+    return activeCheckoutServices
       .filter(s => {
         if (s.isDebt) return false;
         const sDesc = s.description.toLowerCase();
         return sDesc.includes("tuition") || sDesc.includes("school fee") || sDesc.includes("fees");
       })
-      .reduce((sum, s) => sum + s.amount, 0);
+      .reduce((sum, s) => sum + (inputAmounts[s.id] || s.amount), 0);
 
     return tuitionTotal;
   };
@@ -313,7 +321,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   const processingFee = gatewayAmount * 0.01; // 1% Lenco processing surcharge (added by gateway)
   const serviceFee = platformFee + processingFee;
   const finalAmount = gatewayAmount + processingFee; // This is what the user VISIBLY pays (Total)
-  const serviceCount = checkoutServices.length;
+  const serviceCount = activeCheckoutServices.length;
 
   const toggleDiscount = (id: string) => {
     const discount = availableDiscounts.find(d => d.discount_id === id);
@@ -338,7 +346,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   };
 
   // Get unique student names from checkout services
-  const studentNames = Array.from(new Set(checkoutServices.map(service => service.studentName)));
+  const studentNames = Array.from(new Set(activeCheckoutServices.map(service => service.studentName)));
 
   // Lenco Hook
   const { isScriptLoaded, initiatePayment } = useLenco();
@@ -424,7 +432,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
             };
             const invoiceGroups = new Map<string, ServiceGroup>();
 
-            for (const svc of checkoutServices) {
+            for (const svc of activeCheckoutServices) {
               const studentId = svc.studentId || "unknown";
               // Use the explicit invoice UUID if available, otherwise fall back to invoiceNo
               const invoiceKey = svc.invoice_id || svc.invoiceNo || svc.id;
@@ -448,13 +456,13 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
             // Each group's service.amount is the full INVOICE BALANCE (e.g. K7000).
             // We must record the ACTUAL money paid per invoice, not the full balance.
             // We distribute totalAmount proportionally across invoices by their balance weight.
-            const allServicesTotal = checkoutServices.reduce((sum, s) => sum + s.amount, 0);
+            const allServicesTotal = activeCheckoutServices.reduce((sum, s) => sum + (inputAmounts[s.id] || s.amount), 0);
 
             for (let i = 0; i < groups.length; i++) {
               const group = groups[i]!;
 
               // Full invoice balance for this group (for reference only, NOT what we record as paid)
-              const invoiceBalance = group.services.reduce((sum, s) => sum + s.amount, 0);
+              const invoiceBalance = group.services.reduce((sum, s) => sum + (inputAmounts[s.id] || s.amount), 0);
 
               // Actual money paid towards this invoice = proportion of the real Lenco charge
               const proportion = allServicesTotal > 0 ? invoiceBalance / allServicesTotal : 1 / groups.length;
@@ -631,7 +639,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
                 <div className="flex flex-col gap-4">
                   {studentNames.map(name => {
-                    const studentServices = checkoutServices.filter(s => s.studentName === name);
+                    const studentServices = activeCheckoutServices.filter(s => s.studentName === name);
                     if (studentServices.length === 0) return null;
 
                     return (
@@ -640,7 +648,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                         {studentServices.map(service => (
                           <div key={service.id} className="flex justify-between items-center text-[12px]">
                             <span className="text-gray-600 font-medium">{service.description}</span>
-                            <span className="text-black font-semibold">K{service.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className="text-black font-semibold">K{(inputAmounts[service.id] || service.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         ))}
                       </div>
