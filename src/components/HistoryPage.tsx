@@ -226,6 +226,8 @@ export default function HistoryPage({
               <ServiceCategoryCard
                 key={item.id || idx}
                 item={item}
+                schoolName={schoolName || "Master Fees Payment"}
+                schoolLogo={schoolLogo}
                 studentName={currentStudent?.name || "Student"}
                 userName={userName || "Parent"}
                 grade={currentStudent?.grade || "N/A"}
@@ -257,7 +259,7 @@ export default function HistoryPage({
   );
 }
 
-function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, userName }: { item: any, grade: string, transactions: any[], onPay: () => void, studentName: string, userName: string }) {
+function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, userName, schoolName, schoolLogo }: { item: any, grade: string, transactions: any[], onPay: () => void, studentName: string, userName: string, schoolName: string, schoolLogo?: string | null }) {
   const [showDetails, setShowDetails] = useState(false);
   const isCleared = (item.balance || 0) <= 0;
 
@@ -278,7 +280,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
     try {
       const amountPaid = (item.expected || 0) - (item.balance || 0);
       generateReceiptPDF({
-        schoolName: schoolName || "Master Fees Payment",
+        schoolName: schoolName,
         totalAmount: amountPaid,
         refNumber: item.invoice_id?.substring(0, 12).toUpperCase() || 'REF-HIST',
         dateTime: new Date().toLocaleString(),
@@ -292,7 +294,8 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         }],
         parentName: userName,
         admissionNumber: item.admission_number || '', // Try to find admission number in item
-        isPaid: isCleared
+        isPaid: isCleared,
+        schoolLogo: schoolLogo
       });
       toast.success("Receipt downloaded!");
     } catch (e) {

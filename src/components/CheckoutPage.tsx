@@ -12,6 +12,7 @@ import group17 from "../assets/decorations/Group 17.png";
 interface CheckoutPageProps {
   services: Service[];
   onProceed: (amount: number) => void;
+  onBackToServices: () => void;
 }
 
 /**
@@ -39,7 +40,7 @@ function HeroDecorations() {
   );
 }
 
-export default function CheckoutPage({ services, onProceed }: CheckoutPageProps) {
+export default function CheckoutPage({ services, onProceed, onBackToServices }: CheckoutPageProps) {
   const [showPayInPart, setShowPayInPart] = useState(false);
 
   // Global state from useAppStore to persist across page navigations
@@ -102,9 +103,13 @@ export default function CheckoutPage({ services, onProceed }: CheckoutPageProps)
       <div className="flex flex-col w-full max-w-[440px] h-full relative" data-name="Checkout page 1">
 
         {/* ── Header ── */}
-        <div className="h-20 w-full  flex items-center border-b border-[#E6E6E6] bg-white sticky top-0 z-30">
-          <LogoHeader />
+        <div className="h-20 w-full flex items-center border-b border-[#E6E6E6] bg-white sticky top-0 z-30">
+          <LogoHeader showBackButton={true} onBack={() => {
+            hapticFeedback('light');
+            onBackToServices();
+          }} />
         </div>
+
 
         <div className="flex-1 overflow-y-auto no-scrollbar bg-white">
           {/* ── Hero Section (Total) ── */}

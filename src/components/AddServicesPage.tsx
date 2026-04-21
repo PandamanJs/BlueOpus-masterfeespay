@@ -177,7 +177,7 @@ function ServiceTable({ services, onRemoveItem }: { services: Service[]; onRemov
                 <div className="flex-1 w-full">
                     {services.map((service, index) => (
                         <motion.div
-                            key={service.id}
+                            key={`${service.id}-${index}`}
                             className="box-border content-stretch flex min-h-[40px] items-center pl-[5px] pr-[56px] py-[6px] w-full relative group hover:bg-gradient-to-r hover:from-[rgba(149,227,108,0.03)] hover:to-transparent transition-all duration-200"
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -699,7 +699,9 @@ export default function AddServicesPage({
     // Check if any services have been added
     const hasServices = Object.values(studentServices).some(services => services.length > 0);
 
-    const navigateToPage = useAppStore(state => state.navigateToPage);
+    // Use the onCheckout prop passed from App.tsx to ensure history is updated
+    // const navigateToPage = useAppStore(state => state.navigateToPage);
+
     const setCheckoutServices = useAppStore(state => state.setCheckoutServices);
     const setPaymentAmount = useAppStore(state => state.setPaymentAmount);
 
@@ -780,7 +782,13 @@ export default function AddServicesPage({
         setPaymentAmount(totalAmount);
 
         // Navigate to checkout summary
-        navigateToPage('checkout');
+        // Navigate to checkout summary using the prop that updates browser history
+        if (onCheckout) {
+            onCheckout(allCheckoutServices);
+        } else {
+            onNext();
+        }
+
     };
 
     return (
@@ -944,12 +952,14 @@ export default function AddServicesPage({
                         key="unified-popup"
                         onClose={() => setShowUnifiedPopup(false)}
                         onConfirm={(items) => {
+                            // Ensure items are unique by ID to prevent key clashes
+                            const uniqueItems = Array.from(new Map(items.map(item => [item.id, item])).values());
                             setStudentServices(prev => ({
                                 ...prev,
-                                [activeStudentId]: items
+                                [activeStudentId]: uniqueItems
                             }));
                             setShowUnifiedPopup(false);
-                            toast.success(`Successfully updated ${items.length} items in cart`);
+                            toast.success(`Successfully updated ${uniqueItems.length} items in cart`);
                         }}
                         schoolName={schoolName}
                         activeStudent={activeStudent}
@@ -2950,7 +2960,7 @@ function UnifiedServicesPopup({
                                                     const selectedSportsPlan = sportsItems.find(s => s.id === selectedSportsPlanId);
 
                                                     return (
-                                                        <div className="flex flex-col gap-6">
+                                                        <div key={`sports-group-${catIdx}`} className="flex flex-col gap-6">
                                                             {/* Plan Selection */}
                                                             <div className="flex flex-col gap-3">
                                                                 <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Select Club / Sport</label>

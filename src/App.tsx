@@ -1006,21 +1006,14 @@ export default function App() {
     const state = useAppStore.getState();
 
     // Anyone can access these pages
-    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage'];
+    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage', 'pay-fees', 'add-services'];
     if (publicPages.includes(page)) return true;
 
     // Payment flow pages require proper context
-    if (page === 'pay-fees') {
-      return !!state.selectedSchool && !!state.userName && !!state.userPhone;
-    }
-
-    if (page === 'add-services') {
-      return state.selectedStudentIds.length > 0;
-    }
-
     if (page === 'checkout') {
-      return state.checkoutServices.length > 0;
+      return state.checkoutServices.length > 0 || state.selectedStudentIds.length > 0;
     }
+
 
     if (page === 'payment') {
       return state.paymentAmount > 0 && state.checkoutServices.length > 0;
@@ -1596,6 +1589,7 @@ export default function App() {
             <LazyDownloadReceiptPage
               totalAmount={paymentAmount}
               schoolName={selectedSchool || "Twalumbu Educational Center"}
+              schoolLogo={selectedSchoolLogo}
               services={checkoutServices}
               onGoHome={handleGoHome}
               parentName={userName}

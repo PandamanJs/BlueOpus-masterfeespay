@@ -388,8 +388,8 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
     try {
         // 1. Get raw records and transactions in parallel for reconciliation
         const [historyResp, freshResp, transactionsResp] = await Promise.all([
-            supabase.from('payment_history').select('*').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue']).gt('balance_remaining', 0),
-            supabase.from('invoices').select('*').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue']),
+            supabase.from('payment_history').select('*').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue', 'pending']).gt('balance_remaining', 0),
+            supabase.from('invoices').select('*, joined_items:invoice_items(*)').eq('student_id', studentId).in('status', ['unpaid', 'partial', 'overdue', 'pending']),
             supabase.from('transactions').select('*').eq('student_id', studentId).in('status', ['success', 'successful', 'completed'])
         ]);
 
@@ -412,15 +412,33 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
                 const term = inv.term || inv.invoice_items?.meta?.term;
                 const year = inv.year || inv.invoice_items?.meta?.academic_year;
 
-                let serviceName = "School Fees";
-                if (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
-                    const firstItem = inv.invoice_items.items[0];
-                    serviceName = firstItem.description || firstItem.name || serviceName;
-                } else if (term && year) {
+                const items = Array.isArray((inv as any).joined_items)
+                    ? (inv as any).joined_items
+                    : (Array.isArray(inv.invoice_items) 
+                        ? inv.invoice_items 
+                        : (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items) ? inv.invoice_items.items : []));
+                
+                let serviceName = "";
+                
+                // Prioritize item description over generic service_name
+                if (items.length > 0) {
+                    const firstItem = items[0];
+                    serviceName = firstItem.description || firstItem.name || "";
+                }
+                
+                // Fallback to top-level service_name if items didn't provide one
+                if (!serviceName) {
+                    serviceName = inv.service_name || "";
+                }
+                
+                // Final fallbacks
+                if (!serviceName && term && year) {
                     serviceName = `Term ${term} (${year}) School Fees`;
-                } else if (term) {
+                } else if (!serviceName && term) {
                     serviceName = `Term ${term} School Fees`;
                 }
+                
+                if (!serviceName) serviceName = "School Fees";
 
                 results.push({
                     id: invId,
@@ -444,7 +462,8 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
                     completed_at: "",
                     initiated_at: inv.created_at,
                     balance_remaining: inv.total_amount_cached || 0,
-                    service_name: serviceName
+                    service_name: serviceName,
+                    description: serviceName
                 });
                 
                 seenIds.add(invId);
@@ -525,7 +544,7 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
             feeItemsResp
         ] = await Promise.all([
             supabase.from('students').select('student_id, school_id, first_name, last_name, admission_number, student_grade(grade_id, grade:grades(grade_name, grade_id))').eq('student_id', studentId).single(),
-            supabase.from('invoices').select('*').eq('student_id', studentId).neq('status', 'void'),
+            supabase.from('invoices').select('*, joined_items:invoice_items(*)').eq('student_id', studentId).neq('status', 'void'),
             supabase.from('transactions').select('*').eq('student_id', studentId).in('status', ['success', 'successful', 'completed']),
             supabase.from('student_fee_enrollments').select('*, fee_items(*)').eq('student_id', studentId).eq('is_active', true),
             supabase.from('fee_items').select('*, category:fee_categories(category)').eq('is_active', true)
@@ -594,16 +613,31 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
             const term = (inv as any).term || inv.invoice_items?.meta?.term;
             const year = (inv as any).year || inv.invoice_items?.meta?.academic_year;
 
-            let name = (inv as any).service_name;
-            if (!name && inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
-                const firstItem = inv.invoice_items.items[0];
-                name = firstItem.description || firstItem.name;
+            const items = Array.isArray((inv as any).joined_items)
+                ? (inv as any).joined_items
+                : (Array.isArray(inv.invoice_items) 
+                    ? inv.invoice_items 
+                    : (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items) ? inv.invoice_items.items : []));
+
+            let name = "";
+            
+            // Prioritize item description over generic service_name
+            if (items.length > 0) {
+                const firstItem = items[0];
+                name = firstItem.description || firstItem.name || "";
             }
+            
+            // Fallback to top-level service_name
+            if (!name) {
+                name = (inv as any).service_name || "";
+            }
+            
             if (!name && term && year) {
                 name = `Term ${term} (${year}) School Fees`;
             } else if (!name && term) {
                 name = `Term ${term} School Fees`;
             }
+            
             if (!name) name = 'School Fees';
 
             return {
@@ -612,6 +646,7 @@ export async function getStudentFinancialSummary(studentId: string): Promise<any
                 invoice_id: (inv as any).invoice_id || inv.id,
                 invoice_number: inv.invoice_number,
                 name: name,
+                description: name,
                 expected: total,
                 collected: 0,
                 invoiced: total,
