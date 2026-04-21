@@ -14,6 +14,22 @@ sw.addEventListener('message', (event) => {
     }
 });
 
+// Force clear old caches on activation
+sw.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cacheName) => {
+                    console.log('[ServiceWorker] Deleting old cache:', cacheName);
+                    return caches.delete(cacheName);
+                })
+            );
+        }).then(() => {
+            return sw.clients.claim();
+        })
+    );
+});
+
 // Handle push notifications
 sw.addEventListener('push', (event: any) => {
     if (!event.data) return;

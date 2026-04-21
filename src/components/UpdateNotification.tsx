@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
  * 4. Forcing a hard reload to bypass PWA cache
  */
 
-const CURRENT_VERSION = '1.1.0'; // Bumped for update logic fix
+const CURRENT_VERSION = '1.2.1'; // Forced bump for cache clear 
 const VERSION_CHECK_INTERVAL = 60000; // Check every 60 seconds
 
 export function UpdateNotification() {
