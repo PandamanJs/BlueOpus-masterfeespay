@@ -13,9 +13,11 @@ interface CheckoutService {
   amount: number;
   invoiceNo: string;
   studentName: string;
+  studentId?: string;
   term?: number;
   academicYear?: number;
   class?: string;
+  grade?: string;
 }
 
 interface ReceiptData {
@@ -31,8 +33,10 @@ interface ReceiptData {
   schoolAddress?: string;
   schoolPhone?: string;
   schoolEmail?: string;
+  schoolLogo?: string | null;
   paymentMethod?: string;
   admissionNumber?: string;
+  grade?: string;
   isPaid?: boolean;
 }
 
@@ -45,7 +49,9 @@ export function generateReceiptPDF(data: ReceiptData) {
     dateTime,
     services = [],
     parentName,
+    schoolLogo,
     paymentMethod = 'Mobile Money',
+    admissionNumber,
     isPaid = true,
   } = data;
 
@@ -76,8 +82,12 @@ export function generateReceiptPDF(data: ReceiptData) {
     return match ? match[1].replace(/G\s*/i, 'Grade ') : 'Class Not Specified';
   };
 
-  const studentClass = services[0]?.class || extractGrade(services[0]?.description || '');
-  const studentId = services[0]?.id || 'N/A';
+  // Prioritize top-level data.grade, then services[0].grade, then extraction
+  const studentClass = (data as any).grade || services[0]?.grade || services[0]?.class || extractGrade(services[0]?.description || '');
+  
+  // Prioritize top-level admissionNumber, then service-level studentId/id
+  const studentIdRaw = admissionNumber || services[0]?.studentId || services[0]?.id || 'N/A';
+  const studentId = studentIdRaw.length > 12 ? studentIdRaw.substring(0, 12) : studentIdRaw;
   const totalFeesCharged = services.reduce((acc, s) => acc + (s.amount || 0), 0) || totalAmount;
   const balanceOwing = Math.max(0, totalFeesCharged - totalAmount);
 
@@ -85,12 +95,29 @@ export function generateReceiptPDF(data: ReceiptData) {
   let yPos = 15;
 
   // === LOGO & HEADER BARS ===
-  doc.setFillColor(239, 242, 245); // #EFF2F5
-  doc.circle(leftMargin + 5, yPos + 5, 7, 'F');
+  if (schoolLogo) {
+    try {
+      doc.addImage(schoolLogo, 'PNG', leftMargin, yPos, 20, 20);
+    } catch (e) {
+      // Fallback if logo fails
+      doc.setFillColor(239, 242, 245);
+      doc.circle(leftMargin + 10, yPos + 10, 10, 'F');
+    }
+  } else {
+    doc.setFillColor(239, 242, 245); // #EFF2F5
+    doc.circle(leftMargin + 5, yPos + 5, 7, 'F');
+  }
   
-  doc.rect(leftMargin + 25, yPos, 45, 3, 'F');
-  doc.rect(leftMargin + 25, yPos + 6, 45, 3, 'F');
-  doc.rect(leftMargin + 25, yPos + 12, 40, 3, 'F');
+  // Add School Name
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+  doc.text(schoolName.toUpperCase(), leftMargin + 25, yPos + 7);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(COLOR_TEXT_DIM[0], COLOR_TEXT_DIM[1], COLOR_TEXT_DIM[2]);
+  doc.text('OFFICIAL PAYMENT RECEIPT', leftMargin + 25, yPos + 13);
 
   yPos += 35;
 
@@ -101,10 +128,10 @@ export function generateReceiptPDF(data: ReceiptData) {
   doc.text('RECEIPT', leftMargin, yPos);
 
   // Status Badge
-  const statusText = balanceOwing <= 0 ? 'PAID' : 'PARTLY PAID';
+  const statusText = balanceOwing <= 0.01 ? 'PAID' : 'PARTLY PAID';
   const badgeWidth = 25;
   const badgeHeight = 8;
-  doc.setFillColor(COLOR_GREEN_BG[0], COLOR_GREEN_BG[1], COLOR_GREEN_BG[1]);
+  doc.setFillColor(COLOR_GREEN_BG[0], COLOR_GREEN_BG[1], COLOR_GREEN_BG[2]);
   doc.roundedRect(leftMargin, yPos + 5, badgeWidth, badgeHeight, 4, 4, 'F');
   doc.setFontSize(8);
   doc.setTextColor(COLOR_GREEN_TEXT[0], COLOR_GREEN_TEXT[1], COLOR_GREEN_TEXT[2]);
@@ -150,7 +177,7 @@ export function generateReceiptPDF(data: ReceiptData) {
   doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
   doc.text(parentName || 'Parent', leftMargin + (third / 2), yPos + 11, { align: 'center' });
   doc.text(studentClass, leftMargin + third + (third / 2), yPos + 11, { align: 'center' });
-  doc.text(studentId, leftMargin + (third * 2) + (third / 2), yPos + 11, { align: 'center' });
+  doc.text(studentId.toUpperCase(), leftMargin + (third * 2) + (third / 2), yPos + 11, { align: 'center' });
 
   yPos += 30;
 
@@ -195,9 +222,14 @@ export function generateReceiptPDF(data: ReceiptData) {
     colX += 20;
     doc.text(service.amount.toLocaleString(), colX, yPos, { align: 'center' });
     colX += 20;
-    doc.text(totalAmount.toLocaleString(), colX, yPos, { align: 'center' });
+    
+    // Proportional distribution for the paid amount per item
+    const itemPaid = totalAmount >= totalFeesCharged ? service.amount : Math.min(service.amount, totalAmount / services.length);
+    const itemBalance = Math.max(0, service.amount - itemPaid);
+    
+    doc.text(itemPaid.toLocaleString(), colX, yPos, { align: 'center' });
     colX += 20;
-    doc.text(Math.max(0, service.amount - totalAmount).toLocaleString(), rightMargin - 3, yPos, { align: 'right' });
+    doc.text(itemBalance.toLocaleString(), rightMargin - 3, yPos, { align: 'right' });
     yPos += 8;
   });
 
@@ -241,30 +273,37 @@ export function generateReceiptPDF(data: ReceiptData) {
   doc.circle(leftMargin + 8, yPos + 16, 0.2, 'D');
 
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
   doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
   
-  const footerText = [
-    'YOUR NEXT PAYMENT IS DUE ON THE 30/05/2026. ',
-    'PLEASE MAKE SURE TO SETTLE YOUR BALANCE BEFORE THE NEXT PAYMENT DATE. ',
-    'THANK YOU FOR CHOOSING US.'
-  ];
+  if (balanceOwing <= 0.01) {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(COLOR_GREEN_TEXT[0], COLOR_GREEN_TEXT[1], COLOR_GREEN_TEXT[2]);
+    doc.text('ACCOUNT FULLY SETTLED', leftMargin + 18, yPos + 10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+    doc.text('This payment has successfully cleared your outstanding balance for the listed items.', leftMargin + 18, yPos + 15);
+    doc.text('Thank you for your prompt payment and your continued trust in our institution.', leftMargin + 18, yPos + 20);
+  } else {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+    doc.text('PAYMENT REGISTERED', leftMargin + 18, yPos + 10);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+    doc.text(`A balance of K ${balanceOwing.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })} remains on this account.`, leftMargin + 18, yPos + 15);
+    doc.text('Please ensure full settlement is made to avoid any disruption in services.', leftMargin + 18, yPos + 20);
+  }
 
-  let footerY = yPos + 8;
-  doc.text('YOUR ', leftMargin + 18, footerY);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]);
-  doc.text('NEXT PAYMENT IS DUE ON THE 30/05/2026.', leftMargin + 27, footerY);
-  
-  footerY += 5;
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
-  doc.text('PLEASE MAKE SURE TO SETTLE YOUR BALANCE BEFORE THE NEXT PAYMENT DATE.', leftMargin + 18, footerY);
-  
-  footerY += 5;
-  doc.text('THANK YOU FOR CHOOSING US.', leftMargin + 18, footerY);
+
+  drawFooter(doc, schoolName, pageWidth, pageHeight, COLOR_TEXT_DIM);
 
   // Save PDF
   const fileName = `Receipt_${refNumber}_${Date.now()}.pdf`;
   doc.save(fileName);
+}
+
+function drawFooter(doc: jsPDF, schoolName: string, pageWidth: number, pageHeight: number, COLOR_TEXT_DIM: number[]) {
+  doc.setFontSize(8);
+  doc.setTextColor(COLOR_TEXT_DIM[0], COLOR_TEXT_DIM[1], COLOR_TEXT_DIM[2]);
+  doc.text(`GENERATED BY ${schoolName.toUpperCase()} • ON ${new Date().toLocaleDateString('en-GB')}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
 }

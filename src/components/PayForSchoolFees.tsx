@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { motion } from "motion/react";
-import tickSvgPaths from "../imports/svg-m9kcpl04lu";
 import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
 import LogoHeader from "./common/LogoHeader";
 import { BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
+import { useState } from "react";
+import { motion } from "motion/react";
+
+
 
 interface Student {
   name: string;

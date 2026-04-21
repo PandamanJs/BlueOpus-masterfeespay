@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import DynamicIsland, { useDynamicIsland } from "./components/DynamicIsland";
 import { getSchools } from "./lib/supabase/api/schools";
 import { hapticFeedback } from "./utils/haptics";
-import { getInvoicesWithBalanceForStudent } from "./lib/supabase/api/transactions";
+import { getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "./lib/supabase/api/transactions";
 import { checkIfStaff } from "./lib/supabase/api/parents";
 
 import { UpdateNotification } from "./components/UpdateNotification";
@@ -774,13 +774,18 @@ export default function App() {
       setIsStaff(false);
       return;
     }
-    console.log('[App] Fetching students and staff status for phone:', phone);
+    
+    // Get the current school ID from the store to ensure filtered fetching
+    const storeSchoolId = useAppStore.getState().selectedSchoolId;
+    
+    console.log('[App] Fetching students and staff status for phone:', phone, storeSchoolId ? `(Filtered for School: ${storeSchoolId})` : '(No school filter)');
     setStudentsLoading(true);
     setStudentsError(null);
     try {
       // Parallel fetch for students and staff status
+      // We pass the school ID to ensure you only see students for the school you've selected
       const [studentData, staffStatus] = await Promise.all([
-        getStudentsByPhone(phone),
+        getStudentsByPhone(phone, storeSchoolId || undefined),
         checkIfStaff(phone)
       ]);
       
@@ -816,21 +821,14 @@ export default function App() {
     const state = useAppStore.getState();
 
     // Anyone can access these pages
-    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage'];
+    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage', 'pay-fees', 'add-services'];
     if (publicPages.includes(page)) return true;
 
     // Payment flow pages require proper context
-    if (page === 'pay-fees') {
-      return !!state.selectedSchool && !!state.userName && !!state.userPhone;
-    }
-
-    if (page === 'add-services') {
-      return state.selectedStudentIds.length > 0;
-    }
-
     if (page === 'checkout') {
-      return state.checkoutServices.length > 0;
+      return state.checkoutServices.length > 0 || state.selectedStudentIds.length > 0;
     }
+
 
     if (page === 'payment') {
       return state.paymentAmount > 0 && state.checkoutServices.length > 0;
@@ -1061,9 +1059,11 @@ export default function App() {
 
     for (const student of studentsWithBalance) {
       const invoices = await getInvoicesWithBalanceForStudent(student.id);
+      const financialSummary = await getStudentFinancialSummary(student.id);
+      const canonicalOutstandingBalance = Number(financialSummary?.totalBalance ?? student.balances ?? 0);
 
       if (invoices.length > 0) {
-        // Use detailed invoices from payment_history
+        // Prefer canonical invoice-level balances when available.
         const servicesValue = invoices.map(inv => ({
           id: inv.id || crypto.randomUUID(),
           description: inv.service_name || "School Fees",
@@ -1081,12 +1081,12 @@ export default function App() {
         balanceServices = [...balanceServices, ...servicesValue];
 
       }
-      // Final fallback if both were empty but student has a balance field > 0
-      if (invoices.length === 0 && student.balances > 0) {
+      // Final fallback when invoice-level detail is unavailable but the summary still shows debt.
+      if (invoices.length === 0 && canonicalOutstandingBalance > 0) {
         balanceServices.push({
           id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7),
           description: `Outstanding Balance`,
-          amount: student.balances,
+          amount: canonicalOutstandingBalance,
           invoiceNo: `BAL-${student.id.substring(0, 4)}-${Date.now().toString().slice(-4)}`,
           studentName: student.name,
           studentId: student.id,
@@ -1153,10 +1153,30 @@ export default function App() {
   };
 
   const handleProceedToServices = async (name: string, phone: string, id: string) => {
-    setUserInfo(name, phone, '', id);
-    // Explicitly fetch students to ensure they are loaded when entering services
-    await fetchStudents(phone);
-    navigateToPage("services");
+    setStudentsLoading(true);
+    try {
+      // 1. Fetch students first to verify they exist at this school
+      const studentsData = await fetchStudents(phone);
+      
+      // 2. Check if they are staff (fetchStudents already sets this in store)
+      const staffStatus = useAppStore.getState().isStaff;
+
+      // 3. SECURE GATE: If no students found AND not staff, block access
+      if ((!studentsData || studentsData.length === 0) && !staffStatus) {
+        toast.error(`No records found for this number at ${selectedSchool || 'this school'}. Please verify the number or register.`);
+        // Note: we don't navigate or set user info here
+        return;
+      }
+
+      // 4. Success! Now set identity and proceed
+      setUserInfo(name, phone, '', id);
+      navigateToPage("services");
+    } catch (e) {
+      console.error('Login error:', e);
+      toast.error('An error occurred during verification. Please try again.');
+    } finally {
+      setStudentsLoading(false);
+    }
   };
 
   const handleBackToDetails = () => {
@@ -1245,6 +1265,10 @@ export default function App() {
   };
 
   const handleSchoolSelection = (school: School | null) => {
+    // CRITICAL: Always reset the checkout flow when selecting a new school
+    // to prevent service data from bleeding between different institutions.
+    resetCheckoutFlow();
+
     setSelectedSchool(
       school ? school.name : null, 
       school ? school.logo : null, 
@@ -1349,7 +1373,8 @@ export default function App() {
           >
             <LazyDownloadReceiptPage
               totalAmount={paymentAmount}
-              schoolName={selectedSchool || "Twalumbu Educational Center"}
+              schoolName={selectedSchool || "Institutional Fees"}
+              schoolLogo={selectedSchoolLogo}
               services={checkoutServices}
               onGoHome={handleGoHome}
               parentName={userName}
@@ -1527,12 +1552,6 @@ export default function App() {
               onViewHistory={handleViewHistory}
               onPayFees={handlePayFees}
               debtCount={students.reduce((sum, s) => sum + s.unpaidInvoicesCount, 0)}
-              onInactivityRefresh={() => {
-                // Re-navigate to services to trigger fresh data load
-                console.log('[App] Services page inactivity refresh triggered');
-                navigateToPage('search');
-                setTimeout(() => navigateToPage('services'), 100);
-              }}
               navigateToPage={navigateToPage}
             />
           </motion.div>

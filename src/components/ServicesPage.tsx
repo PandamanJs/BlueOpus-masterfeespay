@@ -215,33 +215,6 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
 
   const [showSettings, setShowSettings] = useState(false);
 
-  // ── Inactivity auto-refresh after 5 minutes ──────────────────────────────
-  const INACTIVITY_MS = 5 * 60 * 1000;
-  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const resetInactivityTimer = useCallback(() => {
-    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-    inactivityTimer.current = setTimeout(() => {
-      console.log('[ServicesPage] 5 min inactivity — refreshing...');
-      if (onInactivityRefresh) {
-        onInactivityRefresh();
-      } else {
-        window.location.reload();
-      }
-    }, INACTIVITY_MS);
-  }, [onInactivityRefresh, INACTIVITY_MS]);
-
-  useEffect(() => {
-    const events = ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'scroll'];
-    const handler = () => resetInactivityTimer();
-    events.forEach(e => window.addEventListener(e, handler, { passive: true }));
-    resetInactivityTimer();
-    return () => {
-      events.forEach(e => window.removeEventListener(e, handler));
-      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-    };
-  }, [resetInactivityTimer]);
-
   const currentHour = new Date().getHours();
   const greeting = currentHour >= 5 && currentHour < 12 ? "Good Morning" : currentHour >= 12 && currentHour < 17 ? "Good Afternoon" : "Good Evening";
 

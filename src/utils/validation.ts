@@ -24,10 +24,16 @@ import type { ValidationError } from '../types';
 /**
  * Validate Phone Number
  * 
- * Accepts: Ugandan phone numbers (with or without country code)
- * Examples: "0712345678", "+256712345678", "256 712 345 678"
+ * Accepts: Zambian phone numbers
+ * Valid Prefixes: 
+ * - Airtel: 097, 077
+ * - MTN: 096, 076
+ * - Zamtel: 095
+ * - Beeline: 098
  * 
- * We strip out all non-digits first, then check the length
+ * Examples: "0971234567", "+260971234567", "260971234567", "971234567"
+ * 
+ * We strip out all non-digits first, then check the prefix and length
  */
 export function validatePhoneNumber(phone: string): string {
   const cleaned = phone.replace(/\D/g, '');
@@ -35,13 +41,30 @@ export function validatePhoneNumber(phone: string): string {
   if (!cleaned) {
     return 'Phone number is required';
   }
-  
-  if (cleaned.length < VALIDATION.PHONE_MIN_LENGTH) {
-    return `Phone number must be at least ${VALIDATION.PHONE_MIN_LENGTH} digits`;
+
+  // Handle +260 or 260 prefix
+  let zambianRoot = cleaned;
+  if (cleaned.startsWith('260') && cleaned.length > 3) {
+    zambianRoot = cleaned.substring(3);
   }
-  
-  if (cleaned.length > VALIDATION.PHONE_MAX_LENGTH) {
-    return `Phone number must not exceed ${VALIDATION.PHONE_MAX_LENGTH} digits`;
+
+  // If it starts with 0, it should be 10 digits total (e.g. 097...)
+  // If it doesn't start with 0, it should be 9 digits total (e.g. 97...)
+  let standardFormat = zambianRoot;
+  if (!zambianRoot.startsWith('0')) {
+    standardFormat = '0' + zambianRoot;
+  }
+
+  if (standardFormat.length !== 10) {
+    return 'Invalid number format';
+  }
+
+  // Check Zambian Network Prefixes
+  const validPrefixes = ['097', '077', '096', '076', '095', '098'];
+  const prefix = standardFormat.substring(0, 3);
+
+  if (!validPrefixes.includes(prefix)) {
+    return 'Invalid number format';
   }
   
   return '';

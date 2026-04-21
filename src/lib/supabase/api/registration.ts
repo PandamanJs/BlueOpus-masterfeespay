@@ -90,7 +90,7 @@ export interface SchoolGrade {
 /**
  * Search for students by name or admission number.
  */
-export async function searchStudentsByName(query: string, schoolId?: string): Promise<StudentData[]> {
+export async function searchStudentsByName(query: string, schoolId?: string, currentParentId?: string): Promise<StudentData[]> {
     if (!query || query.trim().length < 2) return [];
 
     const parts = query.trim().split(/\s+/);
@@ -104,6 +104,8 @@ export async function searchStudentsByName(query: string, schoolId?: string): Pr
             other_parent_id,
             school_id,
             admission_number,
+            parent_id,
+            other_parent_id,
             student_grade (
                 class,
                 is_active,
@@ -113,34 +115,70 @@ export async function searchStudentsByName(query: string, schoolId?: string): Pr
             ),
             parent:parents!student_parent_id_fkey (
                 first_name,
-                last_name
+                last_name,
+                phone_number
             ),
             other_parent:parents!student_other_parent_id_fkey (
                 first_name,
-                last_name
+                last_name,
+                phone_number
             )
         `);
 
+    // Broader search to catch potential typos or partial names
     if (parts.length >= 2) {
-        supabaseQuery = supabaseQuery
-            .ilike('first_name', `%${parts[0]}%`)
-            .ilike('last_name', `%${parts.slice(1).join(' ')}%`);
+        // Try searching by both names first
+        supabaseQuery = supabaseQuery.or(`and(first_name.ilike.%${parts[0]}%,last_name.ilike.%${parts.slice(1).join(' ')}%),and(first_name.ilike.%${parts[parts.length-1]}%,last_name.ilike.%${parts.slice(0, parts.length-1).join(' ')}%)`);
     } else {
-        supabaseQuery = supabaseQuery
-            .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,admission_number.ilike.%${query}%`);
+        // Single name search
+        supabaseQuery = supabaseQuery.or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,admission_number.ilike.%${query}%`);
     }
 
     if (schoolId) {
         supabaseQuery = supabaseQuery.eq('school_id', schoolId);
     }
 
-    const { data, error } = await supabaseQuery.limit(10);
+    let { data, error } = await supabaseQuery.limit(15); // Increased limit as we'll filter some out
+    
+    // Fallback if no data
+    if (!error && (!data || data.length === 0) && query.length > 3) {
+        const broadQuery = supabase
+            .from('students')
+            .select(`
+                student_id, first_name, last_name, school_id, admission_number, parent_id, other_parent_id,
+                student_grade(class, is_active, grades(grade_name)),
+                parent:parents!student_parent_id_fkey(first_name, last_name, phone_number),
+                other_parent:parents!student_other_parent_id_fkey(first_name, last_name, phone_number)
+            `)
+            .or(`first_name.ilike.%${parts[0]}%,last_name.ilike.%${parts[parts.length-1]}%`)
+            .limit(15);
+        
+        if (schoolId) broadQuery.eq('school_id', schoolId);
+        const { data: broadData } = await broadQuery;
+        if (broadData && broadData.length > 0) data = broadData;
+    }
+
     if (error) {
         console.error('Error searching students:', error);
         return [];
     }
 
-    return (data || []).map(s => {
+    const filtered = (data || []).filter(s => {
+        const p1 = s.parent_id;
+        const p2 = s.other_parent_id;
+        
+        // IF a child has two guardians already AND the current parent is not one of them, hide it
+        if (p1 && p2) {
+            if (currentParentId && (p1 === currentParentId || p2 === currentParentId)) {
+                return true; // Current parent is already linked, show it (for confirmation/view)
+            }
+            return false; // Two guardians exist and neither is the current one -> HIDE
+        }
+        
+        return true; // 0 or 1 guardians -> Show it
+    });
+
+    return filtered.map(s => {
         const studentGrades = (s as any).student_grade || [];
         const activeGrade = studentGrades.find((sg: any) => sg.is_active) || studentGrades[0];
         const p1 = (s as any).parent;
@@ -679,7 +717,12 @@ export interface RegisterParentResult {
 }
 
 export async function registerParent(parentData: ParentData): Promise<RegisterParentResult> {
-    console.log('[Registration] Registering parent:', { phone: parentData.phone });
+    console.log('[Registration] Registering parent:', { phone: parentData.phone, existingId: parentData.parentId });
+
+    // 0. If we already have an ID (from a deliberate UI match), skip detection
+    if (parentData.parentId) {
+        return { parentId: parentData.parentId, isExisting: true };
+    }
     
     // 1. Credential-based duplicate detection only. Names are not unique.
     const safeVariants = phoneVariants(parentData.phone).filter(v => v.replace(/\D/g, '').length >= 9);
@@ -743,6 +786,7 @@ export async function registerParent(parentData: ParentData): Promise<RegisterPa
  */
 export async function linkStudentsToParent(parentId: string, students: StudentData[], schoolId: string): Promise<void> {
     console.log('[Registration] Linking students process started');
+    const registrationSessionId = crypto.randomUUID();
     
     // Fetch grades and academic year
     const [{ data: schoolGrades, error: gradesError }, { data: academicYear, error: academicYearError }] = await Promise.all([
@@ -1109,6 +1153,32 @@ export async function rollbackParentCreation(parentId: string): Promise<void> {
     if (deleteError) {
         throw new Error(`Failed to rollback parent creation: ${deleteError.message}`);
     }
+}
+
+export async function getGradesWithStreams(schoolId: string) {
+    const grades = await getGradesBySchool(schoolId);
+    const result: { grade_id: string; grade_name: string; stream_name?: string }[] = [];
+
+    for (const grade of grades || []) {
+        const classes = await getClassesByGrade(schoolId, grade.grade_id);
+
+        if ((classes || []).length > 0) {
+            classes.forEach((streamName: string) => {
+                result.push({
+                    grade_id: grade.grade_id,
+                    grade_name: grade.grade_name,
+                    stream_name: streamName,
+                });
+            });
+        } else {
+            result.push({
+                grade_id: grade.grade_id,
+                grade_name: grade.grade_name,
+            });
+        }
+    }
+
+    return result;
 }
 
 /**

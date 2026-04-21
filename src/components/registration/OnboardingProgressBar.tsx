@@ -4,11 +4,12 @@ import { motion } from 'motion/react';
 interface OnboardingProgressBarProps {
   currentStep: number;
   totalSteps?: number;
+  className?: string;
 }
 
-export default function OnboardingProgressBar({ currentStep, totalSteps = 3 }: OnboardingProgressBarProps) {
+export default function OnboardingProgressBar({ currentStep, totalSteps = 3, className }: OnboardingProgressBarProps) {
   return (
-    <div className="w-full max-w-[300px] mx-auto flex items-center justify-between relative py-4 px-2">
+    <div className={`w-full max-w-[300px] mx-auto flex items-center justify-between relative px-2 ${className || 'py-4'}`}>
       {/* Background Line (Grey) - Loading in animation */}
       <motion.div 
         initial={{ scaleX: 0 }}

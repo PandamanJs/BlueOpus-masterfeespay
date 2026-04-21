@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useMemo, Fragment } from "react";
 import { getStudentsByPhone, getInstitutionType } from "../data/students";
 import type { Student } from "../data/students";
-import { getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "../lib/supabase/api/transactions";
+import { getPendingTransactionsForStudent, getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "../lib/supabase/api/transactions";
 import type { Transaction } from "../types";
 import type { PaymentHistoryRecord } from "../lib/supabase/types";
 
@@ -36,31 +36,6 @@ interface Service {
     pricing_id?: string;
     invoice_id?: string; // Add this too for consistency
     categoryId?: string; // Link to fee category ID
-    category?: string;
-    quantity?: number;
-}
-
-function getServiceDedupKey(service: Service, studentId?: string) {
-    const owner = studentId || 'student';
-    if (service.invoice_id) return `${owner}:invoice:${service.invoice_id}`;
-
-    const pricingId = service.pricing_id || service.id;
-    const term = service.term ?? 'none';
-    const year = service.academicYear ?? 'none';
-    const invoiceNo = service.invoiceNo && service.invoiceNo !== '202' ? service.invoiceNo : '';
-    const description = (service.description || '').toLowerCase().replace(/\s+/g, ' ').trim();
-
-    return `${owner}:${pricingId}:${term}:${year}:${invoiceNo}:${description}`;
-}
-
-function dedupeServicesForStudent(services: Service[], studentId?: string) {
-    const seen = new Set<string>();
-    return services.filter(service => {
-        const key = getServiceDedupKey(service, studentId);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
 }
 
 
@@ -202,7 +177,7 @@ function ServiceTable({ services, onRemoveItem }: { services: Service[]; onRemov
                 <div className="flex-1 w-full">
                     {services.map((service, index) => (
                         <motion.div
-                            key={`${service.id}-${index}`}
+                            key={service.id}
                             className="box-border content-stretch flex min-h-[40px] items-center pl-[5px] pr-[56px] py-[6px] w-full relative group hover:bg-gradient-to-r hover:from-[rgba(149,227,108,0.03)] hover:to-transparent transition-all duration-200"
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -293,12 +268,14 @@ export default function AddServicesPage({
 
     useEffect(() => {
         if (activeStudentId) {
+            // Fetch all required data in parallel
             Promise.all([
                 getStudentFinancialSummary(activeStudentId),
+                getPendingTransactionsForStudent(activeStudentId),
                 getInvoicesWithBalanceForStudent(activeStudentId)
-            ]).then(([summary, invoices]) => {
+            ]).then(([summary, pending, invoices]) => {
                 setFinancialSummary(summary);
-                setPendingTransactions([]);
+                setPendingTransactions(pending);
                 setInvoicesWithBalance(invoices);
             });
         }
@@ -307,10 +284,9 @@ export default function AddServicesPage({
     // Get services for the active student
     const activeStudentServices = studentServices[activeStudentId] || [];
     const activeCartRefs = new Set(activeStudentServices.map(s => s.invoiceNo));
-    const canonicalOutstandingBalance = Number(financialSummary?.totalBalance ?? activeStudent?.balances ?? 0);
 
     // Determine net credit position
-    const hasNetDebt = canonicalOutstandingBalance > 0;
+    const hasNetDebt = (activeStudent?.balances || 0) > 0;
 
     const hasTuitionDebt = hasNetDebt && (pendingTransactions.some((tx) => {
         const meta_data = tx.meta_data as any;
@@ -333,9 +309,7 @@ export default function AddServicesPage({
             'transport': [] as Service[],
             'cafeteria': [] as Service[],
             'uniforms': [] as Service[],
-            'boarding': [] as Service[],
-            'tours': [] as Service[],
-            'clubs': [] as Service[]
+            'boarding': [] as Service[]
         };
 
         if (!activeStudentId) return summary;
@@ -350,8 +324,6 @@ export default function AddServicesPage({
             if (explicitCat === 'cafeteria' || explicitCat === 'canteen' || explicitCat === 'meal' || explicitCat === 'lunch') return 'cafeteria';
             if (explicitCat === 'boarding' || explicitCat === 'hostel' || explicitCat === 'bed') return 'boarding';
             if (explicitCat === 'uniforms' || explicitCat === 'uniform') return 'uniforms';
-            if (explicitCat === 'tours' || explicitCat === 'tour' || explicitCat === 'trip' || explicitCat === 'excursion') return 'tours';
-            if (explicitCat === 'clubs' || explicitCat === 'club' || explicitCat === 'society') return 'clubs';
 
             // Priority 2: Scan nested services (for invoices/aggregate items)
             const services = item.services || (item.invoice_items?.items) || [];
@@ -362,16 +334,12 @@ export default function AddServicesPage({
                     if (sCat === 'cafeteria' || sCat === 'canteen' || sCat === 'meal' || sCat === 'lunch') return 'cafeteria';
                     if (sCat === 'boarding' || sCat === 'hostel' || sCat === 'bed') return 'boarding';
                     if (sCat === 'uniforms' || sCat === 'uniform') return 'uniforms';
-                    if (sCat === 'tours' || sCat === 'tour' || sCat === 'trip' || sCat === 'excursion') return 'tours';
-                    if (sCat === 'clubs' || sCat === 'club' || sCat === 'society') return 'clubs';
 
                     const sName = (svc.name || svc.description || '').toLowerCase();
                     if (sName.includes('transport') || sName.includes('bus') || sName.includes('shuttle') || sName.includes('route') || sName.includes('zone') || sName.includes('fare')) return 'transport';
                     if (sName.includes('canteen') || sName.includes('lunch') || sName.includes('cafeteria') || sName.includes('meal') || sName.includes('food')) return 'cafeteria';
                     if (sName.includes('boarding') || sName.includes('hostel') || sName.includes('room') || sName.includes('bed')) return 'boarding';
                     if (sName.includes('uniform') || sName.includes('crest') || sName.includes('blazer') || sName.includes('tracksuit') || sName.includes('tie') || sName.includes('badge')) return 'uniforms';
-                    if (sName.includes('tour') || sName.includes('trip') || sName.includes('excursion') || sName.includes('expedition') || sName.includes('museum')) return 'tours';
-                    if (sName.includes('club') || sName.includes('society') || sName.includes('membership') || sName.includes('association')) return 'clubs';
                 }
             }
 
@@ -385,8 +353,6 @@ export default function AddServicesPage({
             if (desc.includes('canteen') || desc.includes('lunch') || desc.includes('cafeteria') || desc.includes('meal') || desc.includes('food') || ref.startsWith('cn-')) return 'cafeteria';
             if (desc.includes('boarding') || desc.includes('hostel') || desc.includes('room') || desc.includes('bed') || ref.startsWith('bd-')) return 'boarding';
             if (desc.includes('uniform') || desc.includes('crest') || desc.includes('blazer') || desc.includes('tracksuit') || desc.includes('tie') || desc.includes('badge')) return 'uniforms';
-            if (desc.includes('tour') || desc.includes('trip') || desc.includes('excursion') || desc.includes('expedition') || desc.includes('museum') || ref.startsWith('tr-')) return 'tours';
-            if (desc.includes('club') || desc.includes('society') || desc.includes('membership') || desc.includes('association') || ref.startsWith('cl-')) return 'clubs';
             return 'fees';
         };
 
@@ -436,7 +402,7 @@ export default function AddServicesPage({
             financialSummary.items.forEach((item: any) => {
                 if (item.balance > 0) {
                     // Avoid duplicating items already handled by invoices or Txs
-                    const isAlreadyHandled = [...summary.fees, ...summary.transport, ...summary.cafeteria, ...summary.uniforms, ...summary.boarding, ...summary.tours, ...summary.clubs]
+                    const isAlreadyHandled = [...summary.fees, ...summary.transport, ...summary.cafeteria, ...summary.uniforms]
                         .some(d => d.invoiceNo === item.invoice_number || d.id === item.invoice_id);
 
                     if (!isAlreadyHandled) {
@@ -548,9 +514,9 @@ export default function AddServicesPage({
             if (isTargetType(name) && !existingInvoices.has(inv.reference)) {
                 let amount = inv.balance_remaining || 0;
 
-                // Keep invoice-level truth authoritative, but guard against stale student summary totals.
-                if (canonicalOutstandingBalance > 0 && amount > canonicalOutstandingBalance) {
-                    amount = canonicalOutstandingBalance;
+                // Ensure we don't bring the full invoice amount if the student has a lower net balance (partial payment exists)
+                if (activeStudent && activeStudent.balances > 0 && amount > activeStudent.balances) {
+                    amount = activeStudent.balances;
                 }
 
                 debtsToAdd.push({
@@ -568,7 +534,7 @@ export default function AddServicesPage({
 
         // 3. Fallback: If the student object shows a balance but we couldn't find line-item matches, 
         // add it as a generic item so they can still pay it
-        if (debtsToAdd.length === 0 && activeStudent && canonicalOutstandingBalance > 0) {
+        if (debtsToAdd.length === 0 && activeStudent && activeStudent.balances > 0) {
             // Check if we already have a balance-related items in the cart
             const hasBalanceItem = Array.from(existingInvoices).some(ref => ref.startsWith('BAL-') || ref.startsWith('tx-') || ref.startsWith('inv-'));
 
@@ -579,7 +545,7 @@ export default function AddServicesPage({
                 debtsToAdd.push({
                     id: `fallback-${activeStudentId}`,
                     description: `${studentName} - ${gradeContext}Outstanding Fees`,
-                    amount: canonicalOutstandingBalance,
+                    amount: activeStudent.balances,
                     invoiceNo: `BAL-${activeStudent.admissionNumber || activeStudentId.slice(0, 4)}`,
                     academicYear: new Date().getFullYear(),
                     isDebt: true
@@ -708,8 +674,7 @@ export default function AddServicesPage({
                     invoiceNo: "202",
                     term: parseInt(service.term.replace(/\D/g, '')) || 1,
                     academicYear: new Date().getFullYear(),
-                    pricing_id: service.id, // PRESERVE THE ORIGINAL FEE ITEM ID
-                    grade: activeStudent?.grade
+                    pricing_id: service.id // PRESERVE THE ORIGINAL FEE ITEM ID
                 };
 
                 return newSvc;
@@ -734,9 +699,7 @@ export default function AddServicesPage({
     // Check if any services have been added
     const hasServices = Object.values(studentServices).some(services => services.length > 0);
 
-    // Use the onCheckout prop passed from App.tsx to ensure history is updated
-    // const navigateToPage = useAppStore(state => state.navigateToPage);
-
+    const navigateToPage = useAppStore(state => state.navigateToPage);
     const setCheckoutServices = useAppStore(state => state.setCheckoutServices);
     const setPaymentAmount = useAppStore(state => state.setPaymentAmount);
 
@@ -759,10 +722,9 @@ export default function AddServicesPage({
 
         setStudentServices(prev => {
             const current = (prev[activeStudentId] || []).filter(s => s && s.id);
-            const nextKey = getServiceDedupKey(safeService, activeStudentId);
 
             // Check for duplicates
-            if (current.some(s => s.id === safeService.id || getServiceDedupKey(s, activeStudentId) === nextKey)) {
+            if (current.some(s => s.id === safeService.id)) {
                 console.warn("Item already in cart:", safeService.id);
                 toast.error("Item already in cart");
                 return prev;
@@ -794,21 +756,21 @@ export default function AddServicesPage({
             const student = allStudents.find(s => s.id === studentId);
             const studentName = student ? student.name : "Student";
 
-            dedupeServicesForStudent(services, studentId).forEach(s => {
+            services.forEach(s => {
                 allCheckoutServices.push({
-                    id: `${studentId}-${s.id}`,
+                    id: s.id,
                     description: s.description,
                     amount: s.amount,
                     invoiceNo: s.invoiceNo,
                     invoice_id: s.invoice_id,
                     pricing_id: s.pricing_id,
                     studentName: studentName,
+                    studentId: studentId,
                     term: s.term,
                     academicYear: s.academicYear,
                     isDebt: s.isDebt,
                     categoryId: s.categoryId,
-                    grade: s.grade || student?.grade,
-                    studentId: student?.admissionNumber || studentId
+                    grade: s.grade || student?.grade
                 });
             });
         });
@@ -818,13 +780,7 @@ export default function AddServicesPage({
         setPaymentAmount(totalAmount);
 
         // Navigate to checkout summary
-        // Navigate to checkout summary using the prop that updates browser history
-        if (onCheckout) {
-            onCheckout(allCheckoutServices);
-        } else {
-            onNext();
-        }
-
+        navigateToPage('checkout');
     };
 
     return (
@@ -988,13 +944,12 @@ export default function AddServicesPage({
                         key="unified-popup"
                         onClose={() => setShowUnifiedPopup(false)}
                         onConfirm={(items) => {
-                            const uniqueItems = dedupeServicesForStudent(items, activeStudentId);
                             setStudentServices(prev => ({
                                 ...prev,
-                                [activeStudentId]: uniqueItems
+                                [activeStudentId]: items
                             }));
                             setShowUnifiedPopup(false);
-                            toast.success(`Successfully updated ${uniqueItems.length} items in cart`);
+                            toast.success(`Successfully updated ${items.length} items in cart`);
                         }}
                         schoolName={schoolName}
                         activeStudent={activeStudent}
@@ -1051,46 +1006,6 @@ function UnifiedServicesPopup({
     financialSummary?: any;
 }) {
     const [stagedItems, setStagedItems] = useState<Service[]>(initialItems);
-    const currentCalendarYear = new Date().getFullYear();
-    const currentMonthIndex = new Date().getMonth();
-    const activeStudentGradeId = activeStudent?.gradeId;
-
-    const MONTHS_BY_TERM = ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'];
-    const MONTH_INDEX: Record<string, number> = {
-        Jan: 0,
-        Feb: 1,
-        Mar: 2,
-        May: 4,
-        Jun: 5,
-        Jul: 6,
-        Sep: 8,
-        Oct: 9,
-        Nov: 10
-    };
-
-    const normalizeLabel = (value?: string | null) =>
-        (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    const isPastMonth = (month: string) => {
-        if (selectedAcademicYear > currentCalendarYear) return false;
-        if (selectedAcademicYear < currentCalendarYear) return true;
-        return MONTH_INDEX[month] < currentMonthIndex;
-    };
-
-    const removeStagedByPrefixes = (prefixes: string[]) => {
-        setStagedItems(prev => prev.filter(item => !prefixes.some(prefix => item.id.startsWith(prefix))));
-    };
-
-    const toggleScopedService = (service: Service, prefixes: string[], mode: 'single' | 'multi' = 'multi') => {
-        setStagedItems(prev => {
-            const exists = prev.some(s => s.id === service.id);
-            const scopedOut = prev.filter(item => !prefixes.some(prefix => item.id.startsWith(prefix)));
-            const base = mode === 'single' ? scopedOut : prev;
-            if (exists) return base.filter(s => s.id !== service.id);
-            return [...base, service];
-        });
-        haptics.selection();
-    };
 
     const buildServiceDescription = (s: any) => {
         let desc = s.name || s.description;
@@ -1250,18 +1165,18 @@ function UnifiedServicesPopup({
         
         // Current year: check month index
         if (typeof monthOrTerm === 'number') {
-            // Term 1: Ends when April (index 3) starts
-            if (monthOrTerm === 1 && currentMonth >= 3) return true;
-            // Term 2: Ends when August (index 7) starts
-            if (monthOrTerm === 2 && currentMonth >= 7) return true;
+            // Term 1 (Jan-Apr): Past if we are in May (index 4) or later
+            if (monthOrTerm === 1 && currentMonth > 3) return true;
+            // Term 2 (May-Aug): Past if we are in Sept (index 8) or later
+            if (monthOrTerm === 2 && currentMonth > 7) return true;
             // Term 3 (Sept-Dec): Never past if we are in the current year
             return false;
+        } else {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const targetIndex = months.findIndex(m => m.startsWith(monthOrTerm));
+            if (targetIndex === -1) return false;
+            return currentMonth > targetIndex;
         }
-
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const targetIndex = months.findIndex(m => m.startsWith(monthOrTerm as string));
-        if (targetIndex === -1) return false;
-        return currentMonth > targetIndex;
     };
     const [selectedSportsPlanId, setSelectedSportsPlanId] = useState<string>("");
     const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
@@ -1272,22 +1187,10 @@ function UnifiedServicesPopup({
 
     // Auto-select the student's grade when data loads or changes
     useEffect(() => {
-        const summaryYear = financialSummary?.items
-            ?.map((item: any) => item.academic_year || item.academicYear || item.year)
-            .find((year: any) => Number(year) >= currentCalendarYear);
-        setSelectedAcademicYear(Number(summaryYear) || currentCalendarYear);
-    }, [financialSummary, currentCalendarYear]);
-
-    useEffect(() => {
-        if (!activeStudent || !schoolData?.grade_pricing?.length) return;
-
-        const studentGrade = activeStudent.grade || '';
-        const gradeMatch = schoolData.grade_pricing.find(gp => gp.value === activeStudentGradeId)
-            || schoolData.grade_pricing.find(gp => normalizeLabel(studentGrade).startsWith(normalizeLabel(gp.name)))
-            || schoolData.grade_pricing.find(gp => normalizeLabel(gp.name).includes(normalizeLabel(studentGrade)));
-
-        setSelectedGrade(gradeMatch?.name || studentGrade);
-    }, [activeStudent, activeStudentGradeId, schoolData?.grade_pricing]);
+        if (activeStudent?.grade && !selectedGrade) {
+            setSelectedGrade(activeStudent.grade);
+        }
+    }, [activeStudent, selectedGrade]);
 
     // SMART AUTO-SELECT: Last used Transport & Cafeteria from history
     useEffect(() => {
@@ -1373,9 +1276,9 @@ function UnifiedServicesPopup({
         selectedGrade ? gp.name.toLowerCase().includes(selectedGrade.toLowerCase()) : true
     ) || [];
 
-    const selectedFee = schoolData?.grade_pricing?.find(gp => gp.value === activeStudentGradeId)
-        || schoolData?.grade_pricing?.find(gp => normalizeLabel(gp.name) === normalizeLabel(selectedGrade))
-        || schoolData?.grade_pricing?.find(gp => normalizeLabel(selectedGrade).startsWith(normalizeLabel(gp.name)));
+    const selectedFee = schoolData?.grade_pricing?.find(gp =>
+        gp.name.toLowerCase() === selectedGrade.toLowerCase()
+    );
 
     // Debt Lock Logic: Hide new services if outstanding balance exists for current category
     const activeTabDebts = debtSummary[activeTab as keyof typeof debtSummary] || [];
@@ -1688,7 +1591,24 @@ function UnifiedServicesPopup({
                                                                                 categoryId: schoolData?.category_ids?.tuition
                                                                             };
 
-                                                                            toggleScopedService(newService, [`fee-${selectedFee.value}-`], 'multi');
+                                                                            setStagedItems(prev => {
+                                                                                const isAlreadyStaged = prev.some(s => s.id === termId);
+
+                                                                                // Keep everything that isn't a "fee-" item OR is a "fee-" item for the CURRENT grade
+                                                                                const filtered = prev.filter(s => {
+                                                                                    if (!s.id.startsWith("fee-")) return true;
+                                                                                    return s.id.startsWith(`fee-${selectedFee.value}-`);
+                                                                                });
+
+                                                                                if (isAlreadyStaged) {
+                                                                                    // Toggle off
+                                                                                    return filtered.filter(s => s.id !== termId);
+                                                                                } else {
+                                                                                    // Accumulate (Multi-select)
+                                                                                    return [...filtered, newService];
+                                                                                }
+                                                                            });
+                                                                            haptics.selection();
                                                                         }}
                                                                         className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                             ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -1801,10 +1721,8 @@ function UnifiedServicesPopup({
                                                                                 const detected = detectFrequency(route.name);
                                                                                 if (['monthly', 'termly', 'yearly'].includes(detected)) {
                                                                                     setTransportFrequency(detected as any);
-                                                                                    removeStagedByPrefixes([`route-${route.id}-`]);
                                                                                 } else {
                                                                                     setTransportFrequency('monthly');
-                                                                                    removeStagedByPrefixes([`route-${route.id}-`]);
                                                                                 }
 
                                                                                 haptics.selection();
@@ -1942,7 +1860,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {transportFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].map((term) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-term-${term}` : `route-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2002,10 +1920,11 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : transportFrequency === 'monthly' ? (
-                                                                MONTHS_BY_TERM.map((month) => {
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                    .map((month) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-month-${month}` : `route-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
-                                                                    const isPast = isPastMonth(month);
 
                                                                     // Map month to term for invoice metadata
                                                                     const monthMap: Record<string, number> = {
@@ -2017,7 +1936,7 @@ function UnifiedServicesPopup({
                                                                     return (
                                                                         <button
                                                                             key={month}
-                                                                            disabled={!selectedRoute || isPast}
+                                                                            disabled={!selectedRoute}
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (!selectedRoute) return;
@@ -2033,12 +1952,16 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.transport
                                                                                 };
 
-                                                                                toggleScopedService(newService, [`route-${selectedRouteId}-yearly-`], 'multi');
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                                 : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
-                                                                                } ${!selectedRoute || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                } ${!selectedRoute ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
                                                                             <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
                                                                                 {isTermStaged && (
@@ -2047,7 +1970,7 @@ function UnifiedServicesPopup({
                                                                                     </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}{isPast ? ' passed' : ''}</span>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
                                                                         </button>
                                                                     );
                                                                 })
@@ -2067,7 +1990,11 @@ function UnifiedServicesPopup({
                                                                             pricing_id: selectedRouteId,
                                                                             categoryId: schoolData?.category_ids?.transport
                                                                         };
-                                                                        toggleScopedService(newService, [`route-${selectedRouteId}-term-`, `route-${selectedRouteId}-month-`], 'single');
+                                                                        setStagedItems(prev => {
+                                                                            const exists = prev.some(s => s.id === termId);
+                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                        });
+                                                                        haptics.selection();
                                                                     }}
                                                                     className={`h-[60px] col-span-3 rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isStaged(`route-${selectedRouteId}-yearly-${selectedAcademicYear}`)
                                                                         ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2176,10 +2103,8 @@ function UnifiedServicesPopup({
                                                                                 const detected = detectFrequency(room.name);
                                                                                 if (['termly', 'yearly'].includes(detected)) {
                                                                                     setBoardingFrequency(detected as any);
-                                                                                    removeStagedByPrefixes([`room-${room.id}-`]);
                                                                                 } else {
                                                                                     setBoardingFrequency('termly');
-                                                                                    removeStagedByPrefixes([`room-${room.id}-`]);
                                                                                 }
 
                                                                                 haptics.selection();
@@ -2317,7 +2242,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {boardingFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].map((term) => {
                                                                     const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-term-${term}` : `room-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2377,10 +2302,11 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : boardingFrequency === 'monthly' ? (
-                                                                MONTHS_BY_TERM.map((month) => {
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                    .map((month) => {
                                                                     const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-month-${month}` : `room-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
-                                                                    const isPast = isPastMonth(month);
 
                                                                     // Map month to term for invoice metadata
                                                                     const monthMap: Record<string, number> = {
@@ -2392,7 +2318,7 @@ function UnifiedServicesPopup({
                                                                     return (
                                                                         <button
                                                                             key={month}
-                                                                            disabled={!selectedBoardingRoom || isPast}
+                                                                            disabled={!selectedBoardingRoom}
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (!selectedBoardingRoom) return;
@@ -2408,12 +2334,16 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.boarding
                                                                                 };
 
-                                                                                toggleScopedService(newService, [`room-${selectedBoardingRoomId}-yearly-`], 'multi');
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                                 : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
-                                                                                } ${!selectedBoardingRoom || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                } ${!selectedBoardingRoom ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
                                                                             <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
                                                                                 {isTermStaged && (
@@ -2422,7 +2352,7 @@ function UnifiedServicesPopup({
                                                                                     </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}{isPast ? ' passed' : ''}</span>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
                                                                         </button>
                                                                     );
                                                                 })
@@ -2442,7 +2372,11 @@ function UnifiedServicesPopup({
                                                                             pricing_id: selectedBoardingRoomId,
                                                                             categoryId: schoolData?.category_ids?.boarding
                                                                         };
-                                                                        toggleScopedService(newService, [`room-${selectedBoardingRoomId}-term-`, `room-${selectedBoardingRoomId}-month-`], 'single');
+                                                                        setStagedItems(prev => {
+                                                                            const exists = prev.some(s => s.id === termId);
+                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                        });
+                                                                        haptics.selection();
                                                                     }}
                                                                     className={`h-[60px] col-span-3 rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isStaged(`room-${selectedBoardingRoomId}-yearly-${selectedAcademicYear}`)
                                                                         ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2550,10 +2484,8 @@ function UnifiedServicesPopup({
                                                                                 const detected = detectFrequency(plan.name);
                                                                                 if (['daily', 'weekly', 'monthly', 'termly'].includes(detected)) {
                                                                                     setCafeteriaFrequency(detected as any);
-                                                                                    removeStagedByPrefixes([`canteen-${plan.id}-`]);
                                                                                 } else {
                                                                                     setCafeteriaFrequency('monthly');
-                                                                                    removeStagedByPrefixes([`canteen-${plan.id}-`]);
                                                                                 }
 
                                                                                 haptics.selection();
@@ -2690,7 +2622,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {cafeteriaFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].map((term) => {
                                                                     const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-term-${term}` : `canteen-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2714,7 +2646,20 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
 
-                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-day-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
+                                                                                setStagedItems(prev => {
+                                                                                    const isAlreadyStaged = prev.some(s => s.id === termId);
+                                                                                    const filtered = prev.filter(s => {
+                                                                                        if (!s.id.startsWith("canteen-")) return true;
+                                                                                        return s.id.startsWith(`canteen-${selectedCanteenPlanId}-`);
+                                                                                    });
+
+                                                                                    if (isAlreadyStaged) {
+                                                                                        return filtered.filter(s => s.id !== termId);
+                                                                                    } else {
+                                                                                        return [...filtered, newService];
+                                                                                    }
+                                                                                });
+                                                                                haptics.selection();
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -2756,7 +2701,11 @@ function UnifiedServicesPopup({
                                                                                     pricing_id: selectedCanteenPlanId,
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
-                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-day-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
@@ -2791,7 +2740,11 @@ function UnifiedServicesPopup({
                                                                                     pricing_id: selectedCanteenPlanId,
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
-                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'} ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
@@ -2807,10 +2760,11 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'monthly' ? (
-                                                                MONTHS_BY_TERM.map((month) => {
+                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                    .map((month) => {
                                                                     const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-month-${month}` : `canteen-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
-                                                                    const isPast = isPastMonth(month);
 
                                                                     // Map month to term for invoice metadata
                                                                     const monthMap: Record<string, number> = {
@@ -2822,7 +2776,7 @@ function UnifiedServicesPopup({
                                                                     return (
                                                                         <button
                                                                             key={month}
-                                                                            disabled={!selectedCanteenPlan || isPast}
+                                                                            disabled={!selectedCanteenPlan}
                                                                             onClick={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (!selectedCanteenPlan) return;
@@ -2838,12 +2792,16 @@ function UnifiedServicesPopup({
                                                                                     categoryId: schoolData?.category_ids?.canteen
                                                                                 };
 
-                                                                                toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-term-`, `canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-day-`], 'multi');
+                                                                                setStagedItems(prev => {
+                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                });
+                                                                                haptics.selection();
                                                                             }}
                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-4 flex items-center gap-3 transition-all active:scale-[0.95] ${isTermStaged
                                                                                 ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
                                                                                 : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
-                                                                                } ${!selectedCanteenPlan || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                } ${!selectedCanteenPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                         >
                                                                             <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${isTermStaged ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
                                                                                 {isTermStaged && (
@@ -2852,7 +2810,7 @@ function UnifiedServicesPopup({
                                                                                     </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}{isPast ? ' passed' : ''}</span>
+                                                                            <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px] whitespace-nowrap ${isTermStaged ? 'text-white' : 'text-gray-900'}`}>{month}</span>
                                                                         </button>
                                                                     );
                                                                 })
@@ -2902,12 +2860,12 @@ function UnifiedServicesPopup({
                                                 );
                                             }
 
-                                            return Object.entries(grouped).map(([catName, items], catIdx) => {
+                                            return Object.entries(grouped).map(([catName, items]) => {
                                                 const hasActiveItems = items.some(svc => (otherQuantities[svc.id] || 0) > 0);
 
                                                 if (activeTab === 'trips') {
                                                     return (
-                                                        <div key={`trips-${catName}-${catIdx}`} className="w-full flex flex-col gap-5">
+                                                        <div key={`trips-${catName}`} className="w-full flex flex-col gap-5">
                                                             {items.map((svc) => {
                                                                 const qty = otherQuantities[svc.id] || 0;
                                                                 const itemId = `other-${svc.id}`;
@@ -2992,7 +2950,7 @@ function UnifiedServicesPopup({
                                                     const selectedSportsPlan = sportsItems.find(s => s.id === selectedSportsPlanId);
 
                                                     return (
-                                                        <div key={`sports-group-${catIdx}`} className="flex flex-col gap-6">
+                                                        <div className="flex flex-col gap-6">
                                                             {/* Plan Selection */}
                                                             <div className="flex flex-col gap-3">
                                                                 <label className="text-[13px] font-semibold text-gray-500 mb-1 ml-1 text-left w-full">Select Club / Sport</label>
@@ -3126,7 +3084,6 @@ function UnifiedServicesPopup({
                                                                                         e.preventDefault();
                                                                                         haptics.selection();
                                                                                         setSportsFrequency(freq as any);
-                                                                                        if (selectedSportsPlanId) removeStagedByPrefixes([`sports-${selectedSportsPlanId}-`]);
                                                                                     }}
                                                                                     className={`h-[48px] rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-2 ${sportsFrequency === freq
                                                                                         ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
@@ -3172,7 +3129,11 @@ function UnifiedServicesPopup({
                                                                                                     categoryId: schoolData?.category_ids?.other
                                                                                                 };
 
-                                                                                                toggleScopedService(newService, [`sports-${selectedSportsPlanId}-month-`, `sports-${selectedSportsPlanId}-year`], 'multi');
+                                                                                                setStagedItems(prev => {
+                                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                                });
+                                                                                                haptics.selection();
                                                                                             }}
                                                                                             className={`h-[60px] rounded-[12px] border-[1.5px] px-2 flex items-center justify-center gap-2 transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                                         >
@@ -3181,15 +3142,16 @@ function UnifiedServicesPopup({
                                                                                     );
                                                                                 })
                                                                             ) : sportsFrequency === 'monthly' ? (
-                                                                                MONTHS_BY_TERM.map((month) => {
+                                                                                ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov']
+                                                                                    .filter(month => !isPastDate(month, selectedAcademicYear))
+                                                                                    .map((month) => {
                                                                                     const termId = `sports-${selectedSportsPlanId}-month-${month}`;
                                                                                     const isTermStaged = isStaged(termId);
-                                                                                    const isPast = isPastMonth(month);
 
                                                                                     return (
                                                                                         <button
                                                                                             key={month}
-                                                                                            disabled={!selectedSportsPlan || isPast}
+                                                                                            disabled={!selectedSportsPlan}
                                                                                             onClick={(e) => {
                                                                                                 e.preventDefault();
                                                                                                 if (!selectedSportsPlan) return;
@@ -3204,11 +3166,15 @@ function UnifiedServicesPopup({
                                                                                                     categoryId: schoolData?.category_ids?.other
                                                                                                 };
 
-                                                                                                toggleScopedService(newService, [`sports-${selectedSportsPlanId}-term-`, `sports-${selectedSportsPlanId}-year`], 'multi');
+                                                                                                setStagedItems(prev => {
+                                                                                                    const exists = prev.some(s => s.id === termId);
+                                                                                                    return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                                });
+                                                                                                haptics.selection();
                                                                                             }}
-                                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan || isPast ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                                            className={`h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isTermStaged ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                                         >
-                                                                                            <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px]">{month}{isPast ? ' passed' : ''}</span>
+                                                                                            <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[12px]">{month}</span>
                                                                                         </button>
                                                                                     );
                                                                                 })
@@ -3228,7 +3194,11 @@ function UnifiedServicesPopup({
                                                                                             pricing_id: selectedSportsPlanId,
                                                                                             categoryId: schoolData?.category_ids?.other
                                                                                         };
-                                                                                        toggleScopedService(newService, [`sports-${selectedSportsPlanId}-term-`, `sports-${selectedSportsPlanId}-month-`], 'single');
+                                                                                        setStagedItems(prev => {
+                                                                                            const exists = prev.some(s => s.id === termId);
+                                                                                            return exists ? prev.filter(s => s.id !== termId) : [...prev, newService];
+                                                                                        });
+                                                                                        haptics.selection();
                                                                                     }}
                                                                                     className={`col-span-3 h-[60px] rounded-[12px] border-[1.5px] flex items-center justify-center transition-all active:scale-[0.95] ${isStaged(`sports-${selectedSportsPlanId}-year`) ? 'bg-[#003630] border-[#003630] text-white shadow-[0px_8px_25px_rgba(0,54,48,0.25)]' : 'bg-white border-gray-100 text-gray-900'} ${!selectedSportsPlan ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                                                                 >

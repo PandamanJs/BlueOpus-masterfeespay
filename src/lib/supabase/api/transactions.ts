@@ -413,14 +413,18 @@ function buildInvoiceSummaryItem(row: any, transactions: any[], source: 'invoice
         invoice_id: getInvoiceId(row),
         invoice_number: getInvoiceReference(row),
         name: getInvoiceName(row),
+        description: row?.description || row?.service_name || services[0]?.description || services[0]?.name || getInvoiceName(row),
         expected: total,
         collected,
         invoiced: total,
         balance,
         status: balance <= 0 ? 'cleared' : (row?.status || 'unpaid'),
+        raw_status: row?.status || null,
         term: row?.term || row?.invoice_items?.meta?.term,
         academic_year: row?.year || row?.academic_year || row?.invoice_items?.meta?.academic_year,
         initiated_at: row?.created_at || row?.issued_at || row?.date_issued || row?.payment_date || row?.initiated_at || null,
+        student_id: row?.student_id || null,
+        admission_number: row?.admission_number || null,
         services,
         transactions: matchedTransactions,
         source,
@@ -626,6 +630,7 @@ export async function getStudentsActualDebt(studentIds: string[]): Promise<Recor
     return getStudentsOutstandingBalances(studentIds);
 }
 
+
 export async function getInvoicesWithBalanceForStudent(studentId: string): Promise<PaymentHistoryRecord[]> {
     try {
         const summary = await getStudentFinancialSnapshot(studentId);
@@ -663,6 +668,7 @@ export async function getInvoicesWithBalanceForStudent(studentId: string): Promi
         return []; 
     }
 }
+
 
 export async function getStudentsUnpaidInvoicesCount(studentIds: string[]): Promise<Record<string, number>> {
     if (!studentIds.length) return {};
@@ -735,7 +741,7 @@ async function getStudentFinancialSummaryLegacy(studentId: string): Promise<any>
             feeItemsResp
         ] = await Promise.all([
             supabase.from('students').select('student_id, school_id, first_name, last_name, admission_number, student_grade(grade_id, grade:grades(grade_name, grade_id))').eq('student_id', studentId).single(),
-            supabase.from('invoices').select('*').eq('student_id', studentId).neq('status', 'void'),
+            supabase.from('invoices').select('*, joined_items:invoice_items(*)').eq('student_id', studentId).neq('status', 'void'),
             supabase.from('transactions').select('*').eq('student_id', studentId).in('status', ['success', 'successful', 'completed']),
             supabase.from('student_fee_enrollments').select('*, fee_items(*)').eq('student_id', studentId).eq('is_active', true),
             supabase.from('fee_items').select('*, category:fee_categories(category)').eq('is_active', true)
@@ -801,12 +807,35 @@ async function getStudentFinancialSummaryLegacy(studentId: string): Promise<any>
         //    Fee items/enrollments are only used as fallback for services with no invoice yet.
         const invoiceItems: any[] = invoices.map(inv => {
             const total = Number((inv as any).total_amount_cached || inv.total_amount || 0);
-            let name = inv.service_name;
-            if (!name && inv.invoice_items?.items && Array.isArray(inv.invoice_items.items)) {
-                const firstItem = inv.invoice_items.items[0];
-                name = firstItem.description || firstItem.name;
+            const term = (inv as any).term || inv.invoice_items?.meta?.term;
+            const year = (inv as any).year || inv.invoice_items?.meta?.academic_year;
+
+            const items = Array.isArray((inv as any).joined_items)
+                ? (inv as any).joined_items
+                : (Array.isArray(inv.invoice_items) 
+                    ? inv.invoice_items 
+                    : (inv.invoice_items?.items && Array.isArray(inv.invoice_items.items) ? inv.invoice_items.items : []));
+
+            let name = "";
+            
+            // Prioritize item description over generic service_name
+            if (items.length > 0) {
+                const firstItem = items[0];
+                name = firstItem.description || firstItem.name || "";
             }
-            if (!name) name = 'School Fee Payment';
+            
+            // Fallback to top-level service_name
+            if (!name) {
+                name = (inv as any).service_name || "";
+            }
+            
+            if (!name && term && year) {
+                name = `Term ${term} (${year}) School Fees`;
+            } else if (!name && term) {
+                name = `Term ${term} School Fees`;
+            }
+            
+            if (!name) name = 'School Fees';
 
             return {
                 type: 'invoice',
@@ -814,6 +843,7 @@ async function getStudentFinancialSummaryLegacy(studentId: string): Promise<any>
                 invoice_id: (inv as any).invoice_id || inv.id,
                 invoice_number: inv.invoice_number,
                 name: name,
+                description: name,
                 expected: total,
                 collected: 0,
                 invoiced: total,
@@ -826,48 +856,7 @@ async function getStudentFinancialSummaryLegacy(studentId: string): Promise<any>
             };
         });
 
-        // 4. Fallbacks
-        const fallbackItems: any[] = [];
-        const hasTuitionInvoice = invoiceItems.some(ii => {
-            const n = ii.name.toLowerCase();
-            return n.includes('tuition') || n.includes('school fees') || n.includes('academic');
-        });
-        if (!hasTuitionInvoice && tuitionPrice > 0) {
-            fallbackItems.push({
-                type: 'tuition',
-                name: `${activeGradeName} Tuition Fees`,
-                expected: tuitionPrice,
-                collected: 0,
-                invoiced: 0,
-                balance: tuitionPrice,
-                status: 'unpaid',
-                initiated_at: null,
-                transactions: []
-            });
-        }
-
-        enrollments.forEach((en: any) => {
-            const item = en.fee_items;
-            const itemName = (item?.name || 'Service').toLowerCase();
-            const isCovered = invoiceItems.some(ii => ii.name.toLowerCase().includes(itemName));
-            if (!isCovered) {
-                const price = en.override_amount !== null ? Number(en.override_amount) : Number(item?.amount || 0);
-                fallbackItems.push({
-                    type: 'subscription',
-                    id: en.id,
-                    name: item?.name || 'Service',
-                    expected: price,
-                    collected: 0,
-                    invoiced: 0,
-                    balance: price,
-                    status: 'unpaid',
-                    initiated_at: null,
-                    transactions: []
-                });
-            }
-        });
-
-        const allItems = [...invoiceItems, ...fallbackItems];
+        const allItems = [...invoiceItems];
 
         // 5. Attribute payments — match each transaction to exactly ONE item
         let unallocatedPaymentsTotal = 0;

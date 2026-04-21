@@ -146,7 +146,7 @@ async function fetchStudentsForParentId(parentId: string): Promise<StudentWithSc
 /**
  * Get parent by phone number - queries `parents` table in Master-fees Database.
  */
-export async function getParentByPhone(phone: string): Promise<ParentWithStudents | null> {
+export async function getParentByPhone(phone: string, schoolId?: string): Promise<ParentWithStudents | null> {
     try {
         const variants = phoneVariants(phone).filter(v => v.replace(/\D/g, '').length >= 9);
         console.log('[getParentByPhone] Querying with variants:', variants);
@@ -154,35 +154,40 @@ export async function getParentByPhone(phone: string): Promise<ParentWithStudent
         const { data: parentRaw, error: parentError } = await supabase
             .from('parents')
             .select('*')
-            .in('phone_number', variants)
+            .or(phoneOrFilter('phone_number', phone))
             .limit(1)
             .maybeSingle();
 
-        if (parentError) handleSupabaseError(parentError, 'getParentByPhone');
-        if (!parentRaw) {
-            console.warn('[getParentByPhone] No parent found for phone:', phone);
+        if (parentError) {
+            handleSupabaseError(parentError, 'getParentByPhone');
             return null;
         }
-        console.log('[getParentByPhone] Found parent:', parentRaw.parent_id);
 
-        const parent: Parent = {
+        if (!parentRaw) return null;
+
+        const parent = {
+            ...parentRaw,
             id: parentRaw.parent_id,
             name: `${parentRaw.first_name || ''} ${parentRaw.last_name || ''}`.trim(),
             phone: parentRaw.phone_number,
-            email: parentRaw.email,
-            address: null,
-            created_at: parentRaw.created_at,
+            created_at: null,
             updated_at: null,
         } as unknown as Parent;
 
-        const mappedStudents = await fetchStudentsForParentId(parent.id);
+        let mappedStudents = await fetchStudentsForParentId(parent.id);
+
+        if (schoolId) {
+            console.log('[getParentByPhone] Applying school filter:', schoolId);
+            mappedStudents = mappedStudents.filter((student: any) => student.school_id === schoolId);
+        }
 
         return { ...parent, students: mappedStudents as StudentWithSchool[] };
     } catch (error) {
-        console.error('[getParentByPhone] Error:', error);
-        throw error;
+        console.error('Exception in getParentByPhone:', error);
+        return null;
     }
 }
+
 
 /**
  * Get parent by email address.
@@ -221,8 +226,8 @@ export async function getParentByEmail(email: string): Promise<ParentWithStudent
 /**
  * Get students for a parent by phone number.
  */
-export async function getStudentsByParentPhone(phone: string): Promise<StudentWithSchool[]> {
-    const parentData = await getParentByPhone(phone);
+export async function getStudentsByParentPhone(phone: string, schoolId?: string): Promise<StudentWithSchool[]> {
+    const parentData = await getParentByPhone(phone, schoolId);
     return parentData?.students || [];
 }
 

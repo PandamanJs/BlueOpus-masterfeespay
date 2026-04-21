@@ -362,6 +362,8 @@ function ReceiptRowInline({
         schoolName,
         totalAmount: amountVal,
         parentName: parentName,
+        grade: studentGrade,
+        admissionNumber: studentId,
         refNumber: `000${receiptNo}`.slice(-12),
         dateTime: formattedDate,
         scheduleId: `#${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`,
@@ -371,7 +373,8 @@ function ReceiptRowInline({
           amount: amountVal,
           invoiceNo: String(receiptNo || "0000"),
           studentName: String((studentName || "").split(" - ")[0] || ""),
-          class: studentGrade,
+          grade: studentGrade,
+          studentId: studentId
         }],
       });
       toast.success("Receipt downloaded!");

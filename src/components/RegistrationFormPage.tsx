@@ -19,9 +19,23 @@ type RegistrationStep = 'parent' | 'students' | 'review';
 type StudentBalanceDispute = BalanceDisputeDetails & { note: string };
 
 export default function RegistrationFormPage({ onBack, onComplete }: RegistrationFormPageProps) {
-  const [currentStep, setCurrentStep] = useState<RegistrationStep>('parent');
-  const [parentData, setParentData] = useState<ParentData | null>(null);
-  const [studentsData, setStudentsData] = useState<StudentData[]>([]);
+  const PERSISTENCE_KEY = 'masterfees_registration_v1';
+
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>(() => {
+    const saved = localStorage.getItem(`${PERSISTENCE_KEY}_step`);
+    return (saved as RegistrationStep) || 'parent';
+  });
+
+  const [parentData, setParentData] = useState<ParentData | null>(() => {
+    const saved = localStorage.getItem(`${PERSISTENCE_KEY}_parent`);
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [studentsData, setStudentsData] = useState<StudentData[]>(() => {
+    const saved = localStorage.getItem(`${PERSISTENCE_KEY}_students`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [studentBalanceDisputes, setStudentBalanceDisputes] = useState<Record<string, StudentBalanceDispute>>({});
   const [schools, setSchools] = useState<School[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,10 +46,23 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
   const [duplicateMatchType, setDuplicateMatchType] = useState<'phone' | 'email' | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    localStorage.setItem(`${PERSISTENCE_KEY}_step`, currentStep);
+    if (parentData) localStorage.setItem(`${PERSISTENCE_KEY}_parent`, JSON.stringify(parentData));
+    if (studentsData.length > 0) localStorage.setItem(`${PERSISTENCE_KEY}_students`, JSON.stringify(studentsData));
+  }, [currentStep, parentData, studentsData]);
+
+  const clearPersistence = () => {
+    localStorage.removeItem(`${PERSISTENCE_KEY}_step`);
+    localStorage.removeItem(`${PERSISTENCE_KEY}_parent`);
+    localStorage.removeItem(`${PERSISTENCE_KEY}_students`);
+  };
+
   // ── Back-navigation fix ──────────────────────────────────────────────────
   // We need a ref so the popstate handler always sees the CURRENT step without
   // needing to re-register the listener on every render.
-  const currentStepRef = useRef<RegistrationStep>('parent');
+  const currentStepRef = useRef<RegistrationStep>(currentStep);
   useEffect(() => { currentStepRef.current = currentStep; }, [currentStep]);
 
   // Capture fires before App.tsx's bubble-phase listener, so we can handle
@@ -160,6 +187,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || "";
         console.log('[Registration] Finalizing with school:', schoolName);
 
+        clearPersistence();
         onComplete({
           name: parentData.fullName,
           phone: parentData.phone,
@@ -259,6 +287,7 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
           await linkStudentsToParent(newParent.parent_id, studentsWithDisputes, parentData.schoolId);
           toast.success('Registration completed successfully!');
           const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
+          clearPersistence();
           onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName, userId: newParent.parent_id });
         }
       } catch (err) {
@@ -292,57 +321,58 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4 pb-6"
+            className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/60 backdrop-blur-[4px]"
           >
             <motion.div
-              initial={{ y: 60, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 60, opacity: 0 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              className="w-full max-w-sm bg-white rounded-[28px] overflow-hidden shadow-2xl"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="w-full bg-white rounded-t-[12px] overflow-hidden shadow-[0_-8px_40px_rgba(0,0,0,0.3)] pb-safe pointer-events-auto"
             >
               {/* Header */}
-              <div className="bg-amber-50 border-b border-amber-100 px-6 pt-6 pb-5">
-                <div className="size-12 rounded-[16px] bg-amber-400/20 flex items-center justify-center mb-3">
-                  <AlertTriangle size={24} className="text-amber-600" />
+              <div className="bg-amber-50 border-b border-amber-100 px-6 pt-6 pb-5 flex items-start gap-4 rounded-t-[12px]">
+                <div className="size-10 rounded-full bg-amber-400/20 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={20} className="text-amber-600" />
                 </div>
-                <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.4px]">
-                  Existing Account Found
-                </h2>
-                <p className="text-[13px] text-gray-500 mt-1 leading-relaxed">
-                  Your {duplicateMatchType === 'email' ? 'email address' : 'phone number'} is already linked to an account under the name:
-                </p>
-                <p className="text-[17px] font-bold text-[#003630] mt-1 tracking-[-0.3px]">
-                  {duplicateAccountName}
-                </p>
+                <div className="flex-1">
+                  <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630] tracking-[-0.3px] leading-tight">
+                    Existing Account Found
+                  </h2>
+                  <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
+                    Your {duplicateMatchType === 'email' ? 'email' : 'phone number'} is already linked to:
+                  </p>
+                  <p className="text-[16px] font-bold text-[#003630] mt-1 tracking-[-0.3px]">
+                    {duplicateAccountName}
+                  </p>
+                </div>
               </div>
 
               {/* Body */}
-              <div className="px-6 py-5 space-y-3">
+              <div className="px-6 py-6 space-y-4">
                 <p className="text-[13px] text-gray-500 leading-relaxed">
                   Is this your account? Confirming will link your children to this existing profile.
                 </p>
 
-                {/* Yes button */}
+                {/* Continue anyway option */}
+                <button
+                  onClick={handleRejectDuplicate}
+                  className="w-full h-14 rounded-[16px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center active:scale-[0.98] transition-all shadow-md"
+                >
+                  Continue anyway
+                </button>
+
+                {/* Confirm existing account option */}
                 <button
                   onClick={handleConfirmExistingAccount}
-                  className="w-full h-13 rounded-[16px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_6px_16px_rgba(0,54,48,0.2)] py-3"
+                  className="w-full h-14 rounded-[16px] border-[1.5px] border-gray-100 text-gray-500 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
                 >
-                  <CheckCircle2 size={18} className="text-[#95e36c]" />
+                  <CheckCircle2 size={18} className="text-gray-400" />
                   Yes, that's my account
                 </button>
 
-                {/* No button */}
-                <button
-                  onClick={handleRejectDuplicate}
-                  className="w-full h-13 rounded-[16px] border-[1.5px] border-gray-200 text-gray-600 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all py-3"
-                >
-                  <X size={18} />
-                  No, create a new account
-                </button>
-
-                <p className="text-[11px] text-center text-gray-400 pt-1">
-                  If you're unsure, contact your school's administration.
+                <p className="text-[11px] text-center text-gray-400 pt-2 uppercase tracking-[1px] font-bold">
+                  Requires Admin Approval
                 </p>
               </div>
             </motion.div>
@@ -350,8 +380,8 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
         )}
       </AnimatePresence>
       <AnimatePresence mode="wait">
-
-      {currentStep === 'parent' && (
+        <div className={`transition-opacity duration-300 ${showDuplicateModal ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          {currentStep === 'parent' && (
         <motion.div
           key="step-parent"
           initial={{ opacity: 0, x: -20 }}
@@ -403,7 +433,8 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
             isSubmitting={isSubmitting}
           />
         </motion.div>
-      )}
+          )}
+        </div>
       </AnimatePresence>
     </div>
   );

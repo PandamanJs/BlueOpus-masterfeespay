@@ -13,14 +13,19 @@ interface CheckoutService {
   amount: number;
   invoiceNo: string;
   studentName: string;
+  studentId?: string;
+  grade?: string;
 }
 
 interface DownloadReceiptPageProps {
   totalAmount: number;
   schoolName: string;
+  schoolLogo?: string | null;
   services?: CheckoutService[];
   onGoHome: () => void;
   parentName?: string;
+  admissionNumber?: string;
+  grade?: string;
 }
 
 // MasterFeesLogo component removed in favor of LogoHeader
@@ -30,6 +35,7 @@ import { ModernReceipt } from "./common/ModernReceipt";
 export default function DownloadReceiptPage({
   totalAmount,
   schoolName,
+  schoolLogo,
   services,
   onGoHome,
   parentName
@@ -60,7 +66,10 @@ export default function DownloadReceiptPage({
         dateTime,
         scheduleId,
         services,
-        parentName
+        parentName,
+        schoolLogo,
+        admissionNumber: (services && services[0]?.studentId) || '',
+        grade: (services && services[0]?.grade) || ''
       });
       toast.success("Receipt downloaded successfully!");
       setShowShareMenu(false);
@@ -69,6 +78,7 @@ export default function DownloadReceiptPage({
       toast.error("Failed to download receipt. Please try again.");
     }
   };
+
 
   useEffect(() => {
     if (!hasDownloadedRef.current) {
@@ -88,7 +98,7 @@ export default function DownloadReceiptPage({
       `Amount: K${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
       `Reference: ${refNumber}\n` +
       `Date: ${dateTime}\n\n` +
-      `Thank you for using Master-Fees!`
+      `Thank you for your payment to ${schoolName}!`
     );
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
     toast.success("Opening email client...");
@@ -102,7 +112,7 @@ export default function DownloadReceiptPage({
       `Amount: K${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
       `Reference: ${refNumber}\n` +
       `Date: ${dateTime}\n\n` +
-      `Paid via Master-Fees`
+      `Official Payment Receipt`
     );
     window.open(`https://wa.me/?text=${message}`, '_blank');
     toast.success("Opening WhatsApp...");
@@ -116,8 +126,8 @@ export default function DownloadReceiptPage({
     qty: 1,
     unitPrice: s.amount,
     total: s.amount,
-    amtPaid: totalAmount, // Assuming totalAmount is what's paid now
-    balance: Math.max(0, s.amount - totalAmount)
+    amtPaid: totalAmount >= (services?.reduce((acc, curr) => acc + curr.amount, 0) || 0) ? s.amount : Math.min(s.amount, totalAmount / (services?.length || 1)), // Simple proportional distribution for preview
+    balance: Math.max(0, s.amount - (totalAmount >= (services?.reduce((acc, curr) => acc + curr.amount, 0) || 0) ? s.amount : Math.min(s.amount, totalAmount / (services?.length || 1))))
   })) || [
     {
         studentName: 'Student Name',
@@ -129,6 +139,9 @@ export default function DownloadReceiptPage({
         balance: 0
     }
   ];
+
+  const totalCharged = previewItems.reduce((acc, curr) => acc + curr.total, 0);
+  const totalBalance = previewItems.reduce((acc, curr) => acc + curr.balance, 0);
 
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col">
@@ -148,22 +161,23 @@ export default function DownloadReceiptPage({
 
           {/* Receipt Preview - Scaled to fit mobile width */}
           <div className="w-full overflow-hidden rounded-[24px] border border-gray-100 shadow-2xl bg-white flex justify-center py-2 relative">
-             <div className="scale-[0.55] origin-top -mb-[380px]">
+             <div className="scale-[0.55] origin-top -mb-[420px]">
                 <ModernReceipt 
                    schoolName={schoolName}
+                   schoolLogo={schoolLogo}
                    receiptNo={refNumber}
                    date={dateTime}
                    paymentRef={refNumber}
                    paymentMethod="Mobile Money"
                    billedTo={parentName || 'Parent'}
-                   grade={services?.[0]?.class || 'N/A'}
-                   studentId={services?.[0]?.id || 'N/A'}
+                   grade={services?.[0]?.grade || (services?.[0] as any)?.class || 'N/A'}
+                   studentId={services?.[0]?.studentId || services?.[0]?.id || 'N/A'}
                    items={previewItems}
-                   totalFeesCharged={previewItems.reduce((acc, curr) => acc + curr.total, 0)}
+                   totalFeesCharged={totalCharged}
                    amountPaid={totalAmount}
-                   balanceOwing={previewItems.reduce((acc, curr) => acc + curr.balance, 0)}
+                   balanceOwing={totalBalance}
                    nextPaymentDate="30/05/2026"
-                   statusBadge={totalAmount >= previewItems.reduce((acc, curr) => acc + curr.total, 0) ? 'Paid' : 'Partly Paid'}
+                   statusBadge={totalAmount >= totalCharged ? 'Paid' : 'Partly Paid'}
                 />
              </div>
           </div>          {/* Buttons Area */}

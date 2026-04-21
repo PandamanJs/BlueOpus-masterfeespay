@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Search, X, Loader2, Pencil, ChevronDown, User, Sparkles, UserRoundPlus, ChevronRight, Info } from 'lucide-react';
+import { Plus, Search, X, Loader2, Pencil, ChevronDown, User, Sparkles, UserRoundPlus, ChevronRight, Info, AlertTriangle, Check } from 'lucide-react';
 import { type ParentData } from './ParentInformationPage';
 import { type StudentData, getGradesBySchool, getClassesByGrade, type SchoolGrade } from '../../lib/supabase/api/registration';
 import { haptics } from '../../utils/haptics';
@@ -7,6 +7,7 @@ import LogoHeader from '../common/LogoHeader';
 import OnboardingProgressBar from './OnboardingProgressBar';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppStore } from '../../stores/useAppStore';
+import { toast } from 'sonner';
 
 interface StudentsPageProps {
   parentData: ParentData;
@@ -146,7 +147,6 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-
   const [availableGrades, setAvailableGrades] = useState<SchoolGrade[]>([]);
   const [gradeClassOptions, setGradeClassOptions] = useState<GradeClassOption[]>([]);
   const [gradeClassQuery, setGradeClassQuery] = useState('');
@@ -156,6 +156,8 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const [showSimilarStudentModal, setShowSimilarStudentModal] = useState(false);
   const [searchResults, setSearchResults] = useState<StudentData[]>([]);
   const [smartMatchResults, setSmartMatchResults] = useState<StudentData[]>([]);
+  const [showSmartMatchModal, setShowSmartMatchModal] = useState(false);
+  const [showSmartMatchResults, setShowSmartMatchResults] = useState(true);
   const clearDuplicateMatches = pendingManualStudent
     ? smartMatchResults.filter(match => isClearDuplicateStudent(match, pendingManualStudent))
     : [];
@@ -189,6 +191,29 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     studentId: '',
   });
 
+  // Levenshtein distance for fuzzy student-name matching
+  const getFuzzyDistance = (s1: string, s2: string) => {
+    const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+    for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
+    for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
+    for (let j = 1; j <= s2.length; j += 1) {
+      for (let i = 1; i <= s1.length; i += 1) {
+        const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        track[j][i] = Math.min(
+          track[j][i - 1] + 1,
+          track[j - 1][i] + 1,
+          track[j - 1][i - 1] + indicator
+        );
+      }
+    }
+    return track[s2.length][s1.length];
+  };
+
+  const calculateSimilarity = (s1: string, s2: string) => {
+    const longer = s1.length > s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - getFuzzyDistance(s1.toLowerCase(), s2.toLowerCase())) / longer.length;
+  };
   // ── Back-navigation fix for the Add/Edit form ────────────────────────────
   const showAddFormRef = useRef(showAddForm);
   useEffect(() => { showAddFormRef.current = showAddForm; }, [showAddForm]);
@@ -211,7 +236,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   }, [setNavigationDirection]);
 
   useEffect(() => {
-    const fetchGrades = async () => {
+    async function loadData() {
       setIsLoadingMetadata(true);
       try {
         const grades = await getGradesBySchool(parentData.schoolId);
@@ -236,17 +261,17 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       } finally {
         setIsLoadingMetadata(false);
       }
-    };
-    fetchGrades();
+    }
+    loadData();
   }, [parentData.schoolId]);
-
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (searchQuery.trim().length >= 2) {
         try {
           const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
-          const results = await searchStudentsByName(searchQuery, parentData.schoolId);
+          const results = await searchStudentsByName(searchQuery, parentData.schoolId, parentData.parentId);
           setSearchResults(results);
+
         } catch (error) {
           console.error("Search error:", error);
           setSearchResults([]);
@@ -259,25 +284,47 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     return () => clearTimeout(timer);
   }, [searchQuery, parentData.schoolId]);
 
+  const [collisionDetected, setCollisionDetected] = useState<boolean>(false);
+
   useEffect(() => {
-    if (!showAddForm || editingId) return; // Only do smart match when adding new manually
+    if (!showAddForm || editingId) return;
     const timer = setTimeout(async () => {
-      if (newStudent.name.trim().length >= 2) {
+      if (newStudent.name.trim().length >= 3) {
         try {
           const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
-          const results = await searchStudentsByName(newStudent.name, parentData.schoolId);
-          // Filter out students already added
-          setSmartMatchResults(results.filter(r => !students.find(s => s.id === r.id)));
+          const results = await searchStudentsByName(newStudent.name, parentData.schoolId, parentData.parentId);
+
+          // Filter out students already added to the local session list
+          const relevantMatches = results.filter(r => !students.find(s => s.id === r.id));
+
+          // Enhanced fuzzy sorting for matches
+          const matchedWithScores = relevantMatches.map(m => ({
+            ...m,
+            score: calculateSimilarity(newStudent.name, m.name)
+          })).sort((a, b) => b.score - a.score);
+
+          setSmartMatchResults(matchedWithScores.filter(m => m.score > 0.4));
+
+          // Check for exact name + class collision in the database
+          const exactCollision = matchedWithScores.some(m =>
+            m.score > 0.95 &&
+            m.grade === newStudent.grade &&
+            (newStudent.class === 'General' || m.class === newStudent.class)
+          );
+          setCollisionDetected(exactCollision);
         } catch (error) {
           setSmartMatchResults([]);
+          setCollisionDetected(false);
         }
       } else {
         setSmartMatchResults([]);
+        setCollisionDetected(false);
       }
-    }, 500);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [newStudent.name, parentData.schoolId, showAddForm, editingId, students]);
+  }, [newStudent.name, newStudent.grade, newStudent.class, parentData.schoolId, showAddForm, editingId, students]);
+
 
   const addStudent = (student: StudentData) => {
     console.log('[Registration] addStudent called:', student);
@@ -330,6 +377,20 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       isValid = false;
     }
 
+    // Check for local duplicates (same name, grade, class in the list already)
+    const isLocalDuplicate = students.some(s =>
+      s.id !== editingId &&
+      s.name.trim().toLowerCase() === newStudent.name.trim().toLowerCase() &&
+      s.grade === newStudent.grade &&
+      s.class === newStudent.class
+    );
+
+    if (isLocalDuplicate) {
+      errors.name = 'Duplicate student in your list';
+      isValid = false;
+      toast.error('You have already added this student to your application.');
+    }
+
     setFormErrors(errors);
     return isValid;
   };
@@ -337,6 +398,15 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const saveManualStudent = (allowSimilar: boolean = false) => {
     haptics.buttonPress();
     if (validateNewStudent()) {
+      // If we have high similarity matches and it's a new entry, 
+      // trigger the smart match modal to prevent accidental duplicates
+      const hasHighMatch = smartMatchResults.some(m => m.score > 0.75);
+
+      if (!editingId && hasHighMatch && !showSmartMatchModal) {
+        setShowSmartMatchModal(true);
+        return;
+      }
+
       if (editingId) {
         setStudents(students.map(s => s.id === editingId ? {
           ...s,
@@ -344,7 +414,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           grade: newStudent.grade,
           class: newStudent.class,
         } : s));
-        import('sonner').then(({ toast }) => toast.success('Record updated successfully'));
+        toast.success('Record updated successfully');
       } else {
         const studentToAdd: StudentData = {
           id: `new-${Date.now()}`,
@@ -360,12 +430,12 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           return;
         }
         addStudent(studentToAdd);
-        import('sonner').then(({ toast }) => toast.success('New record added to application'));
+        toast.success('New record added to application');
       }
       handleCloseForm();
+      setShowSmartMatchModal(false);
     }
   };
-
   const handleSaveStudent = () => saveManualStudent(false);
 
   const handleUseExistingMatch = (student: StudentData) => {
@@ -465,7 +535,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const handleComplete = () => {
     haptics.heavy();
     if (students.length === 0) {
-      import('sonner').then(({ toast }) => toast.error('Add at least one child to continue'));
+      toast.error('Add at least one child to continue');
       return;
     }
     onComplete(students);
@@ -487,13 +557,101 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader showBackButton onBack={onBack} />
+      <LogoHeader showBackButton onBack={onBack}>
+        <OnboardingProgressBar currentStep={2} totalSteps={3} className="py-0" />
+      </LogoHeader>
 
-      <div className="w-full flex justify-center pt-6 pb-2">
-        <OnboardingProgressBar currentStep={2} totalSteps={3} />
-      </div>
+      {/* ── Smart Match Confirmation Modal ── */}
+      <AnimatePresence>
+        {showSmartMatchModal && smartMatchResults.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/60 backdrop-blur-[4px]"
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="w-full bg-white rounded-t-[12px] overflow-hidden shadow-[0_-8px_40px_rgba(0,0,0,0.3)] pb-safe pointer-events-auto"
+            >
+              <div className="bg-amber-50 border-b border-amber-100 px-6 pt-6 pb-5 flex items-start gap-4 rounded-t-[12px]">
+                <div className="size-10 rounded-full bg-amber-400/20 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={20} className="text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630] tracking-[-0.3px] leading-tight">
+                    Potential Duplicate Found
+                  </h2>
+                  <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
+                    We found students with very similar details in our records. Please review carefully to avoid duplicates.
+                  </p>
+                </div>
+              </div>
 
-      <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full">
+              <div className="px-5 py-6 max-h-[40vh] overflow-y-auto no-scrollbar space-y-3">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Matching Records</p>
+                {smartMatchResults.slice(0, 3).map(match => (
+                  <button
+                    key={match.id}
+                    onClick={() => {
+                      haptics.light();
+                      addStudent(match);
+                      handleCloseForm();
+                      setShowSmartMatchModal(false);
+                    }}
+                    className="w-full bg-gray-50 flex items-center justify-between p-4 rounded-[16px] border border-gray-100 active:scale-[0.98] transition-all text-left group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] truncate">
+                        {match.name}
+                      </div>
+                      <div className="text-[12px] text-gray-400">
+                        Grade {match.grade} {match.class}
+                      </div>
+                    </div>
+                    <div className="px-4 py-2 rounded-full bg-[#003630] text-white text-[12px] font-bold">
+                      Add This Student
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="px-6 pb-10 pt-2 space-y-3">
+                <button
+                  onClick={() => {
+                    const studentToAdd: StudentData = {
+                      id: `new-${Date.now()}`,
+                      name: newStudent.name,
+                      grade: newStudent.grade,
+                      class: newStudent.class,
+                      studentId: 'New Registration',
+                    };
+                    setStudents([...students, studentToAdd]);
+                    toast.success('Successfully added as new record');
+                    handleCloseForm();
+                    setShowSmartMatchModal(false);
+                  }}
+                  className="w-full h-14 rounded-[16px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center active:scale-[0.98] transition-all shadow-md"
+                >
+                  Continue anyway
+                </button>
+
+                <button
+                  onClick={() => setShowSmartMatchModal(false)}
+                  className="w-full h-14 rounded-[16px]  text-gray-600 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] flex items-center justify-center active:scale-[0.98] transition-all"
+                >
+                  No, Go Back & Review
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className={`flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full transition-opacity duration-300 ${showSmartMatchModal ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -568,30 +726,47 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="relative z-20 bg-white rounded-[12px] shadow-lg border border-gray-200 overflow-hidden mb-2"
+                    className="relative z-20 bg-white rounded-[24px] shadow-2xl border border-gray-100 overflow-hidden mb-4 mt-2"
                   >
-                    {searchResults.map((student) => (
-                      <button
-                        key={student.id}
-                        onClick={() => addStudent(student)}
-                        className="w-full p-3 text-left border-b border-gray-50 hover:bg-gray-50 flex items-center justify-between group"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[#003630] text-sm truncate">{student.name}</p>
-                          <div className="flex flex-col gap-0.5 mt-0.5">
-                            <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">
-                              Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? student.class : ''}
-                            </span>
-                            {(student.parentName || student.otherParentName) && (
-                              <span className="text-[10px] text-[#003630] font-bold uppercase tracking-wider">
-                                Guardian: {student.parentName || student.otherParentName}
-                              </span>
-                            )}
+                    <div className="p-2 space-y-1">
+                      {searchResults.map((student) => (
+                        <button
+                          key={student.id}
+                          onClick={() => addStudent(student)}
+                          className="w-full p-4 text-left rounded-[18px] hover:bg-gray-50 flex items-center justify-between group transition-all"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate mb-0.5">{student.name}</p>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full uppercase tracking-widest font-black">
+                                  Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
+                                </span>
+                                {student.studentId && student.studentId !== 'Pending' && (
+                                  <>
+                                    <div className="size-1 rounded-full bg-gray-200" />
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                      ID: {student.studentId}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              {(student.parentName || student.otherParentName) && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <User size={10} className="text-[#003630]/30" />
+                                  <span className="text-[10px] text-[#003630]/60 font-bold uppercase tracking-[1px]">
+                                    {student.parentName || student.otherParentName}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#003630] ml-2 flex-shrink-0" />
-                      </button>
-                    ))}
+                          <div className="size-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#003630] group-hover:text-white transition-all ml-3 shrink-0">
+                            <Plus size={18} />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -612,7 +787,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
             </div>
 
             {/* Students List Box */}
-            <div className="relative min-h-[400px] rounded-[24px] border-[1px] border-[#e5e7eb] p-6 flex flex-col items-start justify-start">
+            <div className={`relative min-h-[400px] rounded-[24px] border-[1px] border-[#e5e7eb] p-6 flex flex-col ${students.length === 0 ? 'items-center justify-center' : 'items-start justify-start'}`}>
               {students.length > 0 ? (
                 <div className="w-full">
                   {students.map((student) => (
@@ -681,55 +856,116 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                         className={inputClasses('name')}
                       />
                     </div>
-                    {/* Smart Match Suggestions */}
-                    {smartMatchResults.length > 0 && !editingId && (
-                      <div className="mt-2 bg-amber-50 border-[1.5px] border-amber-200 rounded-[16px] p-3 shadow-sm animate-in fade-in slide-in-from-top-2">
-                        <div className="flex items-center gap-2 mb-2 text-amber-700 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-1">
-                          <Info size={16} />
-                          <span>Did you mean someone from this list?</span>
-                        </div>
-                        <div className="space-y-2">
-                          {smartMatchResults.slice(0, 3).map(match => (
-                            <button
-                              key={match.id}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                haptics.light();
-                                addStudent(match);
-                                handleCloseForm();
-                              }}
-                              className="w-full bg-white flex items-center justify-between p-3 rounded-[12px] border border-amber-100/50 hover:bg-amber-100/30 active:scale-[0.98] transition-all text-left"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate">
-                                  {match.name}
-                                </div>
-                                <div className="text-[11px] text-gray-500 font-medium flex flex-col gap-1 mt-0.5">
-                                  <div className="flex items-center gap-1.5">
-                                    <span>Grade {match.grade.toString().replace(/^(grade\s+)/i, '')}{match.class && match.class !== 'General' ? match.class : ''}</span>
-                                    <div className="size-0.5 rounded-full bg-gray-300" />
-                                    <span>{match.studentId}</span>
-                                  </div>
-                                  {(match.parentName || match.otherParentName) && (
-                                    <span className="text-[#003630] uppercase text-[9px] font-bold tracking-wider">
-                                      Guardian: {match.parentName || match.otherParentName}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold">
-                                Add
-                              </div>
-                            </button>
-                          ))}
+                    {/* Identical student collision warning */}
+                    {collisionDetected && !editingId && (
+                      <div className="mt-2 bg-red-50 border-[1.5px] border-red-200 rounded-[16px] p-4 shadow-md animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-start gap-3 text-red-700">
+                          <AlertTriangle size={20} className="shrink-0 mt-0.5" />
+                          <div className="flex flex-col gap-1">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] leading-tight">
+                              Student already exists in this Class
+                            </p>
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[12px] leading-relaxed opacity-90">
+                              A record for <strong>{newStudent.name}</strong> was found in <strong>Grade {newStudent.grade.toString().replace(/^(grade\s+)/i, '')} {newStudent.class}</strong>.
+                              Please use the "Did you mean..." list below or continue to add anyway.
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}
+                    {smartMatchResults.length > 0 && !editingId && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="mt-2 bg-[#fdfaf2] border-[1.5px] border-[#fdecd5] rounded-[20px] p-4 shadow-sm"
+                      >
+                        <button
+                          onClick={() => setShowSmartMatchResults(!showSmartMatchResults)}
+                          className="w-full flex items-center justify-between mb-4 px-1 cursor-pointer group/title"
+                        >
+                          <span className="text-gray-500 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] group-hover/title:text-[#003630] transition-colors">
+                            Did you mean someone from this list?
+                          </span>
+                          <motion.div
+                            animate={{ rotate: showSmartMatchResults ? 0 : 180 }}
+                            className="text-[#003630] transition-transform duration-300"
+                          >
+                            <ChevronDown size={20} />
+                          </motion.div>
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                          {showSmartMatchResults && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.3, ease: "easeInOut" }}
+                              className="overflow-hidden"
+                            >
+                              <div className="space-y-3 pb-2">
+                                {smartMatchResults.slice(0, 3).map(match => (
+                                  <button
+                                    key={match.id}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      haptics.light();
+                                      addStudent(match);
+                                      handleCloseForm();
+                                    }}
+                                    className="w-full bg-white flex items-center justify-between p-5 rounded-[22px] border border-gray-100 hover:border-[#95e36c] hover:shadow-lg active:scale-[0.98] transition-all text-left group"
+                                  >
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate mb-0.5 group-hover:text-[#95e36c]/80 transition-colors">
+                                        {match.name}
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[9px] bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded-full uppercase tracking-widest font-black">
+                                            Grade {match.grade.toString().replace(/^(grade\s+)/i, '')}{match.class && match.class !== 'General' ? ` ${match.class}` : ''}
+                                          </span>
+                                          {match.studentId && match.studentId !== 'Pending' && (
+                                            <>
+                                              <div className="size-1 rounded-full bg-gray-200" />
+                                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-[1.5px]">
+                                                ID: {match.studentId}
+                                              </span>
+                                            </>
+                                          )}
+                                        </div>
+                                        {(match.parentName || match.otherParentName) && (
+                                          <div className="flex items-center gap-1.5 opacity-60">
+                                            <User size={10} className="text-[#003630]" />
+                                            <span className="text-[10px] text-[#003630] font-bold uppercase tracking-[1px]">
+                                              {match.parentName || match.otherParentName}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="px-5 py-2.5 rounded-full bg-[#003630] text-white text-[12px] font-black uppercase tracking-[1px] shadow-md group-hover:bg-[#95e36c] group-hover:text-[#003630] transition-all ml-4 shrink-0">
+                                      ADD
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        <div className="mt-4 pt-3 border-t border-[#fdecd5] text-center">
+                          <p className="text-[11px] text-gray-500 font-medium">
+                            Wrong spelling? Review the list carefully to avoid duplicates.
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+
                   </div>
 
                   {/* Grade & Class Grid */}
-                  <div className="space-y-6">
-                    <div className="space-y-2.5">
+                    <div className="space-y-6">
+                      <div className="space-y-2.5">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade & Class</label>
                       <div className="relative group">
                         <input
