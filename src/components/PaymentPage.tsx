@@ -670,12 +670,6 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                   <div className="flex justify-between items-center text-[#585858] text-[12px]">
                     <div className="flex items-center gap-1.5">
                       <span>Transaction Fee</span>
-                      <div className="size-3.5 rounded-full bg-gray-100 flex items-center justify-center cursor-help group relative">
-                        <span className="text-[9px] text-gray-500 font-bold">?</span>
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-black text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-50 pointer-events-none shadow-xl">
-                          Includes 2% platform fee & 1% processing
-                        </div>
-                      </div>
                     </div>
                     <span>K{serviceFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>

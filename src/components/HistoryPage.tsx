@@ -489,3 +489,17 @@ function EmptySummaryState() {
     </AnimatePresence>
   );
 }
+
+function extractDate(row: any) {
+  const rawDate = row.created_at || row.payment_date || row.date;
+  if (!rawDate) return 'N/A';
+  try {
+    return new Date(rawDate).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch (e) {
+    return String(rawDate);
+  }
+}
