@@ -217,15 +217,10 @@ function ServiceTable({ services, onRemoveItem }: { services: Service[]; onRemov
 
 export default function AddServicesPage({
     selectedStudentIds, userPhone, schoolName, onBack, onNext, onCheckout }: AddServicesPageProps) {
-    const [allStudents, setAllStudents] = useState<Student[]>([]);
+    // We now use the global students list from the store instead of fetching locally
+    const allStudents = useAppStore((state) => state.students);
 
-    useEffect(() => {
-        async function loadStudents() {
-            const students = await getStudentsByPhone(userPhone);
-            setAllStudents(students);
-        }
-        loadStudents();
-    }, [userPhone]);
+
 
     const selectedStudents = allStudents.filter(s => selectedStudentIds.includes(s.id));
 

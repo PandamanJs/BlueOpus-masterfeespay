@@ -909,6 +909,22 @@ export default function App() {
   const students = useAppStore((state) => state.students);
   const isStaff = useAppStore((state) => state.isStaff);
 
+  // HYDRATION GUARD: Prevent rendering anything until the store is loaded from localStorage.
+  // This prevents flash-of-empty-state and accidental redirects to search on refresh.
+  if (!hasHydrated) {
+    return (
+      <div className="fixed inset-0 bg-white flex items-center justify-center">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-4"
+        >
+          <div className="w-12 h-12 border-4 border-[#95e36c]/20 border-t-[#95e36c] rounded-full animate-spin" />
+        </motion.div>
+      </div>
+    );
+  }
+
   // iOS Features Demo state
   const [showIOSDemo, setShowIOSDemo] = useState(false);
 
@@ -1080,14 +1096,20 @@ export default function App() {
     if (hash && validPages.includes(hash as PageType)) {
       const targetPage = hash as PageType;
 
-      // Block payment-flow pages from being accessed directly via URL hash on fresh load
+      // Block payment-flow pages from being accessed directly via URL hash IF NO CART DATA EXISTS
       const paymentFlowPages: PageType[] = ['payment', 'checkout', 'processing', 'add-services', 'pay-fees', 'success', 'download-receipt', 'failed'];
       if (paymentFlowPages.includes(targetPage)) {
-        // Landing on a payment page from a fresh load is invalid — go home
-        const safePage: PageType = (userPhone && selectedSchool) ? 'services' : 'search';
-        console.warn(`[Nav] Blocked direct access to payment-flow page "${targetPage}" on fresh load. Redirecting to ${safePage}.`);
-        window.history.replaceState({ page: safePage }, '', `#${safePage}`);
-        useAppStore.setState({ currentPage: safePage });
+        // Landing on a payment page from a fresh load is ONLY invalid if checkoutServices are empty
+        if (!checkoutServices || checkoutServices.length === 0) {
+          const safePage: PageType = (userPhone && selectedSchool) ? 'services' : 'search';
+          console.warn(`[Nav] Blocked direct access to payment-flow page "${targetPage}" on fresh load (Empty Cart). Redirecting to ${safePage}.`);
+          window.history.replaceState({ page: safePage }, '', `#${safePage}`);
+          useAppStore.setState({ currentPage: safePage });
+        } else {
+          // Valid cart exists — allow staying on the page (refresh recovery)
+          window.history.replaceState({ page: targetPage }, '', `#${targetPage}`);
+          useAppStore.setState({ currentPage: targetPage });
+        }
       } else if (canAccessPage(targetPage)) {
         window.history.replaceState({ page: targetPage }, '', `#${targetPage}`);
         useAppStore.setState({ currentPage: targetPage });

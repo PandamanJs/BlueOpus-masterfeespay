@@ -383,9 +383,8 @@ export const useAppStore = create<AppState>()(
       name: 'master-fees-storage', // Key in localStorage
       storage: createJSONStorage(() => localStorage),
 
-      // IMPORTANT: Only persist identity info, NOT navigation or checkout/payment data.
-      // currentPage is intentionally excluded — on a fresh browser open the app should
-      // always start at search or services, never mid-payment or mid-checkout.
+      // Persist identity info AND current progress (services/navigation)
+      // This ensures that refreshing the page doesn't lose the cart or redirect to home.
       partialize: (state) => ({
         selectedSchool: state.selectedSchool,
         selectedSchoolId: state.selectedSchoolId,
@@ -396,19 +395,14 @@ export const useAppStore = create<AppState>()(
         userEmail: state.userEmail,
         userId: state.userId,
         hasSeenTutorial: state.hasSeenTutorial,
-        // NOTE: checkoutServices / selectedStudentIds / currentPage are NOT persisted
+        currentPage: state.currentPage,
+        checkoutServices: state.checkoutServices,
+        studentServices: state.studentServices,
+        selectedStudentIds: state.selectedStudentIds,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.setHasHydrated(true);
-          
-          // Re-route to the services dashboard on every fresh open if they have a school,
-          // otherwise start at the beginning (search).
-          if (state.selectedSchool) {
-            state.currentPage = 'services';
-          } else {
-            state.currentPage = 'search';
-          }
         }
       },
     }
