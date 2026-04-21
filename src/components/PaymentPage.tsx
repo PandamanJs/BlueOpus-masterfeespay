@@ -779,40 +779,62 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                               key={discount.discount_id}
                               disabled={!isSelectable && !isSelected}
                               onClick={() => toggleDiscount(discount.discount_id)}
-                              className={`self-stretch p-3 bg-white rounded-2xl flex flex-col justify-start items-start gap-2.5 transition-all text-left ${!isSelectable && !isSelected ? 'opacity-40 grayscale cursor-not-allowed' : 'hover:bg-zinc-50'
+                              className={`self-stretch p-3 bg-white rounded-2xl flex flex-col justify-start items-start gap-2.5 transition-all text-left ${!isSelectable && !isSelected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-zinc-50'
                                 }`}
                             >
-                              <div className="self-stretch inline-flex justify-end items-start gap-2.5">
-                                <div className="flex-1 py-px inline-flex flex-col justify-start items-start gap-1">
-                                  <div className="text-black text-xs font-normal font-['Inter']">{discount.name}</div>
-                                  <div className="flex items-center gap-2">
-                                    {discount.description && (
-                                      <div className="text-zinc-600 text-[8px] font-normal font-['Inter'] leading-tight">
-                                        {discount.description}
-                                      </div>
-                                    )}
+                              <div className="self-stretch flex justify-between items-center gap-4 w-full">
+                                <div className="flex-1 flex flex-col justify-start items-start gap-0.5">
+                                  <div className="text-black text-[12px] font-semibold font-['Inter']">{discount.name}</div>
+                                  {discount.description && (
+                                    <div className="text-zinc-500 text-[9px] font-normal font-['Inter'] leading-tight max-w-[200px]">
+                                      {discount.description}
+                                    </div>
+                                  )}
+                                  <div className="flex flex-wrap gap-2 mt-1">
                                     {!isEligible && !isOnlyDebt && (
-                                      <span className="text-[8px] text-red-500 font-bold uppercase tracking-wider bg-red-50 px-1 rounded">Not Eligible</span>
+                                      <span 
+                                        className="font-bold uppercase tracking-wider rounded border"
+                                        style={{ 
+                                          fontSize: '8px', 
+                                          color: '#CF1322', 
+                                          backgroundColor: '#FFF1F0', 
+                                          borderColor: 'rgba(255, 163, 158, 0.5)',
+                                          padding: '2px 6px',
+                                          lineHeight: '1'
+                                        }}
+                                      >
+                                        Not Eligible
+                                      </span>
                                     )}
                                     {isOnlyDebt && (
-                                      <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider bg-zinc-100 px-1 rounded"> unavailable</span>
+                                      <span 
+                                        className="font-bold uppercase tracking-wider rounded border"
+                                        style={{ 
+                                          fontSize: '8px', 
+                                          color: '#8C8C8C', 
+                                          backgroundColor: '#F5F5F5', 
+                                          borderColor: '#D9D9D9',
+                                          padding: '2px 6px',
+                                          lineHeight: '1'
+                                        }}
+                                      >
+                                        Unavailable
+                                      </span>
                                     )}
                                   </div>
                                 </div>
-                                <div className="flex justify-end items-center gap-4">
-                                  <div className="text-black text-xs font-normal font-['Inter']">
-                                    {discount.discount_type === 'percentage' ? `-${discount.amount}%` : `-K${discount.amount}`} Off
+                                <div className="flex justify-end items-center gap-3 shrink-0">
+                                  <div className="text-black text-[12px] font-semibold font-['Inter'] text-right whitespace-nowrap">
+                                    {discount.discount_type === 'percentage' ? `-${discount.amount}%` : `-K${discount.amount.toLocaleString()}`} Off
                                   </div>
-                                  <div className="w-6 h-6 flex justify-center items-center">
+                                  <div className="w-5 h-5 flex justify-center items-center">
                                     {isSelected ? (
                                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <rect width="20" height="20" rx="6" fill="#95E36C" />
-                                        <path d="M17 9.5L10.5 16L7.5 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        <rect width="24" height="24" rx="8" fill="#95E36C" />
+                                        <path d="M17 9l-6.5 6.5L7.5 12.5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                                       </svg>
                                     ) : (
-                                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <rect x="0.5" y="0.5" width="23" height="23" rx="6" stroke="#E5E7EB" strokeWidth="1.5" fill="white" />
-                                      </svg>
+                                      <div className="w-[18px] h-[18px] rounded-md border-[1.5px] border-zinc-200 bg-white" />
                                     )}
                                   </div>
                                 </div>
