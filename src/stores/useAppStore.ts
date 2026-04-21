@@ -287,9 +287,17 @@ export const useAppStore = create<AppState>()(
         checkoutServices: [...state.checkoutServices, service]
       })),
 
-      removeCheckoutService: (serviceId) => set((state) => ({
-        checkoutServices: state.checkoutServices.filter(s => s.id !== serviceId)
-      })),
+      removeCheckoutService: (serviceId) => set((state) => {
+        const newStudentServices = { ...state.studentServices };
+        Object.keys(newStudentServices).forEach(studentId => {
+          newStudentServices[studentId] = (newStudentServices[studentId] || []).filter(s => s.id !== serviceId);
+        });
+        
+        return {
+          checkoutServices: state.checkoutServices.filter(s => s.id !== serviceId),
+          studentServices: newStudentServices
+        };
+      }),
 
       clearCheckoutServices: () => set({ checkoutServices: [] }),
 

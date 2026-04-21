@@ -4,7 +4,7 @@ import { useSpring, useTransform } from "motion/react";
 import { generateReceiptPDF } from "../utils/pdfGenerator";
 import {
   CheckCircle2,
-  AlertCircle,
+  AlertTriangle,
   Download,
   Wallet,
   Settings,
@@ -351,13 +351,20 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         {/* Status Badge — from design (Frame12 style) */}
         <div className={`flex items-center justify-center px-4 py-1.5 rounded-full gap-1 shrink-0 ${isCleared ? 'bg-[#e0f7d4]' : 'bg-[#fff0f0]'}`}>
           <div className="shrink-0">
-            <svg width="10" height="10" viewBox="0 0 11 11" fill="none">
-              <path d="M1.4 3.8C1.4 3.1 1.6 2.5 2 2C2.4 1.5 3 1.3 3.8 1.4M3.8 1.4C4.2 1.1 4.8 0.5 5.5 0.5C6.2 0.5 6.8 1.1 7.2 1.4M7.2 1.4C8 1.3 8.6 1.5 9 2C9.4 2.5 9.6 3.1 9.6 3.8M9.6 3.8C9.9 4.2 10.5 4.8 10.5 5.5C10.5 6.2 9.9 6.8 9.6 7.2M9.6 7.2C9.7 8 9.5 8.6 9 9C8.6 9.4 8 9.6 7.2 9.6M7.2 9.6C6.8 9.9 6.2 10.5 5.5 10.5C4.8 10.5 4.2 9.9 3.8 9.6M3.8 9.6C3.1 9.7 2.5 9.5 2 9C1.6 8.6 1.4 8 1.4 7.2M1.4 7.2C1.1 6.8 0.5 6.2 0.5 5.5C0.5 4.8 1.1 4.2 1.4 3.8Z" stroke={isCleared ? "black" : "#EA3030"} strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M4 5.5L5 6.5L7 4.5" stroke={isCleared ? "black" : "#EA3030"} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            {isCleared ? (
+              <svg width="10" height="10" viewBox="0 0 11 11" fill="none">
+                <path d="M1.4 3.8C1.4 3.1 1.6 2.5 2 2C2.4 1.5 3 1.3 3.8 1.4M3.8 1.4C4.2 1.1 4.8 0.5 5.5 0.5C6.2 0.5 6.8 1.1 7.2 1.4M7.2 1.4C8 1.3 8.6 1.5 9 2C9.4 2.5 9.6 3.1 9.6 3.8M9.6 3.8C9.9 4.2 10.5 4.8 10.5 5.5C10.5 6.2 9.9 6.8 9.6 7.2M9.6 7.2C9.7 8 9.5 8.6 9 9C8.6 9.4 8 9.6 7.2 9.6M7.2 9.6C6.8 9.9 6.2 10.5 5.5 10.5C4.8 10.5 4.2 9.9 3.8 9.6M3.8 9.6C3.1 9.7 2.5 9.5 2 9C1.6 8.6 1.4 8 1.4 7.2M1.4 7.2C1.1 6.8 0.5 6.2 0.5 5.5C0.5 4.8 1.1 4.2 1.4 3.8Z" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4 5.5L5 6.5L7 4.5" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <AlertTriangle size={10} color="#ea3030" />
+            )}
           </div>
-          <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[8px] m-0 ${isCleared ? 'text-[#003630]' : 'text-[#ea3030]'}`}>
-            {isCleared ? 'Cleared' : 'Not Cleared'}
+          <p 
+            className="font-['Space_Grotesk',sans-serif] font-bold text-[8px] m-0"
+            style={{ color: isCleared ? '#003630' : '#ea3030' }}
+          >
+            {isCleared ? 'Cleared' : `ZMW ${normalizedBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
           </p>
         </div>
       </div>
