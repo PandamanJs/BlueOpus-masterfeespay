@@ -106,7 +106,7 @@ function StudentInfo({ student, serviceTotal, onClearBalances }: { student: Stud
                         {student.grade}
                     </p>
                     <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[11px] leading-none opacity-80 pl-2 border-l border-[#e5e7eb]">
-                        {student.schoolName || 'Twalumbu Education Centre'}
+                        {student.schoolName || ''}
                     </p>
                 </div>
 

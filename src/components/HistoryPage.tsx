@@ -233,7 +233,7 @@ export default function HistoryPage({
                 grade={currentStudent?.grade || "N/A"}
                 transactions={financialSummary.transactions || []}
                 hasOutstandingBalance={hasOutstandingBalance}
-                onPay={() => {
+                onPay={(txs) => {
                   if (onIndividualPay) {
                     onIndividualPay({
                       id: item.invoice_id || item.id || crypto.randomUUID(),
@@ -246,7 +246,7 @@ export default function HistoryPage({
                       term: item.term,
                       academicYear: item.academic_year,
                       grade: currentStudent?.grade || "N/A",
-                      paymentHistory: relatedTxs.map(tx => ({
+                      paymentHistory: txs.map(tx => ({
                         date: extractDate(tx),
                         method: tx.payment_method?.replace('_', ' ') || 'Office',
                         amount: tx.amount,
@@ -265,7 +265,7 @@ export default function HistoryPage({
   );
 }
 
-function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, userName, schoolName, schoolLogo }: { item: any, grade: string, transactions: any[], onPay: () => void, studentName: string, userName: string, schoolName: string, schoolLogo?: string | null }) {
+function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, userName, schoolName, schoolLogo }: { item: any, grade: string, transactions: any[], onPay: (txs: any[]) => void, studentName: string, userName: string, schoolName: string, schoolLogo?: string | null }) {
   const [showDetails, setShowDetails] = useState(false);
   const normalizedBalance = Math.max(0, Number(item.balance || 0));
   const isCleared = normalizedBalance <= 0;
@@ -409,7 +409,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
       <div className="flex flex-col gap-[10px] mt-2">
         {!isCleared && (
           <button
-            onClick={onPay}
+            onClick={() => onPay(relatedTxs)}
             className="bg-[#e0f7d4] h-[40px] rounded-[8px] border-[0.5px] border-[#003630] font-['Space_Grotesk',sans-serif] font-bold text-[8px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
           >
             Pay Now

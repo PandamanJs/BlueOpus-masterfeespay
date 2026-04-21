@@ -350,6 +350,8 @@ function getInvoiceReference(row: any): string {
 
 function getInvoiceServices(row: any): any[] {
     if (Array.isArray(row?.services)) return row.services;
+    if (Array.isArray(row?.joined_items)) return row.joined_items;
+    if (Array.isArray(row?.invoice_items)) return row.invoice_items;
     if (Array.isArray(row?.invoice_items?.items)) return row.invoice_items.items;
     if (Array.isArray(row?.items)) return row.items;
     return [];
@@ -357,7 +359,20 @@ function getInvoiceServices(row: any): any[] {
 
 function getInvoiceName(row: any): string {
     const services = getInvoiceServices(row);
-    return row?.service_name || row?.description || services[0]?.description || services[0]?.name || 'School Fee Payment';
+    const term = row?.term || row?.invoice_items?.meta?.term || row?.year_term;
+    const year = row?.year || row?.academic_year || row?.invoice_items?.meta?.academic_year;
+    
+    let baseName = row?.service_name || row?.description || services[0]?.description || services[0]?.name || 'School Fees';
+    
+    // Cleanup generic names if we have better info in services
+    if (baseName === 'School Fees' && services.length > 0 && (services[0]?.description || services[0]?.name)) {
+        baseName = services[0].description || services[0].name;
+    }
+
+    const termSuffix = term ? ` (Term ${term})` : '';
+    const yearSuffix = year ? ` ${year}` : '';
+    
+    return `${baseName}${termSuffix}${yearSuffix}`.trim() || 'School Fee Payment';
 }
 
 function getInvoiceTotal(row: any): number {
@@ -413,7 +428,7 @@ function buildInvoiceSummaryItem(row: any, transactions: any[], source: 'invoice
         invoice_id: getInvoiceId(row),
         invoice_number: getInvoiceReference(row),
         name: getInvoiceName(row),
-        description: row?.description || row?.service_name || services[0]?.description || services[0]?.name || getInvoiceName(row),
+        description: row?.description || row?.service_name || (services.length > 0 ? (services[0]?.description || services[0]?.name) : null) || getInvoiceName(row),
         expected: total,
         collected,
         invoiced: total,
@@ -445,7 +460,7 @@ async function getStudentFinancialSnapshot(studentId: string): Promise<any> {
             .single(),
         supabase
             .from('invoices')
-            .select('*')
+            .select('*, joined_items:invoice_items(*)')
             .eq('student_id', studentId),
         supabase
             .from('payment_history')

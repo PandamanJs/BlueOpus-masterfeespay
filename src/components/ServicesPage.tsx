@@ -264,7 +264,7 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
 
           <div className="py-2">
             <p className="text-black/70 text-[13px] font-normal font-['Inter'] leading-relaxed">
-              Welcome to the <span className="font-semibold text-black">{displaySchoolName || 'Twalumbu Education Centre'}</span> payment portal. What would you like to do today?
+              Welcome to the <span className="font-semibold text-black">{displaySchoolName || 'School'}</span> payment portal. What would you like to do today?
             </p>
           </div>
         </div>
