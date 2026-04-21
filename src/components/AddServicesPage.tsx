@@ -790,6 +790,7 @@ export default function AddServicesPage({
     const setCheckoutServices = useAppStore(state => state.setCheckoutServices);
     const setPaymentAmount = useAppStore(state => state.setPaymentAmount);
     const setExcludedServiceIds = useAppStore(state => state.setExcludedServiceIds);
+    const setInputAmounts = useAppStore(state => state.setInputAmounts);
 
     const handleAddService = (service: Service) => {
         if (!activeStudentId) {
@@ -868,6 +869,7 @@ export default function AddServicesPage({
         setCheckoutServices(allCheckoutServices);
         setPaymentAmount(totalAmount);
         setExcludedServiceIds([]); // Clear exclusions when starting a new checkout session
+        setInputAmounts({}); // Clear previous partial settings
 
         // Navigate to checkout summary
         // Navigate to checkout summary using the prop that updates browser history

@@ -230,6 +230,7 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
           <button
             onClick={() => {
               hapticFeedback('medium');
+              setInputAmounts({}); // Clear partial payments if paying in full
               onProceed(totalAmountValue);
             }}
             className="w-full h-[60px] bg-[#003630] text-white rounded-[16px] flex items-center justify-center gap-3 active:scale-[0.97] transition-all group relative overflow-hidden shadow-[0px_25px_60px_rgba(0,54,48,0.2),0px_4px_12px_rgba(0,54,48,0.1)]"
