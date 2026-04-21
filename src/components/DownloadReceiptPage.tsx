@@ -15,6 +15,12 @@ interface CheckoutService {
   studentName: string;
   studentId?: string;
   grade?: string;
+  paymentHistory?: Array<{
+    date: string;
+    method: string;
+    amount: number;
+    description?: string;
+  }>;
 }
 
 interface DownloadReceiptPageProps {
@@ -56,6 +62,11 @@ export default function DownloadReceiptPage({
       scheduleId: `#${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`
     };
   }, []);
+  
+  // Flatten payment history from all services
+  const consolidatedHistory = useMemo(() => {
+    return services?.flatMap(s => s.paymentHistory || []) || [];
+  }, [services]);
 
   const handleDownloadReceipt = () => {
     try {
@@ -69,7 +80,8 @@ export default function DownloadReceiptPage({
         parentName,
         schoolLogo,
         admissionNumber: (services && services[0]?.studentId) || '',
-        grade: (services && services[0]?.grade) || ''
+        grade: (services && services[0]?.grade) || '',
+        paymentHistory: consolidatedHistory
       });
       toast.success("Receipt downloaded successfully!");
       setShowShareMenu(false);
@@ -176,6 +188,7 @@ export default function DownloadReceiptPage({
                    totalFeesCharged={totalCharged}
                    amountPaid={totalAmount}
                    balanceOwing={totalBalance}
+                   paymentHistory={consolidatedHistory}
                    nextPaymentDate="30/05/2026"
                    statusBadge={totalAmount >= totalCharged ? 'Paid' : 'Partly Paid'}
                 />
