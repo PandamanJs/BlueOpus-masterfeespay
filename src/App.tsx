@@ -1588,7 +1588,7 @@ export default function App() {
           >
             <LazyDownloadReceiptPage
               totalAmount={paymentAmount}
-              schoolName={selectedSchool || "Twalumbu Educational Center"}
+              schoolName={selectedSchool || "Institutional Fees"}
               schoolLogo={selectedSchoolLogo}
               services={checkoutServices}
               onGoHome={handleGoHome}

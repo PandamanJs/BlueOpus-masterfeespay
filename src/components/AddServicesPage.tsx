@@ -309,7 +309,9 @@ export default function AddServicesPage({
             'transport': [] as Service[],
             'cafeteria': [] as Service[],
             'uniforms': [] as Service[],
-            'boarding': [] as Service[]
+            'boarding': [] as Service[],
+            'tours': [] as Service[],
+            'clubs': [] as Service[]
         };
 
         if (!activeStudentId) return summary;
@@ -324,6 +326,8 @@ export default function AddServicesPage({
             if (explicitCat === 'cafeteria' || explicitCat === 'canteen' || explicitCat === 'meal' || explicitCat === 'lunch') return 'cafeteria';
             if (explicitCat === 'boarding' || explicitCat === 'hostel' || explicitCat === 'bed') return 'boarding';
             if (explicitCat === 'uniforms' || explicitCat === 'uniform') return 'uniforms';
+            if (explicitCat === 'tours' || explicitCat === 'tour' || explicitCat === 'trip' || explicitCat === 'excursion') return 'tours';
+            if (explicitCat === 'clubs' || explicitCat === 'club' || explicitCat === 'society') return 'clubs';
 
             // Priority 2: Scan nested services (for invoices/aggregate items)
             const services = item.services || (item.invoice_items?.items) || [];
@@ -334,12 +338,16 @@ export default function AddServicesPage({
                     if (sCat === 'cafeteria' || sCat === 'canteen' || sCat === 'meal' || sCat === 'lunch') return 'cafeteria';
                     if (sCat === 'boarding' || sCat === 'hostel' || sCat === 'bed') return 'boarding';
                     if (sCat === 'uniforms' || sCat === 'uniform') return 'uniforms';
+                    if (sCat === 'tours' || sCat === 'tour' || sCat === 'trip' || sCat === 'excursion') return 'tours';
+                    if (sCat === 'clubs' || sCat === 'club' || sCat === 'society') return 'clubs';
 
                     const sName = (svc.name || svc.description || '').toLowerCase();
                     if (sName.includes('transport') || sName.includes('bus') || sName.includes('shuttle') || sName.includes('route') || sName.includes('zone') || sName.includes('fare')) return 'transport';
                     if (sName.includes('canteen') || sName.includes('lunch') || sName.includes('cafeteria') || sName.includes('meal') || sName.includes('food')) return 'cafeteria';
                     if (sName.includes('boarding') || sName.includes('hostel') || sName.includes('room') || sName.includes('bed')) return 'boarding';
                     if (sName.includes('uniform') || sName.includes('crest') || sName.includes('blazer') || sName.includes('tracksuit') || sName.includes('tie') || sName.includes('badge')) return 'uniforms';
+                    if (sName.includes('tour') || sName.includes('trip') || sName.includes('excursion') || sName.includes('expedition') || sName.includes('museum')) return 'tours';
+                    if (sName.includes('club') || sName.includes('society') || sName.includes('membership') || sName.includes('association')) return 'clubs';
                 }
             }
 
@@ -353,6 +361,8 @@ export default function AddServicesPage({
             if (desc.includes('canteen') || desc.includes('lunch') || desc.includes('cafeteria') || desc.includes('meal') || desc.includes('food') || ref.startsWith('cn-')) return 'cafeteria';
             if (desc.includes('boarding') || desc.includes('hostel') || desc.includes('room') || desc.includes('bed') || ref.startsWith('bd-')) return 'boarding';
             if (desc.includes('uniform') || desc.includes('crest') || desc.includes('blazer') || desc.includes('tracksuit') || desc.includes('tie') || desc.includes('badge')) return 'uniforms';
+            if (desc.includes('tour') || desc.includes('trip') || desc.includes('excursion') || desc.includes('expedition') || desc.includes('museum') || ref.startsWith('tr-')) return 'tours';
+            if (desc.includes('club') || desc.includes('society') || desc.includes('membership') || desc.includes('association') || ref.startsWith('cl-')) return 'clubs';
             return 'fees';
         };
 
@@ -402,7 +412,7 @@ export default function AddServicesPage({
             financialSummary.items.forEach((item: any) => {
                 if (item.balance > 0) {
                     // Avoid duplicating items already handled by invoices or Txs
-                    const isAlreadyHandled = [...summary.fees, ...summary.transport, ...summary.cafeteria, ...summary.uniforms]
+                    const isAlreadyHandled = [...summary.fees, ...summary.transport, ...summary.cafeteria, ...summary.uniforms, ...summary.boarding, ...summary.tours, ...summary.clubs]
                         .some(d => d.invoiceNo === item.invoice_number || d.id === item.invoice_id);
 
                     if (!isAlreadyHandled) {

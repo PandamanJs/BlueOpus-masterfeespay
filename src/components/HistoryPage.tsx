@@ -226,7 +226,7 @@ export default function HistoryPage({
               <ServiceCategoryCard
                 key={item.id || idx}
                 item={item}
-                schoolName={schoolName || "Master Fees Payment"}
+                schoolName={schoolName || currentStudent?.schoolName || "Institutional Fees"}
                 schoolLogo={schoolLogo}
                 studentName={currentStudent?.name || "Student"}
                 userName={userName || "Parent"}

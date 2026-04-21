@@ -98,7 +98,7 @@ export default function DownloadReceiptPage({
       `Amount: K${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
       `Reference: ${refNumber}\n` +
       `Date: ${dateTime}\n\n` +
-      `Thank you for using Master-Fees!`
+      `Thank you for your payment to ${schoolName}!`
     );
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
     toast.success("Opening email client...");
@@ -112,7 +112,7 @@ export default function DownloadReceiptPage({
       `Amount: K${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
       `Reference: ${refNumber}\n` +
       `Date: ${dateTime}\n\n` +
-      `Paid via Master-Fees`
+      `Official Payment Receipt`
     );
     window.open(`https://wa.me/?text=${message}`, '_blank');
     toast.success("Opening WhatsApp...");

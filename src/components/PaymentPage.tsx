@@ -305,11 +305,14 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
     const invoiceRatio = invoiceTotal / totalAmount;
     const discountedInvoicePortion = discountedTotal * invoiceRatio;
     // Extract inclusive VAT: Base = Total / (1 + Rate)
-    vatAmount = discountedInvoicePortion - (discountedInvoicePortion / (0 + vatRate));
+    vatAmount = discountedInvoicePortion - (discountedInvoicePortion / (1 + vatRate));
   }
 
-  const serviceFee = discountedTotal * 0.02; // 2% service fee
-  const finalAmount = discountedTotal + serviceFee; // VAT is already inclusive
+  const platformFee = discountedTotal * 0.02; // 2% platform standard fee
+  const gatewayAmount = discountedTotal + platformFee; // This is what we SEND to Lenco
+  const processingFee = gatewayAmount * 0.01; // 1% Lenco processing surcharge (added by gateway)
+  const serviceFee = platformFee + processingFee;
+  const finalAmount = gatewayAmount + processingFee; // This is what the user VISIBLY pays (Total)
   const serviceCount = checkoutServices.length;
 
   const toggleDiscount = (id: string) => {
@@ -392,7 +395,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
       initiatePayment({
         key: school.lenco_public_key, // ✅ Each school gets their own payments
         reference: `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        amount: finalAmount,
+        amount: gatewayAmount, // Send base + platform fee; Lenco adds 1% on top automatically
         currency: "ZMW",
         email: "customer@example.com",
         channels: ["card", "mobile-money"],
@@ -457,7 +460,8 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               const proportion = allServicesTotal > 0 ? invoiceBalance / allServicesTotal : 1 / groups.length;
               const groupAmount = Math.round(totalAmount * proportion * 100) / 100;
 
-              // Proportional share of the 2% service fee
+              // Proportional share of the unified service fee (Platform + Processing)
+              // Correctly weight the total service fee across items
               const groupServiceFee = Math.round(serviceFee * proportion * 100) / 100;
               const groupTotal = groupAmount + groupServiceFee;
 
@@ -636,7 +640,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                         {studentServices.map(service => (
                           <div key={service.id} className="flex justify-between items-center text-[12px]">
                             <span className="text-gray-600 font-medium">{service.description}</span>
-                            <span className="text-black font-semibold">K{service.amount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                            <span className="text-black font-semibold">K{service.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         ))}
                       </div>
@@ -649,7 +653,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                 <div className="flex flex-col gap-4">
                   <div className="flex justify-between items-center text-[#585858] text-[12px]">
                     <span>Subtotal</span>
-                    <span>K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                    <span>K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
 
                   {calculatedDiscountAmount > 0 && (
@@ -659,13 +663,21 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                       className="flex justify-between items-center text-[#EF4444] text-[12px] font-medium"
                     >
                       <span>Discounts (Deduction)</span>
-                      <span>-K{calculatedDiscountAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                      <span>-K{calculatedDiscountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </motion.div>
                   )}
 
                   <div className="flex justify-between items-center text-[#585858] text-[12px]">
-                    <span>Transaction Fee</span>
-                    <span>K{serviceFee.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>Transaction Fee</span>
+                      <div className="size-3.5 rounded-full bg-gray-100 flex items-center justify-center cursor-help group relative">
+                        <span className="text-[9px] text-gray-500 font-bold">?</span>
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-black text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-50 pointer-events-none shadow-xl">
+                          Includes 2% platform fee & 1% processing
+                        </div>
+                      </div>
+                    </div>
+                    <span>K{serviceFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   {vatEnabled && (
                     <div className="flex justify-between items-center text-[#585858] text-[12px]">
