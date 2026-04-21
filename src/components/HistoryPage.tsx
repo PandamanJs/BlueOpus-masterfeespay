@@ -245,7 +245,13 @@ export default function HistoryPage({
                       studentId: selectedStudentId,
                       term: item.term,
                       academicYear: item.academic_year,
-                      grade: currentStudent?.grade || "N/A"
+                      grade: currentStudent?.grade || "N/A",
+                      paymentHistory: relatedTxs.map(tx => ({
+                        date: extractDate(tx),
+                        method: tx.payment_method?.replace('_', ' ') || 'Office',
+                        amount: tx.amount,
+                        description: tx.description
+                      }))
                     });
                   }
                 }}
@@ -298,7 +304,13 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         parentName: userName,
         admissionNumber: item.admission_number || '', // Try to find admission number in item
         isPaid: isCleared,
-        schoolLogo: schoolLogo
+        schoolLogo: schoolLogo,
+        paymentHistory: relatedTxs.map(tx => ({
+          date: extractDate(tx),
+          method: tx.payment_method?.replace('_', ' ') || 'Office',
+          amount: tx.amount,
+          description: tx.description
+        }))
       });
       toast.success("Receipt downloaded!");
     } catch (e) {

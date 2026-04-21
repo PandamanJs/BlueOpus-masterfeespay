@@ -27,6 +27,12 @@ interface ModernReceiptProps {
     balanceOwing: number;
     nextPaymentDate: string;
     statusBadge?: 'Paid' | 'Partly Paid' | 'Unpaid';
+    paymentHistory?: Array<{
+        date: string;
+        method: string;
+        amount: number;
+        description?: string;
+    }>;
 }
 
 export const ModernReceipt: React.FC<ModernReceiptProps> = ({
@@ -47,7 +53,8 @@ export const ModernReceipt: React.FC<ModernReceiptProps> = ({
     amountPaid,
     balanceOwing,
     nextPaymentDate,
-    statusBadge = 'Partly Paid'
+    statusBadge = 'Partly Paid',
+    paymentHistory = []
 }) => {
     const isCleared = balanceOwing <= 0.01;
     // Truncate Student ID to 8 chars
@@ -163,6 +170,22 @@ export const ModernReceipt: React.FC<ModernReceiptProps> = ({
                     <div style={{ color: '#73808C', fontSize: 11, fontFamily: 'Space Grotesk, sans-serif' }}>Amount Paid - {paymentMethod} (P)</div>
                     <div style={{ textAlign: 'right', color: '#059669', fontSize: 11, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700' }}>-K {amountPaid.toLocaleString()}</div>
                 </div>
+
+                {/* Individual Payment History */}
+                {paymentHistory && paymentHistory.length > 0 && (
+                    <div style={{ alignSelf: 'stretch', padding: '0 12px 10px 12px', flexDirection: 'column', gap: 4, display: 'flex' }}>
+                        {paymentHistory.map((pmt, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ color: '#73808C', fontSize: 9, fontFamily: 'Space Grotesk, sans-serif', fontStyle: 'italic', marginLeft: 12 }}>
+                                    {pmt.date} {pmt.description || `Paid via ${pmt.method}`}
+                                </div>
+                                <div style={{ color: '#73808C', fontSize: 9, fontFamily: 'Space Grotesk, sans-serif', fontStyle: 'italic' }}>
+                                    -K {pmt.amount.toLocaleString()}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
                 <div style={{ alignSelf: 'stretch', padding: '12px 12px', borderTop: '2px solid #003630', background: '#F9FAFB', borderRadius: '0 0 8px 8px', justifyContent: 'space-between', alignItems: 'center', display: 'flex', marginTop: 4 }}>
                     <div style={{ color: '#003630', fontSize: 12, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700' }}>Balance Owing (T) - (P)</div>
                 <div style={{ textAlign: 'right', color: balanceOwing > 0 ? '#EA3030' : '#059669', fontSize: 16, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '800' }}>K {balanceOwing.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</div>

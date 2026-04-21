@@ -314,6 +314,28 @@ export default function AddServicesPage({
         const currentServices = studentServices[activeStudentId] || [];
         const existingInvoices = new Set(currentServices.map(s => s.invoiceNo));
 
+        const extractDate = (obj: any) => {
+            if (!obj) return 'N/A';
+            const keys = ['initiated_at', 'created_at', 'invoice_date', 'payment_date', 'date'];
+            let val = null;
+            for (let k of keys) { if (obj[k]) { val = obj[k]; break; } }
+            if (!val) return 'N/A';
+            if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(val)) return val;
+            const parsed = new Date(val);
+            return isNaN(parsed.getTime()) ? val : parsed.toLocaleDateString('en-GB');
+        };
+
+        const getHistoryForInvoice = (invoiceId: string) => {
+            return (financialSummary?.transactions || [])
+                .filter((tx: any) => tx.invoice_id === invoiceId)
+                .map((tx: any) => ({
+                    date: extractDate(tx),
+                    method: tx.payment_method?.replace('_', ' ') || 'Office',
+                    amount: tx.amount,
+                    description: tx.description
+                }));
+        };
+
         const categorize = (item: any) => {
             // Priority 1: Explicit Category from data
             const explicitCat = (item.category || item.service_category || '').toLowerCase();
@@ -398,7 +420,8 @@ export default function AddServicesPage({
                 invoiceNo: inv.reference,
                 invoice_id: inv.id || undefined,
                 term: term,
-                academicYear: year
+                academicYear: year,
+                paymentHistory: getHistoryForInvoice(inv.id)
             });
         });
 

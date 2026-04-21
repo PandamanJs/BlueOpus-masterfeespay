@@ -38,6 +38,12 @@ interface ReceiptData {
   admissionNumber?: string;
   grade?: string;
   isPaid?: boolean;
+  paymentHistory?: Array<{
+    date: string;
+    method: string;
+    amount: number;
+    description?: string;
+  }>;
 }
 
 export function generateReceiptPDF(data: ReceiptData) {
@@ -245,8 +251,25 @@ export function generateReceiptPDF(data: ReceiptData) {
   doc.text(`K ${totalFeesCharged.toLocaleString()}`, rightMargin - 3, yPos, { align: 'right' });
   yPos += 8;
 
-  doc.text(`Amount Paid - ${paymentMethod} (P)`, leftMargin + 3, yPos);
-  doc.text(`-K ${totalAmount.toLocaleString()}`, rightMargin - 3, yPos, { align: 'right' });
+  // Render individual payments if history exists
+  if (data.paymentHistory && data.paymentHistory.length > 0) {
+    data.paymentHistory.forEach((pmt) => {
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(COLOR_TEXT_DIM[0], COLOR_TEXT_DIM[1], COLOR_TEXT_DIM[2]);
+      const paymentDesc = pmt.description || `Paid via ${pmt.method || paymentMethod}`;
+      doc.text(`${pmt.date}  ${paymentDesc}`, leftMargin + 10, yPos);
+      doc.text(`-K ${pmt.amount.toLocaleString()}`, rightMargin - 15, yPos, { align: 'right' });
+      yPos += 6;
+    });
+    yPos += 2; // Extra gap after list
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(COLOR_BLACK[0], COLOR_BLACK[1], COLOR_BLACK[2]);
+    doc.text(`Net Amount Paid (P)`, leftMargin + 3, yPos);
+    doc.text(`-K ${totalAmount.toLocaleString()}`, rightMargin - 3, yPos, { align: 'right' });
+  } else {
+    doc.text(`Amount Paid - ${paymentMethod} (P)`, leftMargin + 3, yPos);
+    doc.text(`-K ${totalAmount.toLocaleString()}`, rightMargin - 3, yPos, { align: 'right' });
+  }
   yPos += 6;
 
   // Heavy divider

@@ -68,6 +68,12 @@ export interface CheckoutService {
   schoolId?: string;    // Optional: The UUID of the school
   isDebt?: boolean;     // Optional: Whether this item is considered debt (VAT excluded)
   categoryId?: string;  // Optional: The UUID of the fee category (used for category-specific discounts)
+  paymentHistory?: Array<{
+    date: string;
+    method: string;
+    amount: number;
+    description?: string;
+  }>;
 }
 
 
