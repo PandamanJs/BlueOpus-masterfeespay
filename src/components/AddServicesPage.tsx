@@ -1645,12 +1645,13 @@ function UnifiedServicesPopup({
                                                     <motion.div
                                                         initial={{ opacity: 0, scale: 0.95 }}
                                                         animate={{ opacity: 1, scale: 1 }}
-                                                        className="mt-4 bg-[#FFFBE6] border border-[#FFE58F] rounded-[18px] p-4 flex gap-3 shadow-sm"
+                                                        className="mt-4 border rounded-[18px] p-4 flex gap-3 shadow-sm"
+                                                        style={{ backgroundColor: '#FFF1F0', borderColor: 'rgba(255, 204, 199, 0.6)' }}
                                                     >
-                                                        <AlertTriangle className="text-[#FAAD14] shrink-0" size={18} strokeWidth={2.5} />
+                                                        <AlertTriangle style={{ color: '#FF4D4F' }} className="shrink-0" size={18} strokeWidth={2.5} />
                                                         <div className="flex flex-col gap-0.5">
-                                                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] text-[#856404]">Careful!</p>
-                                                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] text-[#856404] leading-relaxed">
+                                                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px]" style={{ color: '#CF1322' }}>Careful!</p>
+                                                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[11px] leading-relaxed" style={{ color: '#262626' }}>
                                                                 You're selecting <span className="font-bold">{selectedGrade}</span> fees, but {activeStudent?.name.split(' ')[0]} is in <span className="font-bold">{activeStudent?.grade}</span>. Please verify before adding.
                                                             </p>
                                                         </div>
