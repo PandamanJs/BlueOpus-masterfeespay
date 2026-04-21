@@ -674,7 +674,8 @@ export default function AddServicesPage({
                     invoiceNo: "202",
                     term: parseInt(service.term.replace(/\D/g, '')) || 1,
                     academicYear: new Date().getFullYear(),
-                    pricing_id: service.id // PRESERVE THE ORIGINAL FEE ITEM ID
+                    pricing_id: service.id, // PRESERVE THE ORIGINAL FEE ITEM ID
+                    grade: activeStudent?.grade
                 };
 
                 return newSvc;
@@ -772,7 +773,8 @@ export default function AddServicesPage({
                     academicYear: s.academicYear,
                     isDebt: s.isDebt,
                     categoryId: s.categoryId,
-                    grade: s.grade || student?.grade
+                    grade: s.grade || student?.grade,
+                    studentId: student?.admissionNumber || studentId
                 });
             });
         });

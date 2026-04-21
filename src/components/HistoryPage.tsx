@@ -285,12 +285,15 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         refNumber: item.invoice_id?.substring(0, 12).toUpperCase() || 'REF-HIST',
         dateTime: new Date().toLocaleString(),
         scheduleId: `#${(item.invoice_id || '0').substring(0, 5)}`,
+        grade: grade,
         services: [{
           id: item.id,
           description: `${item.name} ${item.term ? `(Term ${item.term})` : ''}`,
           amount: item.expected || 0,
           invoiceNo: item.invoice_number || 'N/A',
-          studentName: studentName
+          studentName: studentName,
+          studentId: item.student_id || item.admission_number || '',
+          grade: grade
         }],
         parentName: userName,
         admissionNumber: item.admission_number || '', // Try to find admission number in item

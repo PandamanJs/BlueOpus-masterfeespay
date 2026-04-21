@@ -13,6 +13,8 @@ interface CheckoutService {
   amount: number;
   invoiceNo: string;
   studentName: string;
+  studentId?: string;
+  grade?: string;
 }
 
 interface DownloadReceiptPageProps {
@@ -22,6 +24,8 @@ interface DownloadReceiptPageProps {
   services?: CheckoutService[];
   onGoHome: () => void;
   parentName?: string;
+  admissionNumber?: string;
+  grade?: string;
 }
 
 // MasterFeesLogo component removed in favor of LogoHeader
@@ -63,7 +67,9 @@ export default function DownloadReceiptPage({
         scheduleId,
         services,
         parentName,
-        schoolLogo
+        schoolLogo,
+        admissionNumber: (services && services[0]?.studentId) || '',
+        grade: (services && services[0]?.grade) || ''
       });
       toast.success("Receipt downloaded successfully!");
       setShowShareMenu(false);

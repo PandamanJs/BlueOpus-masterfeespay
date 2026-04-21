@@ -36,6 +36,7 @@ interface ReceiptData {
   schoolLogo?: string | null;
   paymentMethod?: string;
   admissionNumber?: string;
+  grade?: string;
   isPaid?: boolean;
 }
 
@@ -50,6 +51,7 @@ export function generateReceiptPDF(data: ReceiptData) {
     parentName,
     schoolLogo,
     paymentMethod = 'Mobile Money',
+    admissionNumber,
     isPaid = true,
   } = data;
 
@@ -80,9 +82,12 @@ export function generateReceiptPDF(data: ReceiptData) {
     return match ? match[1].replace(/G\s*/i, 'Grade ') : 'Class Not Specified';
   };
 
-  const studentClass = services[0]?.grade || services[0]?.class || extractGrade(services[0]?.description || '');
-  const studentIdRaw = services[0]?.studentId || services[0]?.id || 'N/A';
-  const studentId = studentIdRaw.length > 8 ? studentIdRaw.substring(0, 8) : studentIdRaw;
+  // Prioritize top-level data.grade, then services[0].grade, then extraction
+  const studentClass = (data as any).grade || services[0]?.grade || services[0]?.class || extractGrade(services[0]?.description || '');
+  
+  // Prioritize top-level admissionNumber, then service-level studentId/id
+  const studentIdRaw = admissionNumber || services[0]?.studentId || services[0]?.id || 'N/A';
+  const studentId = studentIdRaw.length > 12 ? studentIdRaw.substring(0, 12) : studentIdRaw;
   const totalFeesCharged = services.reduce((acc, s) => acc + (s.amount || 0), 0) || totalAmount;
   const balanceOwing = Math.max(0, totalFeesCharged - totalAmount);
 
@@ -102,12 +107,6 @@ export function generateReceiptPDF(data: ReceiptData) {
     doc.setFillColor(239, 242, 245); // #EFF2F5
     doc.circle(leftMargin + 5, yPos + 5, 7, 'F');
   }
-  
-  doc.setFillColor(239, 242, 245); // #EFF2F5 bars
-  doc.rect(leftMargin + 25, yPos, 45, 3, 'F');
-  doc.rect(leftMargin + 25, yPos + 6, 45, 3, 'F');
-  doc.rect(leftMargin + 25, yPos + 12, 40, 3, 'F');
-
   // Add School Name
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);

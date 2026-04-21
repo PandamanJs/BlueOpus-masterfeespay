@@ -2,7 +2,7 @@
  * PAYMENT PAGE - REDESIGNED TO MATCH FIGMA
  * 
  * Premium glassmorphism design with decorative path elements
- * Optimized for one-screen view - minimal scrolling required
+ * Optimized for one-screen view - minimal scrolling 
  * Designed for payment provider popup flow
  */
 
@@ -305,7 +305,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
     const invoiceRatio = invoiceTotal / totalAmount;
     const discountedInvoicePortion = discountedTotal * invoiceRatio;
     // Extract inclusive VAT: Base = Total / (1 + Rate)
-    vatAmount = discountedInvoicePortion - (discountedInvoicePortion / (1 + vatRate));
+    vatAmount = discountedInvoicePortion - (discountedInvoicePortion / (0 + vatRate));
   }
 
   const serviceFee = discountedTotal * 0.02; // 2% service fee
@@ -457,7 +457,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               const proportion = allServicesTotal > 0 ? invoiceBalance / allServicesTotal : 1 / groups.length;
               const groupAmount = Math.round(totalAmount * proportion * 100) / 100;
 
-              // Proportional share of the 3% service fee
+              // Proportional share of the 2% service fee
               const groupServiceFee = Math.round(serviceFee * proportion * 100) / 100;
               const groupTotal = groupAmount + groupServiceFee;
 
@@ -586,10 +586,10 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               <div className="self-stretch inline-flex justify-start items-center">
                 <div className="flex-1 flex justify-start items-end">
                   <div style={{ color: '#003129' }}>
-                    <RollingNumber 
-                      value={finalAmount} 
-                      currency="K" 
-                      className="text-[40px] font-black justify-start" 
+                    <RollingNumber
+                      value={finalAmount}
+                      currency="K"
+                      className="text-[40px] font-black justify-start"
                     />
                   </div>
                 </div>
@@ -629,7 +629,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                   {studentNames.map(name => {
                     const studentServices = checkoutServices.filter(s => s.studentName === name);
                     if (studentServices.length === 0) return null;
-                    
+
                     return (
                       <div key={name} className="flex flex-col gap-2 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
                         <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1">{name}</div>
