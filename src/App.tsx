@@ -20,6 +20,7 @@ import { checkIfStaff } from "./lib/supabase/api/parents";
 
 import { UpdateNotification } from "./components/UpdateNotification";
 import { useOfflineManager } from "./hooks/useOfflineManager";
+import type { ParentData as RegistrationParentData } from "./components/registration/ParentInformationPage";
 
 // School logos imports removed as we now fetch from database
 
@@ -705,9 +706,12 @@ export default function App() {
   const currentPage = useAppStore((state) => state.currentPage);
   const navigationDirection = useAppStore((state) => state.navigationDirection);
   const selectedSchool = useAppStore((state) => state.selectedSchool);
+  const selectedSchoolId = useAppStore((state) => state.selectedSchoolId);
   const selectedSchoolLogo = useAppStore((state) => state.selectedSchoolLogo);
   const userName = useAppStore((state) => state.userName);
   const userPhone = useAppStore((state) => state.userPhone);
+  const userEmail = useAppStore((state) => state.userEmail);
+  const userId = useAppStore((state) => state.userId);
   const receiptStudentName = useAppStore((state) => state.receiptStudentName);
   const receiptStudentId = useAppStore((state) => state.receiptStudentId);
   const receiptStudentGrade = useAppStore((state) => state.receiptStudentGrade);
@@ -749,6 +753,8 @@ export default function App() {
   const setIsStaff = useAppStore((state) => state.setIsStaff);
   const [studentsLoadingLocal, setStudentsLoading] = useState(false);
   const [studentsError, setStudentsError] = useState<string | null>(null);
+  const [registrationInitialParentData, setRegistrationInitialParentData] = useState<RegistrationParentData | null>(null);
+  const [registrationInitialStep, setRegistrationInitialStep] = useState<"parent" | "students" | "review">("parent");
 
   // Dynamic Island for payment status
   const dynamicIsland = useDynamicIsland();
@@ -1146,7 +1152,38 @@ export default function App() {
   };
 
   const handleRegistration = () => {
+    setRegistrationInitialParentData(null);
+    setRegistrationInitialStep("parent");
     navigateToPage("registration-form");
+  };
+
+  const handleAddStudentRegistration = () => {
+    const resolvedSchoolId = selectedSchoolId
+      || schools.find((school) => school.name === selectedSchool)?.id?.toString()
+      || "";
+
+    if (!userId || !userPhone || !resolvedSchoolId) {
+      handleRegistration();
+      return;
+    }
+
+    setRegistrationInitialParentData({
+      parentId: userId,
+      fullName: userName || "Parent",
+      email: userEmail || "",
+      phone: userPhone,
+      schoolId: resolvedSchoolId,
+      accessCode: "",
+    });
+    setRegistrationInitialStep("students");
+    navigateToPage("registration-form");
+  };
+
+  const handleRegistrationBack = () => {
+    const targetPage = registrationInitialParentData ? "pay-fees" : "details";
+    setRegistrationInitialParentData(null);
+    setRegistrationInitialStep("parent");
+    navigateToPage(targetPage, "back");
   };
 
   const handleRegistrationComplete = async (parentPhone: string, parentName: string, parentId: string) => {
@@ -1511,6 +1548,7 @@ export default function App() {
               onBack={handleBackToServices}
               onSelectServices={handleSelectServices}
               onClearBalances={handleClearBalances}
+              onAddStudent={handleAddStudentRegistration}
               students={students}
               initialSelectedStudents={selectedStudentIds}
             />
@@ -1625,15 +1663,17 @@ export default function App() {
             exit="exit"
           >
             <LazyRegistrationFormPage
-              onBack={() => {
-                navigateToPage("details", "back");
-              }}
+              onBack={handleRegistrationBack}
+              initialParentData={registrationInitialParentData}
+              initialStep={registrationInitialStep}
               onComplete={(data) => {
                 // Store the registration data temporarily so we can use it after success page
                 // We'll use it to auto-login the user
                 sessionStorage.setItem('pendingRegistration', JSON.stringify(data));
 
                 // Set user info and school
+                setRegistrationInitialParentData(null);
+                setRegistrationInitialStep("parent");
                 setUserInfo(data.name, data.phone, '', data.userId);
                 if (data.schoolName) {
                   setSelectedSchool(data.schoolName);

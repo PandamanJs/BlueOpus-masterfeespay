@@ -68,6 +68,10 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+function isGuardianConflictRequest(item: DuplicateReviewRequest) {
+  return item.reason === 'two_guardians_full';
+}
+
 function EmptyState({ icon: Icon, title, detail }: { icon: any; title: string; detail: string }) {
   return (
     <div className="min-h-[260px] rounded-[16px] border border-dashed border-gray-200 bg-gray-50/40 flex flex-col items-center justify-center text-center px-8">
@@ -90,6 +94,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 }
 
 function DuplicateCard({ item, onOpen }: { item: DuplicateReviewRequest; onOpen: () => void }) {
+  const isGuardianConflict = isGuardianConflictRequest(item);
   return (
     <button
       type="button"
@@ -104,6 +109,9 @@ function DuplicateCard({ item, onOpen }: { item: DuplicateReviewRequest; onOpen:
           <p className="text-[11px] text-gray-500 mt-1">
             Requested by {item.parent.name}
           </p>
+          <p className={`text-[10px] font-black uppercase tracking-[0.12em] mt-2 ${isGuardianConflict ? 'text-amber-700' : 'text-gray-400'}`}>
+            {isGuardianConflict ? 'Two guardians already linked' : 'Possible duplicate'}
+          </p>
         </div>
         <StatusPill status={item.status} />
       </div>
@@ -115,6 +123,11 @@ function DuplicateCard({ item, onOpen }: { item: DuplicateReviewRequest; onOpen:
           <p className="text-[11px] text-gray-500 mt-0.5">
             {item.existingStudent.grade || 'Grade unknown'} {item.existingStudent.className || ''}
           </p>
+          {item.existingGuardianNames && item.existingGuardianNames.length > 0 && (
+            <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+              Guardians: {item.existingGuardianNames.join(' and ')}
+            </p>
+          )}
         </div>
         <div className="rounded-[12px] bg-amber-50 p-3">
           <p className="text-[10px] text-amber-700 font-black uppercase tracking-[0.12em]">Parent Entered</p>
@@ -234,7 +247,11 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
         reviewerParentId: userId || null,
         reviewerNote,
       });
-      toast.success(status === 'approved' ? 'Existing student linked' : 'Duplicate request rejected');
+      toast.success(
+        status === 'approved'
+          ? (isGuardianConflictRequest(activeReview.item) ? 'Guardian conflict review approved' : 'Duplicate review approved')
+          : 'Duplicate request rejected'
+      );
       hapticFeedback('success');
       closeReview();
       await loadData();
@@ -428,12 +445,17 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
                     <div className="rounded-[12px] bg-amber-50 border border-amber-100 p-4 mb-4 flex gap-3">
                       <AlertTriangle size={20} className="text-amber-700 shrink-0 mt-0.5" />
                       <p className="text-[12px] text-amber-800 leading-relaxed">
-                        The parent entered details that match an existing pupil. Approving links the parent to the existing record; it does not create a duplicate student.
+                        {isGuardianConflictRequest(activeReview.item)
+                          ? 'The parent entered details that match an existing pupil who already has two guardians linked. Review the guardian names below and use this request to decide whether the school should intervene in the guardian assignment.'
+                          : 'The parent entered details that match an existing pupil. Approving marks the request as valid against the existing record; it does not create a duplicate student.'}
                       </p>
                     </div>
                     <Field label="Parent" value={`${activeReview.item.parent.name}${activeReview.item.parent.phone ? ` - ${activeReview.item.parent.phone}` : ''}`} />
                     <Field label="Existing pupil" value={`${activeReview.item.existingStudent.name} (${activeReview.item.existingStudent.grade || 'Grade unknown'} ${activeReview.item.existingStudent.className || ''})`} />
                     <Field label="Admission number" value={activeReview.item.existingStudent.admissionNumber} />
+                    {activeReview.item.existingGuardianNames && activeReview.item.existingGuardianNames.length > 0 && (
+                      <Field label="Existing guardians" value={activeReview.item.existingGuardianNames.join(' and ')} />
+                    )}
                     <Field label="Parent-entered pupil" value={`${activeReview.item.requestedStudent.name || 'Unknown'} (${activeReview.item.requestedStudent.grade || 'Grade unknown'} ${activeReview.item.requestedStudent.className || ''})`} />
                     <Field label="Submitted" value={formatDate(activeReview.item.createdAt)} />
                   </>
@@ -484,7 +506,7 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
                         className="h-12 rounded-[10px] bg-[#003630] text-white text-[13px] font-black disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                        Approve Link
+                        {isGuardianConflictRequest(activeReview.item) ? 'Approve Review' : 'Approve Request'}
                       </button>
                     </div>
                   ) : (

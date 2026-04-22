@@ -11,6 +11,10 @@ export interface ParentReviewRequest {
     schoolId?: string | null;
     schoolName?: string | null;
     reason?: string | null;
+    requestedGrade?: string | null;
+    requestedClassName?: string | null;
+    existingGuardianNames?: string[];
+    reviewerNote?: string | null;
     createdAt: string;
     reviewedAt?: string | null;
 }
@@ -46,6 +50,7 @@ export interface DuplicateReviewRequest {
         grade?: string | null;
         className?: string | null;
     };
+    existingGuardianNames?: string[];
     evidence: Record<string, any>;
     reviewerNote?: string | null;
     createdAt: string;
@@ -267,7 +272,7 @@ export async function getParentReviewRequests(parentId: string): Promise<ParentR
                 .order('created_at', { ascending: false }),
             supabase
                 .from('guardian_link_requests')
-                .select('request_id, parent_id, school_id, requested_student_id, request_reason, status, evidence, created_at, reviewed_at')
+                .select('request_id, parent_id, school_id, requested_student_id, request_reason, status, evidence, reviewer_note, created_at, reviewed_at')
                 .eq('parent_id', parentId)
                 .order('created_at', { ascending: false }),
         ]);
@@ -325,15 +330,20 @@ export async function getParentReviewRequests(parentId: string): Promise<ParentR
         const guardianLinks: ParentReviewRequest[] = (guardianRows || []).map((row: any) => {
             const student = studentsById.get(row.requested_student_id);
             const schoolId = row.school_id || student?.schoolId || null;
+            const evidence = row.evidence || {};
             return {
                 id: row.request_id,
                 type: 'guardian_link',
                 status: row.status,
                 studentId: row.requested_student_id,
-                studentName: student?.name || row.evidence?.requestedName || 'Unknown student',
+                studentName: student?.name || evidence.requestedName || 'Unknown student',
                 schoolId,
                 schoolName: schoolId ? (schoolsById.get(schoolId) || null) : null,
                 reason: row.request_reason,
+                requestedGrade: evidence.requestedGrade || null,
+                requestedClassName: evidence.requestedClass || null,
+                existingGuardianNames: (evidence.existingGuardianNames || []).filter(Boolean),
+                reviewerNote: row.reviewer_note || null,
                 createdAt: row.created_at,
                 reviewedAt: row.reviewed_at,
             };
@@ -620,7 +630,7 @@ export async function getSchoolReviewCenterData(schoolId?: string | null): Promi
         }));
 
         const duplicates: DuplicateReviewRequest[] = (guardianRows || [])
-            .filter((row: any) => row.request_reason === 'duplicate_suspected')
+            .filter((row: any) => row.request_reason === 'duplicate_suspected' || row.request_reason === 'two_guardians_full')
             .map((row: any) => {
                 const evidence = row.evidence || {};
                 return {
@@ -642,6 +652,7 @@ export async function getSchoolReviewCenterData(schoolId?: string | null): Promi
                         grade: evidence.requestedGrade || null,
                         className: evidence.requestedClass || null,
                     },
+                    existingGuardianNames: (evidence.existingGuardianNames || []).filter(Boolean),
                     evidence,
                     reviewerNote: row.reviewer_note,
                     createdAt: row.created_at,
