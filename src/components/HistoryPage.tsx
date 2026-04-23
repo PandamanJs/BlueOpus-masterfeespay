@@ -31,7 +31,7 @@ function AnimatedNumber({ value }: { value: number }) {
   });
 
   const display = useTransform(spring, (current) =>
-    `K${current.toLocaleString(undefined, {
+    `ZMW ${current.toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     })}`
@@ -61,6 +61,50 @@ interface HistoryPageProps {
   ) => void;
 }
 
+function StudentTab({
+  name,
+  isActive,
+  onClick,
+}: {
+  name: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={() => {
+        haptics.selection();
+        onClick();
+      }}
+      className={`flex items-center gap-[10px] px-[25px] h-[42px] rounded-xl shrink-0 transition-all active:scale-95 ${isActive ? "bg-[#F3FCF0] outline outline-1 outline-[#95E36C]" : ""
+        }`}
+      style={{
+        outline: isActive ? "1px solid #95E36C" : "1px solid #F2F2F2",
+        outlineOffset: "0px",
+        background: isActive ? "#F3FCF0" : "#FFFFFF",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+      }}
+    >
+      {isActive && (
+        <div data-svg-wrapper>
+          <svg width="6" height="6" viewBox="0 0 6 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="3" cy="3" r="3" fill="#4FE501" />
+          </svg>
+        </div>
+      )}
+      <div
+        className="text-[12px] font-['Space_Grotesk'] whitespace-nowrap flex flex-col justify-end"
+        style={{
+          color: isActive ? "black" : "#2D2D2D",
+          fontWeight: isActive ? 700 : 500,
+        }}
+      >
+        {name}
+      </div>
+    </button>
+  );
+}
+
 export default function HistoryPage({
   userPhone,
   onBack,
@@ -73,7 +117,8 @@ export default function HistoryPage({
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const historyStudents = students.filter(student => student.verificationStatus !== 'unverified');
 
   // 1. Fetch Students on Mount
@@ -88,11 +133,11 @@ export default function HistoryPage({
         } else {
           setSelectedStudentId('');
           setFinancialSummary(null);
-          setIsLoading(false);
         }
       } catch (e) {
         console.error("Error loading students:", e);
-        setIsLoading(false);
+      } finally {
+        setIsInitialLoading(false);
       }
     };
     loadStudents();
@@ -103,14 +148,14 @@ export default function HistoryPage({
     if (!selectedStudentId) return;
 
     const loadSummary = async () => {
-      setIsLoading(true);
+      setIsSummaryLoading(true);
       try {
         const summary = await getStudentFinancialSummary(selectedStudentId);
         setFinancialSummary(summary);
       } catch (e) {
         console.error("Error loading summary:", e);
       } finally {
-        setIsLoading(false);
+        setIsSummaryLoading(false);
       }
     };
     loadSummary();
@@ -131,22 +176,30 @@ export default function HistoryPage({
     <div className="bg-[#f8fafc] min-h-screen w-full overflow-hidden flex flex-col">
       <div className="relative w-full max-w-lg h-screen mx-auto flex flex-col bg-[#f9fafb]">
 
-        {/* Brand Header — from design */}
-        <div className="bg-white border-b border-[#e4e4e4] px-7 py-6 flex items-center justify-center relative z-20">
-          <p className="font-['Space_Grotesk',sans-serif] font-bold text-[24px] text-black tracking-[-0.5px]">masterfees</p>
-        </div>
+        <LogoHeader />
 
         {/* Dash Content */}
         <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
 
-          {/* Emerald Card — from design (Frame17/Frame1 style) */}
-          {historyStudents.length === 0 ? (
+          {isInitialLoading ? (
+            <div className="py-24 flex flex-col items-center justify-center gap-6">
+              <div className="relative">
+                <Loader2 className="animate-spin text-[#95e36c]" size={40} strokeWidth={1.5} />
+                <div className="absolute inset-0 blur-md bg-[#95e36c]/20 rounded-full animate-pulse" />
+              </div>
+              <p className="font-['Space_Grotesk',sans-serif] text-[13px] text-gray-400 font-bold uppercase tracking-[0.2em] animate-pulse">
+                Fetching Profiles
+              </p>
+            </div>
+          ) : historyStudents.length === 0 ? (
             <EmptyHistoryState onBack={onBack} />
           ) : (
             <>
+              {/* Emerald Card — from design (Frame17/Frame1 style) */}
               <motion.div
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
                 className="mx-4 mt-6 mb-8 p-6 rounded-[12px] relative overflow-hidden min-h-[131px] flex flex-col justify-end gap-1 shadow-[0_8px_32px_-8px_rgba(0,54,48,0.3)]"
               >
                 <img
@@ -160,17 +213,22 @@ export default function HistoryPage({
                 </p>
 
                 <div className="flex items-center justify-between gap-4 mt-1 relative z-10">
-                  <div className="overflow-hidden">
-                    <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[40px] tracking-[-1px] leading-tight m-0 ${hasOutstandingBalance ? 'text-white' : 'text-[#d1d5db]'}`}>
-                      {isLoading
-                        ? "---"
-                        : hasOutstandingBalance
-                          ? <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
-                          : "No Balance"}
-                    </p>
+                  <div className="flex-1 overflow-hidden">
+                    <div className="font-['Space_Grotesk',sans-serif] font-bold text-[32px] tracking-[-1px] leading-tight m-0 text-white flex items-center gap-3">
+                      {isSummaryLoading ? (
+                        <div className="flex items-center gap-2">
+                          <span className="opacity-50 text-[24px]">ZMW</span>
+                          <Loader2 className="animate-spin size-6 text-[#95e36c]" />
+                        </div>
+                      ) : hasOutstandingBalance ? (
+                        <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
+                      ) : (
+                        "ZMW 0"
+                      )}
+                    </div>
                   </div>
 
-                  {hasOutstandingBalance && !isLoading && (
+                  {!isSummaryLoading && hasOutstandingBalance && (
                     <button
                       onClick={() => {
                         haptics.heavy();
@@ -181,7 +239,7 @@ export default function HistoryPage({
                           toast.info('Going to checkout...');
                         }
                       }}
-                      className="bg-[#95e36c] rounded-[8px] px-6 py-2 shadow-[0px_4px_12px_rgba(0,0,0,0.15)] active:scale-95 transition-transform"
+                      className="bg-[#95e36c] rounded-[8px] px-6 py-2 shadow-[0px_4px_12px_rgba(0,0,0,0.15)] active:scale-95 transition-transform shrink-0"
                     >
                       <span className="font-['Space_Grotesk',sans-serif] font-bold text-[#003630] text-[12px]">
                         Settle All
@@ -191,95 +249,68 @@ export default function HistoryPage({
                 </div>
               </motion.div>
 
-              {/* Child Selector Tabs — EXACTLY from design (Frame14 style) */}
-              <div className="flex items-center gap-[16px] h-[50px] px-4 overflow-x-auto no-scrollbar">
-                {historyStudents.map(student => {
-              const isActive = selectedStudentId === student.id;
-
-              return (
-                <button
-                  key={student.id}
-                  onClick={() => {
-                    haptics.selection();
-                    setSelectedStudentId(student.id);
-                  }}
-                  className={`h-full relative rounded-[12px] shrink-0 transition-all ${isActive ? 'bg-[#f5f7f9]' : 'bg-transparent'}`}
-                >
-                  {isActive && (
-                    <div aria-hidden="true" className="absolute border-[2px] border-[#a3a3a3] border-solid inset-0 pointer-events-none rounded-[12px] shadow-[0px_10px_20px_0px_rgba(0,0,0,0.25)]" />
-                  )}
-                  <div className="flex flex-row items-center justify-center h-full">
-                    <div className="flex gap-[10px] items-center justify-center px-[25px] py-[4px] relative h-full">
-                      {isActive && (
-                        <div className="relative shrink-0 w-[10px] h-[10px]">
-                          <svg className="absolute block inset-0 w-full h-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10 10">
-                            <circle cx="5" cy="5" fill="#95E36C" r="5" />
-                          </svg>
-                        </div>
-                      )}
-                      <div className={`flex flex-col justify-end leading-[normal] relative shrink-0 text-[10px] text-black whitespace-nowrap ${isActive ? "font-['Space_Grotesk',sans-serif] font-bold" : "font-['Space_Grotesk',sans-serif] font-medium"}`}>
-                        <p className="m-0">{student.name}</p>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+              {/* Child Selector Tabs — Moved below Emerald Card */}
+              <div className="h-[70px] flex items-center gap-4 px-6 overflow-x-auto no-scrollbar bg-transparent mt-4">
+                {historyStudents.map(student => (
+                  <StudentTab
+                    key={student.id}
+                    name={student.name}
+                    isActive={selectedStudentId === student.id}
+                    onClick={() => setSelectedStudentId(student.id)}
+                  />
+                ))}
               </div>
 
               {/* Content Area — from design (FeesSection style) */}
               <div className="mt-8 px-4 space-y-4">
                 <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-gray-400 uppercase tracking-[0.2em] mb-4">
-
+                  Fees & Payments
                 </p>
 
-                {isLoading ? (
-                  <div className="py-24 flex flex-col items-center justify-center gap-6">
-                    <div className="relative">
-                      <Loader2 className="animate-spin text-[#95e36c]" size={40} strokeWidth={1.5} />
-                      <div className="absolute inset-0 blur-md bg-[#95e36c]/20 rounded-full animate-pulse" />
-                    </div>
-                    <p className="font-['Space_Grotesk',sans-serif] text-[13px] text-gray-400 font-bold uppercase tracking-[0.2em] animate-pulse">
-                      Reconciling Ledger
-                    </p>
+                {isSummaryLoading ? (
+                  <div className="py-12 flex flex-col items-center gap-3">
+                    <Loader2 className="animate-spin text-[#95e36c]" size={24} />
+                    <p className="text-[12px] text-gray-400">Loading payment history...</p>
                   </div>
-                ) : !hasOutstandingBalance ? (
+                ) : (!financialSummary || !financialSummary.items || financialSummary.items.length === 0) ? (
                   <EmptySummaryState onBack={onBack} />
-                ) : financialSummary?.items?.map((item, idx) => (
-                  <ServiceCategoryCard
-                    key={item.id || idx}
-                    item={item}
-                    schoolName={schoolName || currentStudent?.schoolName || "Institutional Fees"}
-                    schoolLogo={schoolLogo}
-                    studentName={currentStudent?.name || "Student"}
-                    userName={userName || "Parent"}
-                    grade={currentStudent?.grade || "N/A"}
-                    transactions={financialSummary.transactions || []}
-                    hasOutstandingBalance={hasOutstandingBalance}
-                    onPay={(txs) => {
-                      if (onIndividualPay) {
-                        onIndividualPay({
-                          id: item.invoice_id || item.id || crypto.randomUUID(),
-                          description: item.name,
-                          amount: item.balance || 0,
-                          invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
-                          invoice_id: item.invoice_id,
-                          studentName: currentStudent?.name || "Student",
-                          studentId: selectedStudentId,
-                          term: item.term,
-                          academicYear: item.academic_year,
-                          grade: currentStudent?.grade || "N/A",
-                          paymentHistory: txs.map(tx => ({
-                            date: extractDate(tx),
-                            method: tx.payment_method?.replace('_', ' ') || 'Office',
-                            amount: tx.amount,
-                            description: tx.description
-                          }))
-                        });
-                      }
-                    }}
-                  />
-                ))}
+                ) : (
+                  financialSummary.items.map((item, idx) => (
+                    <ServiceCategoryCard
+                      key={item.id || idx}
+                      item={item}
+                      schoolName={schoolName || currentStudent?.schoolName || "Institutional Fees"}
+                      schoolLogo={schoolLogo}
+                      studentName={currentStudent?.name || "Student"}
+                      userName={userName || "Parent"}
+                      grade={currentStudent?.grade || "N/A"}
+                      transactions={financialSummary.transactions || []}
+                      hasOutstandingBalance={hasOutstandingBalance}
+                      onPay={(txs) => {
+                        if (onIndividualPay) {
+                          onIndividualPay({
+                            id: item.invoice_id || item.id || crypto.randomUUID(),
+                            description: item.name,
+                            amount: item.balance || 0,
+                            invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
+                            invoice_id: item.invoice_id,
+                            studentName: currentStudent?.name || "Student",
+                            studentId: selectedStudentId,
+                            term: item.term,
+                            academicYear: item.academic_year,
+                            grade: currentStudent?.grade || "N/A",
+                            paymentHistory: txs.map(tx => ({
+                              date: extractDate(tx),
+                              method: tx.payment_method?.replace('_', ' ') || 'Office',
+                              amount: tx.amount,
+                              description: tx.description
+                            }))
+                          });
+                        }
+                      }}
+                    />
+                  ))
+                )}
               </div>
             </>
           )}
@@ -357,18 +388,20 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
 
   return (
     <div
-      className="rounded-[12px] p-4 relative overflow-hidden flex flex-col gap-4 shadow-[0px_8px_32px_rgba(0,0,0,0.06)] border border-white/40"
+      className="rounded-[12px] p-4 relative overflow-hidden flex flex-col gap-4 border border-white/40"
       style={{
         background: "rgba(255, 255, 255, 0.65)",
         backdropFilter: "blur(16px) saturate(160%)",
         WebkitBackdropFilter: "blur(16px) saturate(160%)",
-        boxShadow: isCleared ? "inset 0 4px 0 0 #95e36c, 0 8px 32px rgba(0,0,0,0.06)" : "0 8px 32px rgba(0,0,0,0.06)"
+        boxShadow: isCleared
+          ? "inset 0 4px 0 0 #95e36c, 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -4px rgba(0,0,0,0.05), 0 20px 25px -5px rgba(0,0,0,0.05)"
+          : "0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -4px rgba(0,0,0,0.05), 0 20px 25px -5px rgba(0,0,0,0.05)"
       }}
     >
       <div className="flex justify-between items-start gap-4">
         <div className="flex flex-col gap-1 flex-1">
-          <p className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-black m-0">{item.name}</p>
-          <p className="font-['Space_Grotesk',sans-serif] font-normal text-[8px] text-black m-0">
+          <p className="font-['Space_Grotesk',sans-serif] font-semibold text-black m-0" style={{ fontSize: '13px' }}>{item.name}</p>
+          <p className="font-['Space_Grotesk',sans-serif] font-normal text-black m-0" style={{ fontSize: '8px' }}>
             {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
           </p>
         </div>
@@ -385,7 +418,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
               <AlertTriangle size={10} color="#ea3030" />
             )}
           </div>
-          <p 
+          <p
             className="font-['Space_Grotesk',sans-serif] font-bold text-[8px] m-0"
             style={{ color: isCleared ? '#003630' : '#ea3030' }}
           >
@@ -403,7 +436,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
             <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
               {item.description || `${item.name} Invoice`}
             </p>
-            <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right">K{item.expected?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+            <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right">ZMW {item.expected?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
           </div>
 
           {/* Related Payments */}
@@ -413,7 +446,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
               <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
                 {tx.description || `Paid via ${tx.payment_method?.replace('_', ' ') || 'Office'}`}
               </p>
-              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-K{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-ZMW {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
             </div>
           ))}
 
@@ -423,7 +456,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
               <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
                 Credit applied from previous payments
               </p>
-              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-K{creditApplied.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-ZMW {creditApplied.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
             </div>
           )}
 
@@ -431,7 +464,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
           <div className="mt-1 pt-2 border-t border-[#dad9d9] flex items-center justify-between gap-4">
             <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[12px] ${!isCleared ? 'text-[#ea3030]' : 'text-[#b3b3b3]'}`}>{isCleared ? 'Balance Settled' : 'Balance Due'}</p>
             <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-right ${!isCleared ? 'text-[#ea3030]' : 'text-[#b3b3b3]'}`}>
-              {`K${normalizedBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+              {`ZMW ${normalizedBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
             </p>
           </div>
         </div>
@@ -442,7 +475,8 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         {!isCleared && (
           <button
             onClick={() => onPay(relatedTxs)}
-            className="bg-[#e0f7d4] h-[40px] rounded-[8px] border-[0.5px] border-[#003630] font-['Space_Grotesk',sans-serif] font-bold text-[8px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+            className="bg-[#e0f7d4] h-[40px] rounded-[8px] border-[0.5px] border-[#003630] font-['Space_Grotesk',sans-serif] font-bold text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-[0px_4px_12px_rgba(0,0,0,0.08)]"
+            style={{ fontSize: '9px' }}
           >
             Pay Now
           </button>
@@ -450,15 +484,17 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         <div className="flex items-center gap-[10px]">
           <button
             onClick={() => { haptics.light(); setShowDetails(!showDetails); }}
-            className="flex-1 bg-[#f5f7f9] h-[40px] rounded-[8px] border border-[#d6d6d6] font-['Space_Grotesk',sans-serif] font-bold text-[8px] text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-sm"
+            className="flex-1 bg-[#f5f7f9] h-[40px] rounded-[8px] border border-[#d6d6d6] font-['Space_Grotesk',sans-serif] font-bold text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-[0px_4px_12px_rgba(0,0,0,0.08)]"
+            style={{ fontSize: '9px' }}
           >
             {showDetails ? 'Hide Details' : 'Show Details'}
           </button>
           <button
             onClick={handleDownload}
-            className="flex-1 h-[40px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-medium text-[8px] text-[#003630] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="flex-1 h-[40px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-bold text-[#003630] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0px_4px_12px_rgba(0,0,0,0.03)]"
+            style={{ fontSize: '9px' }}
           >
-            <Download size={16} className="opacity-70" />
+            <Download size={14} className="opacity-70" />
             <span>Download</span>
           </button>
         </div>

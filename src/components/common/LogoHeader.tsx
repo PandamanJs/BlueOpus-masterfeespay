@@ -1,6 +1,6 @@
 import { hapticFeedback } from "../../utils/haptics";
-import headerSvgPaths from "../../imports/svg-co0ktog99f";
 import { useAppStore } from "../../stores/useAppStore";
+import { ChevronLeft } from "lucide-react";
 
 interface LogoHeaderProps {
     onBack?: () => void;
@@ -40,12 +40,29 @@ export default function LogoHeader({ onBack, showBackButton = false, className, 
         window.history.pushState({ page: 'search' }, '', '#search');
     };
 
+    const handleBackClick = () => {
+        if (onBack) {
+            hapticFeedback('light');
+            onBack();
+        }
+    };
+
     return (
         <div className={`h-[66px] w-full sticky top-0 z-[100] bg-white/95 backdrop-blur-[20px] flex items-center px-4 ${className}`}>
-            <div className="flex items-center gap-4 flex-1">
+            <div className="flex items-center gap-4 w-full">
+                {showBackButton && (
+                    <button 
+                        onClick={handleBackClick}
+                        className="p-2 -ml-2 rounded-full active:scale-90 transition-transform flex items-center justify-center"
+                        aria-label="Go back"
+                    >
+                        <ChevronLeft size={24} strokeWidth={2.5} />
+                    </button>
+                )}
+
                 <button 
                     onClick={handleHomeClick}
-                    className="relative flex items-center gap-[12px] touch-manipulation active:scale-95 transition-transform shrink-0"
+                    className="relative flex items-center gap-[8px] touch-manipulation active:scale-95 transition-transform shrink-0"
                     title="Go to Home"
                 >
                     {showLogo && <Logo />}
@@ -53,7 +70,7 @@ export default function LogoHeader({ onBack, showBackButton = false, className, 
                 </button>
 
                 {children && (
-                    <div className="flex-1 flex justify-center pr-[140px]">
+                    <div className="flex-1 flex justify-end">
                         {children}
                     </div>
                 )}
