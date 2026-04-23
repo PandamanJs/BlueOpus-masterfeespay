@@ -158,6 +158,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const [smartMatchResults, setSmartMatchResults] = useState<StudentData[]>([]);
   const [showSmartMatchModal, setShowSmartMatchModal] = useState(false);
   const [showSmartMatchResults, setShowSmartMatchResults] = useState(true);
+  const [isSearchingStudents, setIsSearchingStudents] = useState(false);
   const clearDuplicateMatches = pendingManualStudent
     ? smartMatchResults.filter(match => isClearDuplicateStudent(match, pendingManualStudent))
     : [];
@@ -265,24 +266,42 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     loadData();
   }, [parentData.schoolId]);
   useEffect(() => {
+    let isCancelled = false;
     const timer = setTimeout(async () => {
       if (searchQuery.trim().length >= 2) {
         try {
+          setIsSearchingStudents(true);
           const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
-          const results = await searchStudentsByName(searchQuery, parentData.schoolId, parentData.parentId);
-          setSearchResults(results);
+          const results = await searchStudentsByName(searchQuery, parentData.schoolId, parentData.parentId, {
+            includeGuardianLocked: true
+          });
+          if (!isCancelled) {
+            setSearchResults(results);
+          }
 
         } catch (error) {
           console.error("Search error:", error);
-          setSearchResults([]);
+          if (!isCancelled) {
+            setSearchResults([]);
+          }
+        } finally {
+          if (!isCancelled) {
+            setIsSearchingStudents(false);
+          }
         }
       } else {
-        setSearchResults([]);
+        if (!isCancelled) {
+          setSearchResults([]);
+          setIsSearchingStudents(false);
+        }
       }
     }, 500);
 
-    return () => clearTimeout(timer);
-  }, [searchQuery, parentData.schoolId]);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, parentData.schoolId, parentData.parentId]);
 
   const [collisionDetected, setCollisionDetected] = useState<boolean>(false);
 
@@ -292,7 +311,9 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       if (newStudent.name.trim().length >= 3) {
         try {
           const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
-          const results = await searchStudentsByName(newStudent.name, parentData.schoolId, parentData.parentId);
+          const results = await searchStudentsByName(newStudent.name, parentData.schoolId, parentData.parentId, {
+            includeGuardianLocked: true
+          });
 
           // Filter out students already added to the local session list
           const relevantMatches = results.filter(r => !students.find(s => s.id === r.id));
@@ -337,6 +358,70 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     } else {
       console.log('[Registration] Student already in list, skipping');
     }
+  };
+
+  const buildGuardianReviewStudent = (match: StudentData): StudentData | null => {
+    if (!pendingManualStudent) return null;
+
+    const guardianConflict = Boolean(match.isGuardianLinkLocked);
+    return {
+      ...pendingManualStudent,
+      id: `review-${Date.now()}`,
+      studentId: 'School Review',
+      guardianReviewStudentId: match.id,
+      guardianReviewReason: guardianConflict ? 'two_guardians_full' : 'duplicate_suspected',
+      guardianReviewEvidence: {
+        duplicateStudentId: match.id,
+        duplicateStudentName: match.name,
+        duplicateStudentGrade: match.grade,
+        duplicateStudentClass: match.class,
+        requestedName: pendingManualStudent.name,
+        requestedGrade: pendingManualStudent.grade,
+        requestedClass: pendingManualStudent.class,
+        existingGuardianNames: match.guardianNames || [match.parentName, match.otherParentName].filter(Boolean),
+        guardianSlotsRemaining: match.guardianSlotsRemaining ?? null,
+        isGuardianLinkLocked: guardianConflict,
+        source: guardianConflict ? 'manual_student_two_guardians_modal' : 'manual_student_duplicate_modal'
+      }
+    };
+  };
+
+  const buildGuardianReviewFromSearch = (match: StudentData): StudentData => {
+    const guardianConflict = Boolean(match.isGuardianLinkLocked);
+    return {
+      id: `review-${Date.now()}`,
+      name: match.name,
+      grade: match.grade,
+      class: match.class,
+      studentId: 'School Review',
+      guardianReviewStudentId: match.id,
+      guardianReviewReason: guardianConflict ? 'two_guardians_full' : 'duplicate_suspected',
+      guardianReviewEvidence: {
+        duplicateStudentId: match.id,
+        duplicateStudentName: match.name,
+        duplicateStudentGrade: match.grade,
+        duplicateStudentClass: match.class,
+        requestedName: match.name,
+        requestedGrade: match.grade,
+        requestedClass: match.class,
+        existingGuardianNames: match.guardianNames || [match.parentName, match.otherParentName].filter(Boolean),
+        guardianSlotsRemaining: match.guardianSlotsRemaining ?? null,
+        isGuardianLinkLocked: guardianConflict,
+        source: guardianConflict ? 'search_result_two_guardians' : 'search_result_duplicate_review'
+      }
+    };
+  };
+
+  const handleSelectSearchResult = (student: StudentData) => {
+    if (student.isGuardianLinkLocked) {
+      addStudent(buildGuardianReviewFromSearch(student));
+      import('sonner').then(({ toast }) => toast.success('Guardian conflict sent for review', {
+        description: 'This student already has two guardians linked. The school will review your request before any access is granted.'
+      }));
+      return;
+    }
+
+    addStudent(student);
   };
 
   const removeStudent = (id: string) => {
@@ -439,6 +524,18 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const handleSaveStudent = () => saveManualStudent(false);
 
   const handleUseExistingMatch = (student: StudentData) => {
+    if (student.isGuardianLinkLocked) {
+      const reviewStudent = buildGuardianReviewStudent(student);
+      if (!reviewStudent) return;
+      addStudent(reviewStudent);
+      setPendingManualStudent(null);
+      setShowSimilarStudentModal(false);
+      handleCloseForm();
+      import('sonner').then(({ toast }) => toast.success('School review requested', {
+        description: 'This student already has two guardians linked. The school will review the request before access is granted.'
+      }));
+      return;
+    }
     addStudent(student);
     setPendingManualStudent(null);
     setShowSimilarStudentModal(false);
@@ -470,30 +567,17 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     const match = clearDuplicateMatches[0];
     if (!match) return;
 
-    const reviewStudent: StudentData = {
-      ...pendingManualStudent,
-      id: `review-${Date.now()}`,
-      studentId: 'School Review',
-      guardianReviewStudentId: match.id,
-      guardianReviewReason: 'duplicate_suspected',
-      guardianReviewEvidence: {
-        duplicateStudentId: match.id,
-        duplicateStudentName: match.name,
-        duplicateStudentGrade: match.grade,
-        duplicateStudentClass: match.class,
-        requestedName: pendingManualStudent.name,
-        requestedGrade: pendingManualStudent.grade,
-        requestedClass: pendingManualStudent.class,
-        source: 'manual_student_duplicate_modal'
-      }
-    };
+    const reviewStudent = buildGuardianReviewStudent(match);
+    if (!reviewStudent) return;
 
     addStudent(reviewStudent);
     setPendingManualStudent(null);
     setShowSimilarStudentModal(false);
     handleCloseForm();
     import('sonner').then(({ toast }) => toast.success('Requested school verification', {
-      description: 'This duplicate-looking student was not created. The school will review whether it is a different child.'
+      description: match.isGuardianLinkLocked
+        ? 'The matching student already has two guardians linked. The school will review the conflict before any access is granted.'
+        : 'This duplicate-looking student was not created. The school will review whether it is a different child.'
     }));
   };
 
@@ -721,7 +805,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
               </motion.div>
 
               <AnimatePresence>
-                {searchResults.length > 0 && (
+                {(isSearchingStudents || searchResults.length > 0 || (searchQuery.trim().length >= 2 && !isSearchingStudents)) && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -729,10 +813,15 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     className="relative z-20 bg-white rounded-[24px] shadow-2xl border border-gray-100 overflow-hidden mb-4 mt-2"
                   >
                     <div className="p-2 space-y-1">
-                      {searchResults.map((student) => (
+                      {isSearchingStudents ? (
+                        <div className="flex items-center justify-center gap-3 px-4 py-6 text-[#003630]/60">
+                          <Loader2 size={18} className="animate-spin" />
+                          <span className="text-[12px] font-bold uppercase tracking-widest">Searching student records...</span>
+                        </div>
+                      ) : searchResults.length > 0 ? searchResults.map((student) => (
                         <button
                           key={student.id}
-                          onClick={() => addStudent(student)}
+                          onClick={() => handleSelectSearchResult(student)}
                           className="w-full p-4 text-left rounded-[18px] hover:bg-gray-50 flex items-center justify-between group transition-all"
                         >
                           <div className="flex-1 min-w-0">
@@ -755,17 +844,37 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   <User size={10} className="text-[#003630]/30" />
                                   <span className="text-[10px] text-[#003630]/60 font-bold uppercase tracking-[1px]">
-                                    {student.parentName || student.otherParentName}
+                                    {student.isGuardianLinkLocked && student.guardianNames && student.guardianNames.length > 0
+                                      ? student.guardianNames.join(' and ')
+                                      : student.parentName || student.otherParentName}
+                                  </span>
+                                </div>
+                              )}
+                              {student.isGuardianLinkLocked && (
+                                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-2.5 py-1">
+                                  <AlertTriangle size={10} className="text-amber-700" />
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-amber-700">
+                                    Two guardians are already linked to this student.
                                   </span>
                                 </div>
                               )}
                             </div>
                           </div>
                           <div className="size-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#003630] group-hover:text-white transition-all ml-3 shrink-0">
-                            <Plus size={18} />
+                            {student.isGuardianLinkLocked ? <AlertTriangle size={18} /> : <Plus size={18} />}
                           </div>
                         </button>
-                      ))}
+                      )) : (
+                        <div className="px-4 py-5 text-center">
+                          <p className="text-[12px] font-bold text-[#003630]">No student matches found</p>
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            Try another spelling or add the pupil manually so the school can review it.
+                          </p>
+                          <p className="text-[10px] text-amber-700/80 mt-3 font-bold uppercase tracking-wider">
+                            Some students with two guardians are hidden from direct linking
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -1048,6 +1157,12 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
       <AnimatePresence>
         {showSimilarStudentModal && (
+          <>
+          {(() => {
+            const highlightedMatch = clearDuplicateMatches[0];
+            const hasGuardianConflict = Boolean(highlightedMatch?.isGuardianLinkLocked);
+            const guardianNames = highlightedMatch?.guardianNames || [highlightedMatch?.parentName, highlightedMatch?.otherParentName].filter(Boolean);
+            return (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1065,11 +1180,21 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                   <Info size={22} className="text-amber-700" />
                 </div>
                 <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.4px]">
-                  Duplicate student found
+                  {hasGuardianConflict ? 'Guardian conflict found' : 'Duplicate student found'}
                 </h3>
                 <p className="text-[13px] text-amber-800/80 leading-relaxed mt-1">
-                  This name, grade, and class already match an existing record. Please use the existing pupil record or ask the school to review it.
+                  {hasGuardianConflict
+                    ? 'This name, grade, and class match an existing student who already has two guardians linked. You can request school review so the school can verify whether this request should replace or add a guardian.'
+                    : 'This name, grade, and class already match an existing record. Please use the existing pupil record or ask the school to review it.'}
                 </p>
+                {hasGuardianConflict && guardianNames.length > 0 && (
+                  <div className="mt-3 rounded-[14px] border border-amber-200 bg-white/70 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">Existing guardians</p>
+                    <p className="text-[12px] text-[#003630] font-bold mt-1 leading-relaxed">
+                      {guardianNames.join(' and ')}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-3 overflow-y-auto">
@@ -1087,9 +1212,16 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                       <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mt-1">
                         {match.grade}{match.class && match.class !== 'General' ? ` ${match.class}` : ''} {match.studentId ? `- ${match.studentId}` : ''}
                       </p>
+                      {match.guardianNames && match.guardianNames.length > 0 && (
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Guardians: {match.guardianNames.join(' and ')}
+                        </p>
+                      )}
                     </div>
-                    <span className="text-[11px] font-black text-[#003630] bg-[#95e36c]/30 rounded-full px-3 py-1 whitespace-nowrap">
-                      This is my child
+                    <span className={`text-[11px] font-black rounded-full px-3 py-1 whitespace-nowrap ${
+                      match.isGuardianLinkLocked ? 'text-amber-800 bg-amber-100' : 'text-[#003630] bg-[#95e36c]/30'
+                    }`}>
+                      {match.isGuardianLinkLocked ? 'School review needed' : 'This is my child'}
                     </span>
                   </button>
                 ))}
@@ -1109,11 +1241,14 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                   onClick={handleRequestSchoolReview}
                   className="w-full min-h-11 rounded-[14px] bg-white text-gray-500 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-4"
                 >
-                  Request school verification
+                  {hasGuardianConflict ? 'Request guardian conflict review' : 'Request school verification'}
                 </button>
               </div>
             </motion.div>
           </motion.div>
+            );
+          })()}
+          </>
         )}
       </AnimatePresence>
 

@@ -13,20 +13,25 @@ import { useAppStore } from '../stores/useAppStore';
 interface RegistrationFormPageProps {
   onBack: () => void;
   onComplete: (data: { name: string; phone: string; schoolName: string; userId: string }) => void;
+  initialParentData?: ParentData | null;
+  initialStep?: RegistrationStep;
 }
 
 type RegistrationStep = 'parent' | 'students' | 'review';
 type StudentBalanceDispute = BalanceDisputeDetails & { note: string };
 
-export default function RegistrationFormPage({ onBack, onComplete }: RegistrationFormPageProps) {
+export default function RegistrationFormPage({ onBack, onComplete, initialParentData = null, initialStep = 'parent' }: RegistrationFormPageProps) {
   const PERSISTENCE_KEY = 'masterfees_registration_v1';
+  const isAddStudentEntry = Boolean(initialParentData?.parentId && initialStep === 'students');
 
   const [currentStep, setCurrentStep] = useState<RegistrationStep>(() => {
+    if (initialParentData?.schoolId) return initialStep;
     const saved = localStorage.getItem(`${PERSISTENCE_KEY}_step`);
     return (saved as RegistrationStep) || 'parent';
   });
 
   const [parentData, setParentData] = useState<ParentData | null>(() => {
+    if (initialParentData?.schoolId) return initialParentData;
     const saved = localStorage.getItem(`${PERSISTENCE_KEY}_parent`);
     return saved ? JSON.parse(saved) : null;
   });
@@ -46,6 +51,20 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
   const [duplicateMatchType, setDuplicateMatchType] = useState<'phone' | 'email' | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
+  useEffect(() => {
+    const hasParentContext = Boolean(parentData?.schoolId);
+    const hasStudentsContext = studentsData.length > 0;
+
+    if (!hasParentContext && currentStep !== 'parent') {
+      setCurrentStep('parent');
+      return;
+    }
+
+    if (currentStep === 'review' && !hasStudentsContext) {
+      setCurrentStep('students');
+    }
+  }, [currentStep, parentData, studentsData]);
+
   // Save to localStorage whenever state changes
   useEffect(() => {
     localStorage.setItem(`${PERSISTENCE_KEY}_step`, currentStep);
@@ -59,32 +78,55 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
     localStorage.removeItem(`${PERSISTENCE_KEY}_students`);
   };
 
+  useEffect(() => {
+    if (!initialParentData?.schoolId) return;
+    clearPersistence();
+    setParentData(initialParentData);
+    setStudentsData([]);
+    setStudentBalanceDisputes({});
+    setCurrentStep(initialStep);
+  }, [initialParentData, initialStep]);
+
   // ── Back-navigation fix ──────────────────────────────────────────────────
   // We need a ref so the popstate handler always sees the CURRENT step without
   // needing to re-register the listener on every render.
   const currentStepRef = useRef<RegistrationStep>(currentStep);
   useEffect(() => { currentStepRef.current = currentStep; }, [currentStep]);
 
-  // Capture fires before App.tsx's bubble-phase listener, so we can handle
-  // inter-step navigation first and stop propagation when appropriate.
   const setNavigationDirection = useAppStore((state) => state.setNavigationDirection);
 
-  /*
+  useEffect(() => {
+    window.history.replaceState(
+      { page: 'registration-form', step: currentStep },
+      '',
+      '#registration-form'
+    );
+  }, [currentStep]);
+
   useEffect(() => {
     const handleInternalBack = (e: PopStateEvent) => {
-      const step = currentStepRef.current;
-      if (step === 'students' || step === 'review') {
-        e.stopImmediatePropagation(); // prevent App.tsx from also handling it
-        setNavigationDirection('back'); // Let any animated components know we're moving back
-        if (step === 'students') setCurrentStep('parent');
-        else if (step === 'review') setCurrentStep('students');
+      const targetPage = e.state?.page || window.location.hash.slice(1);
+      if (targetPage !== 'registration-form') return;
+
+      const targetStep = e.state?.step as RegistrationStep | undefined;
+      const activeStep = currentStepRef.current;
+
+      if (targetStep && targetStep !== activeStep) {
+        e.stopImmediatePropagation();
+        setNavigationDirection('back');
+        setCurrentStep(targetStep);
+        return;
+      }
+
+      if (!targetStep && (activeStep === 'students' || activeStep === 'review')) {
+        e.stopImmediatePropagation();
+        setNavigationDirection('back');
+        setCurrentStep(activeStep === 'review' ? 'students' : 'parent');
       }
     };
-    // true = capture phase
     window.addEventListener('popstate', handleInternalBack, true);
     return () => window.removeEventListener('popstate', handleInternalBack, true);
-  }, [setNavigationDirection]); // Uses setNavigationDirection from hook
-  */
+  }, [setNavigationDirection]);
 
   useEffect(() => {
     async function fetchSchools() {
@@ -126,6 +168,10 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
 
   const handleStudentsBack = () => {
     console.log('[Registration] Step 2 -> 1 (Back to parent info)');
+    if (isAddStudentEntry) {
+      onBack();
+      return;
+    }
     window.history.back();
   };
 
@@ -136,7 +182,9 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
     window.history.pushState({ page: 'registration-form', step: 'review' }, '', '#registration-form');
   };
 
-  const handleReviewBack = () => { window.history.back(); };
+  const handleReviewBack = () => {
+    window.history.back();
+  };
 
   const handleFinalConfirm = async (confirmedParentId?: string) => {
     if (parentData && studentsData.length > 0) {
@@ -175,12 +223,17 @@ export default function RegistrationFormPage({ onBack, onComplete }: Registratio
 
         // Success!
         const hasSchoolReviewRequests = studentsWithDisputes.some(student => student.guardianReviewStudentId);
+        const hasTwoGuardianConflictRequests = studentsWithDisputes.some(student => student.guardianReviewReason === 'two_guardians_full');
         toast.success(
           hasSchoolReviewRequests
             ? "School verification request sent"
             : "Registration completed successfully!",
           hasSchoolReviewRequests
-            ? { description: "The duplicate-looking student was not created. The school will review the request." }
+            ? {
+                description: hasTwoGuardianConflictRequests
+                  ? "The matching student already has two guardians linked. The school will review the guardian conflict before access is granted."
+                  : "The duplicate-looking student was not created. The school will review the request."
+              }
             : undefined
         );
 

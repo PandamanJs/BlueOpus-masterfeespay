@@ -14,6 +14,7 @@ export interface StudentData {
     otherParentName?: string;
     isGuardianLinkLocked?: boolean;
     guardianSlotsRemaining?: number;
+    guardianNames?: string[];
     confidenceBand?: ConfidenceBand;
     confidenceScore?: number;
     requiresSchoolReview?: boolean;
@@ -24,7 +25,7 @@ export interface StudentData {
     balanceDisputeRecordedChargedAmount?: number;
     balanceDisputeRecordedPaidAmount?: number;
     guardianReviewStudentId?: string;
-    guardianReviewReason?: 'duplicate_suspected' | 'manual_override';
+    guardianReviewReason?: 'duplicate_suspected' | 'manual_override' | 'two_guardians_full';
     guardianReviewEvidence?: Record<string, any>;
 }
 
@@ -90,10 +91,28 @@ export interface SchoolGrade {
 /**
  * Search for students by name or admission number.
  */
-export async function searchStudentsByName(query: string, schoolId?: string, currentParentId?: string): Promise<StudentData[]> {
+export async function searchStudentsByName(
+    query: string,
+    schoolId?: string,
+    currentParentId?: string,
+    options?: { includeGuardianLocked?: boolean }
+): Promise<StudentData[]> {
     if (!query || query.trim().length < 2) return [];
 
-    const parts = query.trim().split(/\s+/);
+    const normalizedQuery = normalizeName(query);
+    const tokens = normalizedQuery.split(' ').filter(Boolean);
+    const searchTokens = tokens.length > 0
+        ? tokens
+        : query.trim().toLowerCase().split(/\s+/).map(token => token.replace(/[^a-z0-9]/gi, '')).filter(Boolean);
+
+    if (searchTokens.length === 0) return [];
+
+    const orTerms = Array.from(new Set(searchTokens)).flatMap(token => ([
+        `first_name.ilike.%${token}%`,
+        `last_name.ilike.%${token}%`,
+        `admission_number.ilike.%${token}%`
+    ]));
+
     let supabaseQuery = supabase
         .from('students')
         .select(`
@@ -123,46 +142,21 @@ export async function searchStudentsByName(query: string, schoolId?: string, cur
                 last_name,
                 phone_number
             )
-        `);
-
-    // Broader search to catch potential typos or partial names
-    if (parts.length >= 2) {
-        // Try searching by both names first
-        supabaseQuery = supabaseQuery.or(`and(first_name.ilike.%${parts[0]}%,last_name.ilike.%${parts.slice(1).join(' ')}%),and(first_name.ilike.%${parts[parts.length-1]}%,last_name.ilike.%${parts.slice(0, parts.length-1).join(' ')}%)`);
-    } else {
-        // Single name search
-        supabaseQuery = supabaseQuery.or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,admission_number.ilike.%${query}%`);
-    }
+        `)
+        .or(orTerms.join(','));
 
     if (schoolId) {
         supabaseQuery = supabaseQuery.eq('school_id', schoolId);
     }
 
-    let { data, error } = await supabaseQuery.limit(15); // Increased limit as we'll filter some out
-    
-    // Fallback if no data
-    if (!error && (!data || data.length === 0) && query.length > 3) {
-        const broadQuery = supabase
-            .from('students')
-            .select(`
-                student_id, first_name, last_name, school_id, admission_number, parent_id, other_parent_id,
-                student_grade(class, is_active, grades(grade_name)),
-                parent:parents!student_parent_id_fkey(first_name, last_name, phone_number),
-                other_parent:parents!student_other_parent_id_fkey(first_name, last_name, phone_number)
-            `)
-            .or(`first_name.ilike.%${parts[0]}%,last_name.ilike.%${parts[parts.length-1]}%`)
-            .limit(15);
-        
-        if (schoolId) broadQuery.eq('school_id', schoolId);
-        const { data: broadData } = await broadQuery;
-        if (broadData && broadData.length > 0) data = broadData;
-    }
+    const { data, error } = await supabaseQuery.limit(30);
 
     if (error) {
         console.error('Error searching students:', error);
         return [];
     }
 
+    const includeGuardianLocked = Boolean(options?.includeGuardianLocked);
     const filtered = (data || []).filter(s => {
         const p1 = s.parent_id;
         const p2 = s.other_parent_id;
@@ -172,36 +166,64 @@ export async function searchStudentsByName(query: string, schoolId?: string, cur
             if (currentParentId && (p1 === currentParentId || p2 === currentParentId)) {
                 return true; // Current parent is already linked, show it (for confirmation/view)
             }
-            return false; // Two guardians exist and neither is the current one -> HIDE
+            return includeGuardianLocked; // Keep hidden for normal search, expose for review-aware duplicate checks
         }
         
         return true; // 0 or 1 guardians -> Show it
     });
 
-    return filtered.map(s => {
+    const scored = filtered.map(s => {
         const studentGrades = (s as any).student_grade || [];
         const activeGrade = studentGrades.find((sg: any) => sg.is_active) || studentGrades[0];
         const p1 = (s as any).parent;
         const p2 = (s as any).other_parent;
         const primaryParent = p1 ? `${p1.first_name} ${p1.last_name}`.trim() : undefined;
         const secondaryParent = p2 ? `${p2.first_name} ${p2.last_name}`.trim() : undefined;
+        const guardianNames = [primaryParent, secondaryParent].filter(Boolean) as string[];
         const hasPrimaryGuardian = Boolean((s as any).parent_id);
         const hasSecondaryGuardian = Boolean((s as any).other_parent_id);
         const guardianCount = (hasPrimaryGuardian ? 1 : 0) + (hasSecondaryGuardian ? 1 : 0);
         const guardianSlotsRemaining = Math.max(0, 2 - guardianCount);
+        const displayName = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+        const normalizedDisplayName = normalizeName(displayName);
+        const normalizedAdmission = String(s.admission_number || '').toLowerCase();
+        const matchesAllTokens = searchTokens.every(token =>
+            normalizedDisplayName.includes(token) || normalizedAdmission.includes(token)
+        );
+
+        if (!matchesAllTokens) return null;
+
+        const exactNameMatch = normalizedDisplayName === normalizedQuery;
+        const startsWithQuery = normalizedDisplayName.startsWith(normalizedQuery);
+        const admissionExact = normalizedAdmission === query.trim().toLowerCase();
+        const tokenHits = searchTokens.reduce((sum, token) => {
+            return sum
+                + (normalizedDisplayName.includes(token) ? 2 : 0)
+                + (normalizedAdmission.includes(token) ? 1 : 0);
+        }, 0);
+        const score = (admissionExact ? 120 : 0)
+            + (exactNameMatch ? 100 : 0)
+            + (startsWithQuery ? 25 : 0)
+            + tokenHits;
 
         return {
             id: s.student_id,
-            name: `${s.first_name} ${s.last_name}`,
+            name: displayName,
             grade: activeGrade?.grades?.grade_name || 'Unknown',
             class: activeGrade?.class || 'A',
             studentId: s.admission_number || 'Pending',
             parentName: primaryParent,
             otherParentName: secondaryParent,
+            guardianNames,
             isGuardianLinkLocked: guardianSlotsRemaining === 0,
-            guardianSlotsRemaining
+            guardianSlotsRemaining,
+            confidenceScore: score
         };
-    });
+    }).filter((student): student is StudentData & { confidenceScore: number } => Boolean(student));
+
+    return scored
+        .sort((left, right) => (right.confidenceScore || 0) - (left.confidenceScore || 0))
+        .slice(0, 15);
 }
 
 function normalizeName(value: string): string {

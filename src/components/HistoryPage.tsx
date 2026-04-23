@@ -74,6 +74,7 @@ export default function HistoryPage({
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const historyStudents = students.filter(student => student.verificationStatus !== 'unverified');
 
   // 1. Fetch Students on Mount
   useEffect(() => {
@@ -81,11 +82,17 @@ export default function HistoryPage({
       try {
         const data = await getStudentsByPhone(userPhone);
         setStudents(data);
-        if (data.length > 0) {
-          setSelectedStudentId(data[0].id);
+        const eligibleStudents = data.filter(student => student.verificationStatus !== 'unverified');
+        if (eligibleStudents.length > 0) {
+          setSelectedStudentId(eligibleStudents[0].id);
+        } else {
+          setSelectedStudentId('');
+          setFinancialSummary(null);
+          setIsLoading(false);
         }
       } catch (e) {
         console.error("Error loading students:", e);
+        setIsLoading(false);
       }
     };
     loadStudents();
@@ -109,8 +116,16 @@ export default function HistoryPage({
     loadSummary();
   }, [selectedStudentId]);
 
+  useEffect(() => {
+    if (!selectedStudentId) return;
+    const stillVisible = historyStudents.some(student => student.id === selectedStudentId);
+    if (!stillVisible) {
+      setSelectedStudentId(historyStudents[0]?.id || '');
+    }
+  }, [historyStudents, selectedStudentId]);
+
   const hasOutstandingBalance = (financialSummary?.totalBalance ?? 0) > 0;
-  const currentStudent = students.find(s => s.id === selectedStudentId);
+  const currentStudent = historyStudents.find(s => s.id === selectedStudentId);
 
   return (
     <div className="bg-[#f8fafc] min-h-screen w-full overflow-hidden flex flex-col">
@@ -125,54 +140,60 @@ export default function HistoryPage({
         <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
 
           {/* Emerald Card — from design (Frame17/Frame1 style) */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mx-4 mt-6 mb-8 p-6 rounded-[12px] relative overflow-hidden min-h-[131px] flex flex-col justify-end gap-1 shadow-[0_8px_32px_-8px_rgba(0,54,48,0.3)]"
-          >
-            <img
-              alt=""
-              className="absolute inset-0 object-cover w-full h-full pointer-events-none z-0"
-              src={cardBg}
-            />
+          {historyStudents.length === 0 ? (
+            <EmptyHistoryState onBack={onBack} />
+          ) : (
+            <>
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-4 mt-6 mb-8 p-6 rounded-[12px] relative overflow-hidden min-h-[131px] flex flex-col justify-end gap-1 shadow-[0_8px_32px_-8px_rgba(0,54,48,0.3)]"
+              >
+                <img
+                  alt=""
+                  className="absolute inset-0 object-cover w-full h-full pointer-events-none z-0"
+                  src={cardBg}
+                />
 
-            <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-[#95e36c] tracking-[-0.2px] relative z-10 m-0">
-              {currentStudent?.name}'s Current Balance
-            </p>
-
-            <div className="flex items-center justify-between gap-4 mt-1 relative z-10">
-              <div className="overflow-hidden">
-                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[40px] text-white tracking-[-1px] leading-tight m-0">
-                  {isLoading ? "---" : (
-                    <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
-                  )}
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-[#95e36c] tracking-[-0.2px] relative z-10 m-0">
+                  {currentStudent?.name}'s Current Balance
                 </p>
-              </div>
 
-              {hasOutstandingBalance && !isLoading && (
-                <button
-                  onClick={() => {
-                    haptics.heavy();
-                    if (onClearBalances) {
-                      const studentIds = students.map(s => s.id);
-                      onClearBalances(studentIds);
-                    } else {
-                      toast.info('Going to checkout...');
-                    }
-                  }}
-                  className="bg-[#95e36c] rounded-[8px] px-6 py-2 shadow-[0px_4px_12px_rgba(0,0,0,0.15)] active:scale-95 transition-transform"
-                >
-                  <span className="font-['Space_Grotesk',sans-serif] font-bold text-[#003630] text-[12px]">
-                    Settle All
-                  </span>
-                </button>
-              )}
-            </div>
-          </motion.div>
+                <div className="flex items-center justify-between gap-4 mt-1 relative z-10">
+                  <div className="overflow-hidden">
+                    <p className={`font-['Space_Grotesk',sans-serif] font-bold text-[40px] tracking-[-1px] leading-tight m-0 ${hasOutstandingBalance ? 'text-white' : 'text-[#d1d5db]'}`}>
+                      {isLoading
+                        ? "---"
+                        : hasOutstandingBalance
+                          ? <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
+                          : "No Balance"}
+                    </p>
+                  </div>
 
-          {/* Child Selector Tabs — EXACTLY from design (Frame14 style) */}
-          <div className="flex items-center gap-[16px] h-[50px] px-4 overflow-x-auto no-scrollbar">
-            {students.map(student => {
+                  {hasOutstandingBalance && !isLoading && (
+                    <button
+                      onClick={() => {
+                        haptics.heavy();
+                        if (onClearBalances) {
+                          const studentIds = historyStudents.map(s => s.id);
+                          onClearBalances(studentIds);
+                        } else {
+                          toast.info('Going to checkout...');
+                        }
+                      }}
+                      className="bg-[#95e36c] rounded-[8px] px-6 py-2 shadow-[0px_4px_12px_rgba(0,0,0,0.15)] active:scale-95 transition-transform"
+                    >
+                      <span className="font-['Space_Grotesk',sans-serif] font-bold text-[#003630] text-[12px]">
+                        Settle All
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Child Selector Tabs — EXACTLY from design (Frame14 style) */}
+              <div className="flex items-center gap-[16px] h-[50px] px-4 overflow-x-auto no-scrollbar">
+                {historyStudents.map(student => {
               const isActive = selectedStudentId === student.id;
 
               return (
@@ -204,60 +225,64 @@ export default function HistoryPage({
                 </button>
               );
             })}
-          </div>
-
-          {/* Content Area — from design (FeesSection style) */}
-          <div className="mt-8 px-4 space-y-4">
-            <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-gray-400 uppercase tracking-[0.2em] mb-4">
-
-            </p>
-
-            {isLoading ? (
-              <div className="py-24 flex flex-col items-center justify-center gap-6">
-                <div className="relative">
-                  <Loader2 className="animate-spin text-[#95e36c]" size={40} strokeWidth={1.5} />
-                  <div className="absolute inset-0 blur-md bg-[#95e36c]/20 rounded-full animate-pulse" />
-                </div>
-                <p className="font-['Space_Grotesk',sans-serif] text-[13px] text-gray-400 font-bold uppercase tracking-[0.2em] animate-pulse">
-                  Reconciling Ledger
-                </p>
               </div>
-            ) : financialSummary?.items?.map((item, idx) => (
-              <ServiceCategoryCard
-                key={item.id || idx}
-                item={item}
-                schoolName={schoolName || currentStudent?.schoolName || "Institutional Fees"}
-                schoolLogo={schoolLogo}
-                studentName={currentStudent?.name || "Student"}
-                userName={userName || "Parent"}
-                grade={currentStudent?.grade || "N/A"}
-                transactions={financialSummary.transactions || []}
-                hasOutstandingBalance={hasOutstandingBalance}
-                onPay={(txs) => {
-                  if (onIndividualPay) {
-                    onIndividualPay({
-                      id: item.invoice_id || item.id || crypto.randomUUID(),
-                      description: item.name,
-                      amount: item.balance || 0,
-                      invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
-                      invoice_id: item.invoice_id,
-                      studentName: currentStudent?.name || "Student",
-                      studentId: selectedStudentId,
-                      term: item.term,
-                      academicYear: item.academic_year,
-                      grade: currentStudent?.grade || "N/A",
-                      paymentHistory: txs.map(tx => ({
-                        date: extractDate(tx),
-                        method: tx.payment_method?.replace('_', ' ') || 'Office',
-                        amount: tx.amount,
-                        description: tx.description
-                      }))
-                    });
-                  }
-                }}
-              />
-            ))}
-          </div>
+
+              {/* Content Area — from design (FeesSection style) */}
+              <div className="mt-8 px-4 space-y-4">
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[12px] text-gray-400 uppercase tracking-[0.2em] mb-4">
+
+                </p>
+
+                {isLoading ? (
+                  <div className="py-24 flex flex-col items-center justify-center gap-6">
+                    <div className="relative">
+                      <Loader2 className="animate-spin text-[#95e36c]" size={40} strokeWidth={1.5} />
+                      <div className="absolute inset-0 blur-md bg-[#95e36c]/20 rounded-full animate-pulse" />
+                    </div>
+                    <p className="font-['Space_Grotesk',sans-serif] text-[13px] text-gray-400 font-bold uppercase tracking-[0.2em] animate-pulse">
+                      Reconciling Ledger
+                    </p>
+                  </div>
+                ) : !hasOutstandingBalance ? (
+                  <EmptySummaryState onBack={onBack} />
+                ) : financialSummary?.items?.map((item, idx) => (
+                  <ServiceCategoryCard
+                    key={item.id || idx}
+                    item={item}
+                    schoolName={schoolName || currentStudent?.schoolName || "Institutional Fees"}
+                    schoolLogo={schoolLogo}
+                    studentName={currentStudent?.name || "Student"}
+                    userName={userName || "Parent"}
+                    grade={currentStudent?.grade || "N/A"}
+                    transactions={financialSummary.transactions || []}
+                    hasOutstandingBalance={hasOutstandingBalance}
+                    onPay={(txs) => {
+                      if (onIndividualPay) {
+                        onIndividualPay({
+                          id: item.invoice_id || item.id || crypto.randomUUID(),
+                          description: item.name,
+                          amount: item.balance || 0,
+                          invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
+                          invoice_id: item.invoice_id,
+                          studentName: currentStudent?.name || "Student",
+                          studentId: selectedStudentId,
+                          term: item.term,
+                          academicYear: item.academic_year,
+                          grade: currentStudent?.grade || "N/A",
+                          paymentHistory: txs.map(tx => ({
+                            date: extractDate(tx),
+                            method: tx.payment_method?.replace('_', ' ') || 'Office',
+                            amount: tx.amount,
+                            description: tx.description
+                          }))
+                        });
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
         </div>
       </div>
@@ -442,51 +467,61 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
   );
 }
 
-function EmptySummaryState() {
-  const [isVisible, setIsVisible] = useState(true);
-
-  useEffect(() => {
-
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-    }, 4500); // Disappear after 4.5 seconds
-    return () => clearTimeout(timer);
-  }, []);
-
+function EmptySummaryState({ onBack }: { onBack: () => void }) {
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, height: 0, scale: 0.9, marginTop: 0, marginBottom: 0, padding: 0 }}
-          transition={{ duration: 0.5 }}
-          style={{
-            paddingTop: '10px',
-            boxShadow: "inset 0 4px 0 0 #95e36c, 0 12px 32px -8px rgba(0,0,0,0.08)"
-          }}
-          className="mx-4 mt-2 mb-4 pb-12 px-12 bg-white border-[1.5px] border-[#e5e7eb] rounded-[24px] flex flex-col items-center text-center gap-6 relative overflow-hidden origin-top"
-        >
-          <div className="absolute top-0 right-0 w-48 h-48 bg-[#95e36c]/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.35 }}
+      className="mx-4 mt-4 mb-6 px-5 pt-7 pb-8 bg-white/80 border border-white/40 rounded-[12px] flex flex-col items-center text-center relative overflow-hidden shadow-[0px_8px_32px_rgba(0,0,0,0.06)]"
+    >
+      <div className="absolute inset-x-0 top-0 h-[3px] bg-[#d1d5db]" />
+      <div className="flex flex-col gap-1.5">
+        <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[20px] text-[#6b7280] tracking-[-0.4px]">
+          No Balance
+        </h3>
+        <p className="font-['Inter',sans-serif] text-[12px] text-[#9ca3af] max-w-[250px] leading-relaxed">
+          This student has no outstanding fees right now. When new invoices are posted, they will appear here.
+        </p>
+      </div>
 
-          <motion.div
-            initial={{ rotate: -180, scale: 0 }}
-            animate={{ rotate: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
-            className="w-12 h-12 rounded-full bg-[#f0fdf4] flex items-center justify-center text-[#95e36c] border-[1.5px] border-[#95e36c]/40 shadow-sm"
-          >
-            <CheckCircle2 size={24} />
-          </motion.div>
+      <button
+        onClick={() => {
+          haptics.light();
+          onBack();
+        }}
+        className="mt-5 px-4 py-2 rounded-[10px] border border-[#d1d5db] bg-[#f9fafb] text-[#6b7280] font-['Space_Grotesk',sans-serif] font-bold text-[8px] uppercase tracking-[0.16em] hover:bg-[#f3f4f6] transition-all"
+      >
+        Go Back
+      </button>
+    </motion.div>
+  );
+}
 
-          <div className="flex flex-col gap-2">
-            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[26px] text-[#003630] tracking-[-0.5px]">Congratulations!</h3>
-            <p className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[16px] text-[#6b7280]">
-              You have no outstanding balance.
-            </p>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+function EmptyHistoryState({ onBack }: { onBack: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="mx-4 mt-6 mb-6 rounded-[12px] border border-white/40 bg-white/80 px-5 pt-7 pb-8 text-center shadow-[0px_8px_32px_rgba(0,0,0,0.06)]"
+    >
+      <h3 className="font-['Space_Grotesk',sans-serif] font-bold text-[17px] text-[#003630] tracking-[-0.3px]">
+        No students to show
+      </h3>
+      <p className="mt-2 font-['Inter',sans-serif] text-[12px] leading-relaxed text-[#6b7280] max-w-[260px] mx-auto">
+        Financial history appears here only for students already linked to your account and eligible for payments.
+      </p>
+      <button
+        onClick={() => {
+          haptics.light();
+          onBack();
+        }}
+        className="mt-6 inline-flex items-center justify-center rounded-[10px] bg-[#003630] px-4 py-2 font-['Space_Grotesk',sans-serif] font-bold text-[8px] uppercase tracking-[0.16em] text-white shadow-[0_8px_20px_rgba(0,54,48,0.2)] transition-all hover:bg-[#06483f]"
+      >
+        Go Back
+      </button>
+    </motion.div>
   );
 }
 

@@ -9,7 +9,12 @@
  * Now powered by Supabase instead of mock data!
  */
 
-import { getParentByPhone, getStudentsByParentPhone, getStudentsByParentId as getStudentsByParentIdApi } from '../lib/supabase/api/parents';
+import {
+  getParentByPhone,
+  getParentReviewRequests,
+  getStudentsByParentPhone,
+  getStudentsByParentId as getStudentsByParentIdApi
+} from '../lib/supabase/api/parents';
 import { supabase } from '../lib/supabase/client';
 import {
   getStudentsOutstandingBalances,
@@ -23,8 +28,10 @@ export interface Student {
   id: string; // This MUST be the UUID for database queries
   admissionNumber?: string; // For display purposes (e.g. TEC1455)
   verificationStatus?: 'unverified' | null;
-  verificationReason?: 'new_student_review' | 'balance_dispute' | 'school_review' | null;
+  verificationReason?: 'new_student_review' | 'balance_dispute' | 'school_review' | 'two_guardians_full' | null;
   pendingReviewStatus?: 'pending' | 'approved' | 'rejected' | 'resolved' | 'cancelled' | string | null;
+  reviewGuardianNames?: string[];
+  reviewNote?: string | null;
   grade: string;
   balances: number;
   unpaidInvoicesCount: number;
@@ -47,6 +54,38 @@ export interface ParentData {
 }
 
 type VerificationReason = NonNullable<Student['verificationReason']>;
+
+function buildPendingGuardianReviewStudents(
+  reviewRequests: Awaited<ReturnType<typeof getParentReviewRequests>>,
+  schoolFilterId?: string
+): Student[] {
+  return reviewRequests
+    .filter(request =>
+      request.type === 'guardian_link'
+      && ['pending', 'rejected'].includes(String(request.status || '').toLowerCase())
+      && (!schoolFilterId || !request.schoolId || request.schoolId === schoolFilterId)
+    )
+    .map((request) => {
+      const grade = request.requestedGrade || 'Pending review';
+      const className = request.requestedClassName;
+      const reason = request.reason === 'two_guardians_full' ? 'two_guardians_full' : 'school_review';
+      return {
+        name: request.studentName,
+        id: `review-request-${request.id}`,
+        admissionNumber: 'School Review',
+        verificationStatus: 'unverified',
+        verificationReason: reason,
+        pendingReviewStatus: request.status,
+        reviewGuardianNames: request.existingGuardianNames || [],
+        reviewNote: request.reviewerNote || null,
+        grade: `${grade}${className ? ` ${className}` : ''}`,
+        balances: 0,
+        unpaidInvoicesCount: 0,
+        schoolName: request.schoolName || 'Unknown School',
+        schoolId: request.schoolId || undefined,
+      };
+    });
+}
 
 async function getCanonicalBalanceSnapshot(studentIds: string[]): Promise<{
   balanceMap: Record<string, number>;
@@ -196,14 +235,20 @@ async function convertToLegacyStudent(
 export async function getStudentsByPhone(phone: string, schoolId?: string): Promise<Student[]> {
   try {
     console.log('[getStudentsByPhone] Searching for phone:', phone, schoolId ? `(School: ${schoolId})` : '');
-    const students = await getStudentsByParentPhone(phone, schoolId);
+    const parent = await getParentByPhone(phone, schoolId);
+    if (!parent) {
+      console.warn('[getStudentsByPhone] No parent found for phone:', phone, schoolId ? `at school: ${schoolId}` : '');
+      return [];
+    }
+    const students = parent.students || [];
+    const pendingGuardianReviews = await getParentReviewRequests(parent.id);
 
-    if (!students || students.length === 0) {
-      console.warn('[getStudentsByPhone] No students found for phone:', phone, schoolId ? `at school: ${schoolId}` : '');
+    if ((!students || students.length === 0) && pendingGuardianReviews.length === 0) {
+      console.warn('[getStudentsByPhone] No students or pending reviews found for phone:', phone, schoolId ? `at school: ${schoolId}` : '');
       return [];
     }
 
-    console.log(`[getStudentsByPhone] Found ${students.length} students, fetching balances...`);
+    console.log(`[getStudentsByPhone] Found ${students.length} linked students, fetching balances...`);
     // Fetch canonical balances and counts so all fee pages stay in sync.
     const studentIds = students.map(s => s.student_id);
     const [{ balanceMap, countMap }, pendingBalanceReviewMap] = await Promise.all([
@@ -216,9 +261,10 @@ export async function getStudentsByPhone(phone: string, schoolId?: string): Prom
     const convertedStudents = await Promise.all(
       students.map(student => convertToLegacyStudent(student, balanceMap, countMap, actualDebtMap, pendingBalanceReviewMap))
     );
+    const pendingReviewStudents = buildPendingGuardianReviewStudents(pendingGuardianReviews, schoolId);
 
     console.log('[getStudentsByPhone] Successfully converted students:', convertedStudents.map(s => s.name));
-    return convertedStudents;
+    return [...convertedStudents, ...pendingReviewStudents];
   } catch (error) {
     console.error('[getStudentsByPhone] Error:', error);
     // Return empty array on error to prevent app crash
@@ -232,8 +278,9 @@ export async function getStudentsByPhone(phone: string, schoolId?: string): Prom
 export async function getStudentsByParentId(parentId: string): Promise<Student[]> {
   try {
     const students = await getStudentsByParentIdApi(parentId);
+    const pendingGuardianReviews = await getParentReviewRequests(parentId);
 
-    if (!students || students.length === 0) {
+    if ((!students || students.length === 0) && pendingGuardianReviews.length === 0) {
       return [];
     }
 
@@ -244,9 +291,10 @@ export async function getStudentsByParentId(parentId: string): Promise<Student[]
     ]);
     const actualDebtMap = balanceMap;
 
-    return Promise.all(
+    const converted = await Promise.all(
       students.map(student => convertToLegacyStudent(student, balanceMap, countMap, actualDebtMap, pendingBalanceReviewMap))
     );
+    return [...converted, ...buildPendingGuardianReviewStudents(pendingGuardianReviews)];
   } catch (error) {
     console.error('[getStudentsByParentId] Error:', error);
     return [];
@@ -279,12 +327,13 @@ export async function getParentDataByPhone(phone: string): Promise<ParentData | 
     const convertedStudents = await Promise.all(
       parentData.students.map((student: StudentWithSchool) => convertToLegacyStudent(student, balanceMap, countMap, actualDebtMap, pendingBalanceReviewMap))
     );
+    const pendingReviewStudents = await getParentReviewRequests(parentData.id);
 
     return {
       id: parentData.id,
       name: parentData.name,
       phone: (parentData as any).phone_number || parentData.phone || '',
-      students: convertedStudents,
+      students: [...convertedStudents, ...buildPendingGuardianReviewStudents(pendingReviewStudents)],
       primarySchool: parentData.students[0]?.school.name || '',
     };
   } catch (error) {

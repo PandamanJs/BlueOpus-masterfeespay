@@ -15,14 +15,17 @@ interface Student {
   balances: number;
   admissionNumber?: string;
   verificationStatus?: 'unverified' | null;
-  verificationReason?: 'new_student_review' | 'balance_dispute' | 'school_review' | null;
+  verificationReason?: 'new_student_review' | 'balance_dispute' | 'school_review' | 'two_guardians_full' | null;
   pendingReviewStatus?: string | null;
+  reviewGuardianNames?: string[];
+  reviewNote?: string | null;
 }
 
 interface PayForSchoolFeesProps {
   onBack: () => void;
   onSelectServices: (selectedStudents: string[]) => void;
   onClearBalances?: (selectedStudents: string[]) => void;
+  onAddStudent?: () => void;
   students?: Student[];
   initialSelectedStudents?: string[]; // Add prop to receive initial selections
 }
@@ -35,6 +38,24 @@ function getVerificationCopy(student: Student): {
   toastTitle: string;
   toastDescription: string;
 } {
+  const reviewNote = student.reviewNote?.trim();
+
+  if (student.pendingReviewStatus === 'rejected') {
+    const guardianNames = student.reviewGuardianNames?.filter(Boolean) || [];
+    const guardianCopy = guardianNames.length > 0
+      ? ` Existing guardians on the matched record: ${guardianNames.join(' and ')}.`
+      : '';
+    const noteCopy = reviewNote
+      ? ` School note: ${reviewNote}`
+      : '';
+    return {
+      badgeTitle: 'Link request rejected',
+      badgeDetail: `The school rejected this request to link the student to your account.${guardianCopy}${noteCopy} Contact school directly for further details, or add the student instead if advised by the school.`,
+      toastTitle: 'Link request was rejected',
+      toastDescription: `${reviewNote || 'The school rejected this request to link the student to your account.'} Contact school directly for further details.`,
+    };
+  }
+
   if (student.verificationReason === 'balance_dispute') {
     return {
       badgeTitle: 'Balance review pending',
@@ -53,6 +74,19 @@ function getVerificationCopy(student: Student): {
     };
   }
 
+  if (student.verificationReason === 'two_guardians_full') {
+    const guardianNames = student.reviewGuardianNames?.filter(Boolean) || [];
+    const guardianCopy = guardianNames.length > 0
+      ? ` Existing guardians on the matched record: ${guardianNames.join(' and ')}.`
+      : '';
+    return {
+      badgeTitle: 'Guardian conflict review',
+      badgeDetail: `This student matches an existing record that already has two guardians linked. The school is reviewing the request before access is granted.${guardianCopy}`,
+      toastTitle: 'Guardian conflict review is pending',
+      toastDescription: `The school is reviewing a guardian conflict on this student record before payments can unlock.${guardianCopy}`,
+    };
+  }
+
   return {
     badgeTitle: 'School verification needed',
     badgeDetail: 'Payments unlock after the school confirms this profile.',
@@ -64,15 +98,28 @@ function getVerificationCopy(student: Student): {
 function StudentCard({
   student,
   isSelected,
-  onClick
+  onClick,
+  onAddStudent
 }: {
   student: Student;
   isSelected: boolean;
   onClick: () => void;
+  onAddStudent?: () => void;
 }) {
   const isCleared = student.balances <= 0;
   const isUnverified = student.verificationStatus === 'unverified';
+  const isRejected = student.pendingReviewStatus === 'rejected';
   const verificationCopy = getVerificationCopy(student);
+  const statusLabel = isRejected
+    ? 'Rejected'
+    : student.balances > 0
+      ? `K${Math.floor(student.balances).toLocaleString()} Balance`
+      : 'Cleared';
+  const statusPillClass = isRejected
+    ? 'bg-[#FFF5F5] text-[#EA3030]'
+    : student.balances > 0
+      ? 'bg-[#FFF5F5] text-[#EA3030]'
+      : 'bg-[#F0FFF4] text-[#16A34A]';
 
   return (
     <motion.div
@@ -95,13 +142,25 @@ function StudentCard({
       }}
     >
       {isUnverified && (
-        <div className="mb-3 rounded-[8px] bg-amber-50 border border-amber-200 px-3 py-2">
+        <div className="mb-2 rounded-[8px] bg-amber-50 border border-amber-200 px-3 py-2">
           <p className="font-['Inter',sans-serif] text-[10px] font-bold text-amber-800 uppercase tracking-wide">
             {verificationCopy.badgeTitle}
           </p>
           <p className="font-['Inter',sans-serif] text-[11px] font-medium text-amber-700 leading-snug mt-0.5">
             {verificationCopy.badgeDetail}
           </p>
+          {isRejected && onAddStudent && (
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                hapticFeedback('light');
+                onAddStudent();
+              }}
+              className="mt-2 inline-flex items-center gap-2 rounded-[10px] bg-[#003630] px-3 py-1.5 font-['Inter',sans-serif] text-[10px] font-semibold text-white transition-all hover:bg-[#06483f]"
+            >
+              Add student instead
+            </button>
+          )}
         </div>
       )}
 
@@ -147,12 +206,18 @@ function StudentCard({
         <div className="flex items-center gap-2">
           {/* Status Pill */}
           <div
-            className={`flex items-center gap-2 px-3 py-1 rounded-full transition-all duration-300 ${student.balances > 0
-              ? 'bg-[#FFF5F5] text-[#EA3030]'
-              : 'bg-[#F0FFF4] text-[#16A34A]'
-              }`}
+            className={`flex items-center gap-2 px-3 py-1 rounded-full transition-all duration-300 ${statusPillClass}`}
           >
-            {student.balances > 0 ? (
+            {isRejected ? (
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="#EA3030" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M9 9l6 6" />
+                <path d="M15 9l-6 6" />
+              </svg>
+            ) : student.balances > 0 ? (
               <svg
                 width="12" height="12" viewBox="0 0 24 24" fill="none"
                 stroke="#EA3030" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -171,7 +236,7 @@ function StudentCard({
               </svg>
             )}
             <span className="font-['Inter',sans-serif] font-bold text-[10px] tracking-tight">
-              {student.balances > 0 ? `K${Math.floor(student.balances).toLocaleString()} Balance` : 'Cleared'}
+              {statusLabel}
             </span>
           </div>
 
@@ -195,6 +260,7 @@ export default function PayForSchoolFees({
   onBack,
   onSelectServices,
   onClearBalances,
+  onAddStudent,
   students = [],
   initialSelectedStudents = []
 }: PayForSchoolFeesProps) {
@@ -212,10 +278,11 @@ export default function PayForSchoolFees({
       if (student.verificationStatus !== 'unverified') return acc;
       if (student.verificationReason === 'balance_dispute') acc.balanceDisputes += 1;
       else if (student.verificationReason === 'new_student_review') acc.newStudents += 1;
+      else if (student.pendingReviewStatus === 'rejected') acc.rejectedReviews += 1;
       else acc.otherReviews += 1;
       return acc;
     },
-    { balanceDisputes: 0, newStudents: 0, otherReviews: 0 }
+    { balanceDisputes: 0, newStudents: 0, otherReviews: 0, rejectedReviews: 0 }
   );
 
   const toggleStudent = (studentId: string) => {
@@ -299,18 +366,35 @@ export default function PayForSchoolFees({
                 <p className="font-['Inter',sans-serif] text-[11px] text-amber-700 mt-1">
                   {unverifiedBreakdown.newStudents > 0 && `${unverifiedBreakdown.newStudents} new student profile${unverifiedBreakdown.newStudents === 1 ? '' : 's'} must be verified by the school before payments unlock. `}
                   {unverifiedBreakdown.balanceDisputes > 0 && `${unverifiedBreakdown.balanceDisputes} balance review${unverifiedBreakdown.balanceDisputes === 1 ? ' is' : 's are'} awaiting school resolution. `}
-                  {unverifiedBreakdown.otherReviews > 0 && `${unverifiedBreakdown.otherReviews} profile${unverifiedBreakdown.otherReviews === 1 ? ' is' : 's are'} awaiting school confirmation. `}
+                  {unverifiedBreakdown.otherReviews > 0 && `${unverifiedBreakdown.otherReviews} guardian review request${unverifiedBreakdown.otherReviews === 1 ? ' is' : 's are'} awaiting school confirmation. `}
+                  {unverifiedBreakdown.rejectedReviews > 0 && `${unverifiedBreakdown.rejectedReviews} guardian link request${unverifiedBreakdown.rejectedReviews === 1 ? ' was' : 's were'} rejected by the school. `}
                   Payments unlock after the relevant review is completed.
                 </p>
               </div>
             )}
 
             {students.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-white/40 rounded-[24px] border border-dashed border-gray-200">
-                <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+              <div className="flex flex-col items-center justify-center py-12 bg-white/40 rounded-[20px] border border-dashed border-gray-200">
+                <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center mb-3">
                   <span className="text-2xl">👥</span>
                 </div>
-                <p className="font-['Space_Grotesk',sans-serif] font-bold text-gray-500 text-center px-8">No students found associated with this account</p>
+                <p className="font-['Space_Grotesk',sans-serif] font-bold text-[16px] text-gray-500 text-center px-8">
+                  No students found associated with this account
+                </p>
+                <p className="font-['Inter',sans-serif] text-[11px] text-gray-400 text-center mt-2 max-w-[280px] leading-relaxed">
+                  If you already have a parent account, you can go straight to the add student flow and register the learner without re-entering your parent details.
+                </p>
+                {onAddStudent && (
+                  <button
+                    onClick={() => {
+                      hapticFeedback('light');
+                      onAddStudent();
+                    }}
+                    className="mt-4 inline-flex items-center gap-2 rounded-[10px] bg-[#003630] px-4 py-2 font-['Inter',sans-serif] text-[10px] font-semibold text-white transition-all hover:bg-[#06483f]"
+                  >
+                    Add student
+                  </button>
+                )}
               </div>
             ) : (
               students.map((student, index) => (
@@ -319,6 +403,7 @@ export default function PayForSchoolFees({
                   student={student}
                   isSelected={selectedStudents.includes(student.id)}
                   onClick={() => toggleStudent(student.id)}
+                  onAddStudent={student.pendingReviewStatus === 'rejected' ? onAddStudent : undefined}
                 />
               ))
             )}
