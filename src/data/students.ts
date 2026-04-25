@@ -71,7 +71,7 @@ function buildPendingGuardianReviewStudents(
       const reason = request.reason === 'two_guardians_full' ? 'two_guardians_full' : 'school_review';
       return {
         name: request.studentName,
-        id: `review-request-${request.id}`,
+        id: request.studentId || `review-request-${request.id}`,
         admissionNumber: 'School Review',
         verificationStatus: 'unverified',
         verificationReason: reason,

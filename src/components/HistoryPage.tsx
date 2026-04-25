@@ -64,10 +64,12 @@ interface HistoryPageProps {
 function StudentTab({
   name,
   isActive,
+  isUnverified,
   onClick,
 }: {
   name: string;
   isActive: boolean;
+  isUnverified: boolean;
   onClick: () => void;
 }) {
   return (
@@ -93,13 +95,18 @@ function StudentTab({
         </div>
       )}
       <div
-        className="text-[12px] font-['Space_Grotesk'] whitespace-nowrap flex flex-col justify-end"
+        className="text-[12px] font-['Space_Grotesk'] whitespace-nowrap flex items-center gap-2"
         style={{
           color: isActive ? "black" : "#2D2D2D",
           fontWeight: isActive ? 700 : 500,
         }}
       >
-        {name}
+        <span>{name}</span>
+        {isUnverified && (
+          <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-black uppercase tracking-tighter">
+            Review
+          </span>
+        )}
       </div>
     </button>
   );
@@ -119,7 +126,7 @@ export default function HistoryPage({
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
-  const historyStudents = students.filter(student => student.verificationStatus !== 'unverified');
+  const historyStudents = students; // Include all students, even unverified ones, for history visibility
 
   // 1. Fetch Students on Mount
   useEffect(() => {
@@ -127,7 +134,7 @@ export default function HistoryPage({
       try {
         const data = await getStudentsByPhone(userPhone);
         setStudents(data);
-        const eligibleStudents = data.filter(student => student.verificationStatus !== 'unverified');
+        const eligibleStudents = data; // Allow selection of all students
         if (eligibleStudents.length > 0) {
           setSelectedStudentId(eligibleStudents[0].id);
         } else {
@@ -220,6 +227,8 @@ export default function HistoryPage({
                           <span className="opacity-50 text-[24px]">ZMW</span>
                           <Loader2 className="animate-spin size-6 text-[#95e36c]" />
                         </div>
+                      ) : currentStudent?.verificationStatus === 'unverified' ? (
+                        "Under Review"
                       ) : hasOutstandingBalance ? (
                         <AnimatedNumber value={financialSummary?.totalBalance ?? 0} />
                       ) : (
@@ -228,7 +237,7 @@ export default function HistoryPage({
                     </div>
                   </div>
 
-                  {!isSummaryLoading && hasOutstandingBalance && (
+                  {!isSummaryLoading && hasOutstandingBalance && currentStudent?.verificationStatus !== 'unverified' && (
                     <button
                       onClick={() => {
                         haptics.heavy();
@@ -255,6 +264,7 @@ export default function HistoryPage({
                   <StudentTab
                     key={student.id}
                     name={student.name}
+                    isUnverified={student.verificationStatus === 'unverified'}
                     isActive={selectedStudentId === student.id}
                     onClick={() => setSelectedStudentId(student.id)}
                   />

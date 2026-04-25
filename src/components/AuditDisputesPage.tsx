@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   Check,
+  CheckCircle2,
   ChevronRight,
   ClipboardCheck,
   FileWarning,
+  History,
   Loader2,
   RefreshCw,
   ShieldAlert,
@@ -16,20 +19,250 @@ import {
 import { toast } from 'sonner';
 import { useAppStore } from '../stores/useAppStore';
 import { hapticFeedback } from '../utils/haptics';
+import LogoHeader from './common/LogoHeader';
 import type { PageType } from '../stores/useAppStore';
 import {
   getSchoolReviewCenterData,
-  updateBalanceReviewStatus,
-  updateGuardianLinkRequestStatus,
+  logDispute,
   type BalanceReviewRequest,
   type DuplicateReviewRequest
 } from '../lib/supabase/api/parents';
 
-type ReviewTab = 'duplicates' | 'balances' | 'history';
-type ActiveReview =
-  | { kind: 'duplicate'; item: DuplicateReviewRequest }
-  | { kind: 'balance'; item: BalanceReviewRequest }
-  | null;
+type ReviewTab = 'duplicates' | 'balances' | 'history' | 'new-dispute';
+
+function NewDisputeForm({ 
+  onSuccess 
+}: { 
+  onSuccess: () => void 
+}) {
+  const students = useAppStore(state => state.students);
+  const userId = useAppStore(state => state.userId);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [disputeType, setDisputeType] = useState<'balance' | 'identity' | 'payment'>('balance');
+  const [reason, setReason] = useState('');
+  
+  // Specific fields
+  const [claimedBalance, setClaimedBalance] = useState('');
+  const [paymentDate, setPaymentDate] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedStudent = students.find(s => s.id === selectedStudentId);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentId) {
+      toast.error('Please select a student.');
+      return;
+    }
+
+    let finalReason = `[Type: ${disputeType.toUpperCase()}]\n`;
+    let metaData: any = { disputeType };
+
+    if (disputeType === 'balance') {
+      if (!claimedBalance) {
+        toast.error('Please enter what you believe is the correct balance.');
+        return;
+      }
+      finalReason += `Claimed Balance: ZMW ${claimedBalance}\n`;
+      metaData.claimedBalance = claimedBalance;
+      metaData.currentBalance = selectedStudent?.balances;
+    } else if (disputeType === 'payment') {
+      if (!paymentAmount || !paymentReference) {
+        toast.error('Please provide payment amount and reference number.');
+        return;
+      }
+      finalReason += `Payment Date: ${paymentDate}\nAmount: ZMW ${paymentAmount}\nRef: ${paymentReference}\n`;
+      metaData.paymentDate = paymentDate;
+      metaData.paymentAmount = paymentAmount;
+      metaData.paymentReference = paymentReference;
+    }
+
+    if (!reason.trim()) {
+      toast.error('Please provide a brief explanation.');
+      return;
+    }
+    finalReason += `Note: ${reason.trim()}`;
+    metaData.note = reason.trim();
+
+    setIsSubmitting(true);
+    try {
+      await logDispute(selectedStudentId, userId, finalReason, metaData);
+      toast.success('Dispute submitted successfully.');
+      hapticFeedback('success');
+      setReason('');
+      setClaimedBalance('');
+      setPaymentAmount('');
+      setPaymentReference('');
+      setPaymentDate('');
+      setSelectedStudentId('');
+      onSuccess();
+    } catch (error) {
+      console.error('[NewDispute] Submission failed:', error);
+      toast.error('Failed to submit dispute. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col gap-8 pb-10"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Select Student */}
+        <div className="flex flex-col gap-2">
+          <label className="text-zinc-500 text-xs font-normal font-['Inter'] uppercase tracking-wider">Select Student</label>
+          <div className="grid grid-cols-1 gap-3">
+            {students.map(student => (
+              <button
+                key={student.id}
+                type="button"
+                onClick={() => { hapticFeedback('light'); setSelectedStudentId(student.id); }}
+                className={`w-full px-4 py-4 rounded-xl border flex items-center justify-between transition-all text-left ${
+                  selectedStudentId === student.id 
+                    ? 'bg-[#95e36c]/10 border-[#95e36c]/40' 
+                    : 'bg-white border-neutral-100'
+                }`}
+              >
+                <div>
+                  <p className="text-black text-xs font-bold font-['Inter']">{student.name}</p>
+                  <p className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider mt-0.5">{student.grade}</p>
+                </div>
+                {selectedStudentId === student.id && (
+                  <div className="size-5 rounded-md bg-white border border-neutral-200 shadow-inner flex items-center justify-center">
+                    <Check size={12} className="text-[#003630]" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Issue Category */}
+        <div className="flex flex-col gap-2">
+          <label className="text-zinc-500 text-xs font-normal font-['Inter'] uppercase tracking-wider">Issue Category</label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'balance', label: 'Balance Issue', icon: FileWarning },
+              { id: 'payment', label: 'Missing Payment', icon: Check },
+              { id: 'identity', label: 'Wrong Student', icon: Users },
+            ].map(type => (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => { hapticFeedback('light'); setDisputeType(type.id as any); }}
+                className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border transition-all ${
+                  disputeType === type.id 
+                    ? 'bg-[#003630] border-[#003630] text-white shadow-lg shadow-[#003630]/20' 
+                    : 'bg-white border-neutral-100 text-neutral-500'
+                }`}
+              >
+                <type.icon size={16} />
+                <span className="text-[12px] font-bold font-['Inter']">{type.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Category Specific Fields */}
+        {disputeType === 'balance' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+            <div className="p-4 rounded-xl bg-[#f9fafb] border border-neutral-100 flex items-center justify-between">
+              <div>
+                <p className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider mb-1">Current Balance</p>
+                <p className={`font-black tracking-tight ${selectedStudent ? 'text-[22px] text-black' : 'text-[14px] text-neutral-300'}`}>
+                  {selectedStudent ? formatCurrency(selectedStudent.balances) : 'Select student...'}
+                </p>
+              </div>
+              <div className="size-10 rounded-lg bg-white border border-neutral-100 flex items-center justify-center text-neutral-400">
+                <FileWarning size={20} />
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <label className="text-zinc-500 text-xs font-normal font-['Inter']">What is the correct balance?</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-black font-bold text-sm">ZMW</span>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={claimedBalance}
+                  onChange={(e) => setClaimedBalance(e.target.value)}
+                  className="w-full px-16 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-sm font-bold font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all text-right"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {disputeType === 'payment' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-zinc-500 text-xs font-normal font-['Inter']">Amount Paid</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-black font-bold text-sm">ZMW</span>
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    className="w-full px-16 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-sm font-bold font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all text-right"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-zinc-500 text-xs font-normal font-['Inter']">Date of Payment</label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-xs font-medium font-['Inter'] focus:outline-[#003630] transition-all"
+                />
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <label className="text-zinc-500 text-xs font-normal font-['Inter']">Reference Number (PoP)</label>
+              <input
+                type="text"
+                placeholder="Enter transaction ID or Reference"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                className="w-full px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-xs font-medium font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Explanation */}
+        <div className="flex flex-col gap-2">
+          <label className="text-zinc-500 text-xs font-normal font-['Inter']">Explanation / Note</label>
+          <textarea
+            placeholder="Please provide a brief explanation of the discrepancy..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full h-32 px-4 py-4 bg-white rounded-xl shadow-[inset_0px_4px_4px_0px_rgba(0,0,0,0.05)] outline outline-1 outline-offset-[-1px] outline-neutral-200 text-black text-xs font-medium font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all resize-none"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          style={{ backgroundColor: isSubmitting ? '#E6E6E6' : '#003630' }}
+          className="w-full h-14 text-white rounded-xl flex items-center justify-center text-sm font-semibold font-['Inter'] shadow-xl shadow-teal-950/20 active:scale-[0.98] transition-all disabled:cursor-not-allowed mt-4"
+        >
+          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'Submit Dispute'}
+        </button>
+      </form>
+    </motion.div>
+  );
+}
 
 function formatDate(value?: string | null) {
   if (!value) return 'Not reviewed';
@@ -52,7 +285,7 @@ function statusClasses(status: string) {
       return 'bg-green-50 text-green-700 border-green-100';
     case 'rejected':
     case 'cancelled':
-      return 'bg-red-50 text-red-700 border-red-100';
+      return 'bg-transparent text-red-700 border-red-100';
     case 'pending':
       return 'bg-amber-50 text-amber-700 border-amber-100';
     default:
@@ -78,8 +311,8 @@ function EmptyState({ icon: Icon, title, detail }: { icon: any; title: string; d
       <div className="size-12 rounded-[12px] bg-white border border-gray-100 flex items-center justify-center text-gray-300 mb-4">
         <Icon size={24} />
       </div>
-      <p className="text-[14px] font-bold text-[#003630]">{title}</p>
-      <p className="text-[12px] text-gray-500 leading-relaxed mt-1 max-w-[280px]">{detail}</p>
+      <p className="text-[14px] font-bold text-[#003630] text-center">{title}</p>
+      <p className="text-[12px] text-gray-500 leading-relaxed mt-1 max-w-[280px] text-center">{detail}</p>
     </div>
   );
 }
@@ -93,94 +326,70 @@ function Field({ label, value }: { label: string; value?: string | number | null
   );
 }
 
-function DuplicateCard({ item, onOpen }: { item: DuplicateReviewRequest; onOpen: () => void }) {
+function DuplicateCard({ item }: { item: DuplicateReviewRequest }) {
   const isGuardianConflict = isGuardianConflictRequest(item);
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full text-left rounded-[16px] border border-gray-100 bg-white p-4 shadow-sm active:scale-[0.99] transition-all"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[15px] font-black text-[#003630] truncate">
+    <div className="w-full p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-4 transition-all">
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <span className="text-black text-[13px] font-bold font-['Inter'] line-clamp-1">
             {item.requestedStudent.name || item.existingStudent.name}
-          </p>
-          <p className="text-[11px] text-gray-500 mt-1">
-            Requested by {item.parent.name}
-          </p>
-          <p className={`text-[10px] font-black uppercase tracking-[0.12em] mt-2 ${isGuardianConflict ? 'text-amber-700' : 'text-gray-400'}`}>
-            {isGuardianConflict ? 'Two guardians already linked' : 'Possible duplicate'}
-          </p>
+          </span>
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isGuardianConflict ? 'text-amber-600' : 'text-neutral-400'}`}>
+              {isGuardianConflict ? 'Guardian Conflict' : 'Duplicate Record'}
+            </span>
+            <div className="w-1 h-1 rounded-full bg-neutral-200" />
+            <span className="text-neutral-400 text-[11px]">{formatDate(item.createdAt)}</span>
+          </div>
         </div>
         <StatusPill status={item.status} />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-[12px] bg-gray-50 p-3">
-          <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Existing</p>
-          <p className="text-[12px] font-bold text-gray-900 mt-1">{item.existingStudent.name}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">
-            {item.existingStudent.grade || 'Grade unknown'} {item.existingStudent.className || ''}
-          </p>
-          {item.existingGuardianNames && item.existingGuardianNames.length > 0 && (
-            <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
-              Guardians: {item.existingGuardianNames.join(' and ')}
-            </p>
-          )}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="p-3 bg-[#f9fafb] rounded-xl border border-neutral-50">
+          <p className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest mb-1">Existing</p>
+          <p className="text-black text-[11px] font-bold font-['Inter'] line-clamp-1">{item.existingStudent.name}</p>
+          <p className="text-neutral-500 text-[10px] mt-0.5">{item.existingStudent.grade}</p>
         </div>
-        <div className="rounded-[12px] bg-amber-50 p-3">
-          <p className="text-[10px] text-amber-700 font-black uppercase tracking-[0.12em]">Parent Entered</p>
-          <p className="text-[12px] font-bold text-gray-900 mt-1">{item.requestedStudent.name || 'Unknown'}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">
-            {item.requestedStudent.grade || 'Grade unknown'} {item.requestedStudent.className || ''}
-          </p>
+        <div className="p-3 bg-[#f9fafb] rounded-xl border border-neutral-50">
+          <p className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest mb-1">New Claim</p>
+          <p className="text-black text-[11px] font-bold font-['Inter'] line-clamp-1">{item.requestedStudent.name || 'Unknown'}</p>
+          <p className="text-neutral-500 text-[10px] mt-0.5">{item.requestedStudent.grade}</p>
         </div>
       </div>
-
-      <div className="mt-4 flex items-center justify-between text-[11px] text-gray-400">
-        <span>{formatDate(item.createdAt)}</span>
-        <span className="flex items-center gap-1 font-bold text-[#003630]">
-          Review <ChevronRight size={14} />
-        </span>
-      </div>
-    </button>
+    </div>
   );
 }
 
-function BalanceCard({ item, onOpen }: { item: BalanceReviewRequest; onOpen: () => void }) {
+function BalanceCard({ item }: { item: BalanceReviewRequest }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full text-left rounded-[16px] border border-gray-100 bg-white p-4 shadow-sm active:scale-[0.99] transition-all"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[15px] font-black text-[#003630] truncate">{item.student.name}</p>
-          <p className="text-[11px] text-gray-500 mt-1">Submitted by {item.parent.name}</p>
+    <div className="w-full p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-4 transition-all">
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <span className="text-black text-[13px] font-bold font-['Inter'] line-clamp-1">
+            {item.student.name}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider">Balance Dispute</span>
+            <div className="w-1 h-1 rounded-full bg-neutral-200" />
+            <span className="text-neutral-400 text-[11px]">{formatDate(item.createdAt)}</span>
+          </div>
         </div>
         <StatusPill status={item.status} />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-[12px] bg-gray-50 p-3">
-          <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Recorded</p>
-          <p className="text-[15px] font-black text-gray-900 mt-1">{formatCurrency(item.recordedBalance)}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="p-3 bg-[#f9fafb] rounded-xl border border-neutral-50">
+          <p className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest mb-1">Recorded</p>
+          <p className="text-black text-[13px] font-black font-['Inter']">{formatCurrency(item.recordedBalance)}</p>
         </div>
-        <div className="rounded-[12px] bg-amber-50 p-3">
-          <p className="text-[10px] text-amber-700 font-black uppercase tracking-[0.12em]">Parent Says</p>
-          <p className="text-[15px] font-black text-gray-900 mt-1">{formatCurrency(item.claimedBalance)}</p>
+        <div className="p-3 bg-[#f9fafb] rounded-xl border border-neutral-50">
+          <p className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest mb-1">Parent Claim</p>
+          <p className="text-black text-[13px] font-black font-['Inter']">{formatCurrency(item.claimedBalance)}</p>
         </div>
       </div>
-
-      <div className="mt-4 flex items-center justify-between text-[11px] text-gray-400">
-        <span>{formatDate(item.createdAt)}</span>
-        <span className="flex items-center gap-1 font-bold text-[#003630]">
-          Review <ChevronRight size={14} />
-        </span>
-      </div>
-    </button>
+    </div>
   );
 }
 
@@ -188,19 +397,21 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
   const selectedSchoolId = useAppStore(state => state.selectedSchoolId);
   const selectedSchool = useAppStore(state => state.selectedSchool);
   const userId = useAppStore(state => state.userId);
+  const isStaff = useAppStore(state => state.isStaff);
 
-  const [activeTab, setActiveTab] = useState<ReviewTab>('duplicates');
+  const [activeTab, setActiveTab] = useState<ReviewTab>('balances');
   const [duplicates, setDuplicates] = useState<DuplicateReviewRequest[]>([]);
   const [balances, setBalances] = useState<BalanceReviewRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [activeReview, setActiveReview] = useState<ActiveReview>(null);
-  const [reviewerNote, setReviewerNote] = useState('');
+  const [showNewDispute, setShowNewDispute] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getSchoolReviewCenterData(selectedSchoolId);
+      // If user is staff, show everything for the school.
+      // If user is a parent, only show their own requests.
+      const parentFilter = isStaff ? null : userId;
+      const data = await getSchoolReviewCenterData(selectedSchoolId, parentFilter);
       setDuplicates(data.duplicates);
       setBalances(data.balances);
     } catch (error) {
@@ -226,315 +437,226 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
     return new Date(right || 0).getTime() - new Date(left || 0).getTime();
   }), [duplicates, balances]);
 
-  const openReview = (review: ActiveReview) => {
-    hapticFeedback('light');
-    setActiveReview(review);
-    setReviewerNote('');
-  };
-
-  const closeReview = () => {
-    setActiveReview(null);
-    setReviewerNote('');
-  };
-
-  const handleDuplicateAction = async (status: 'approved' | 'rejected') => {
-    if (!activeReview || activeReview.kind !== 'duplicate') return;
-    setIsUpdating(true);
-    try {
-      await updateGuardianLinkRequestStatus({
-        requestId: activeReview.item.id,
-        status,
-        reviewerParentId: userId || null,
-        reviewerNote,
-      });
-      toast.success(
-        status === 'approved'
-          ? (isGuardianConflictRequest(activeReview.item) ? 'Guardian conflict review approved' : 'Duplicate review approved')
-          : 'Duplicate request rejected'
-      );
-      hapticFeedback('success');
-      closeReview();
-      await loadData();
-    } catch (error) {
-      console.error('[ReviewCenter] Duplicate action failed:', error);
-      toast.error(status === 'approved' ? 'Could not approve request' : 'Could not reject request');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleBalanceAction = async (status: 'resolved' | 'rejected') => {
-    if (!activeReview || activeReview.kind !== 'balance') return;
-    setIsUpdating(true);
-    try {
-      await updateBalanceReviewStatus({
-        requestId: activeReview.item.id,
-        status,
-        reviewerNote,
-      });
-      toast.success(status === 'resolved' ? 'Balance review resolved' : 'Balance review rejected');
-      hapticFeedback('success');
-      closeReview();
-      await loadData();
-    } catch (error) {
-      console.error('[ReviewCenter] Balance action failed:', error);
-      toast.error('Could not update balance review');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const tabButton = (tab: ReviewTab, label: string, count: number) => (
-    <button
-      type="button"
-      onClick={() => {
-        hapticFeedback('light');
-        setActiveTab(tab);
-      }}
-      className={`h-11 px-4 rounded-[10px] border text-[12px] font-black transition-all flex items-center gap-2 ${
-        activeTab === tab
-          ? 'bg-[#003630] border-[#003630] text-white'
-          : 'bg-white border-gray-200 text-gray-500'
-      }`}
-    >
-      {label}
-      <span className={`min-w-5 h-5 px-1 rounded-full text-[10px] flex items-center justify-center ${
-        activeTab === tab ? 'bg-[#95e36c] text-[#003630]' : 'bg-gray-100 text-gray-500'
-      }`}>
-        {count}
-      </span>
-    </button>
-  );
-
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center font-['Inter',sans-serif]">
-      <header className="w-full h-20 px-6 bg-white border-b border-gray-100 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              hapticFeedback('medium');
-              navigateToPage('services', 'back');
-            }}
-            className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-[#003630] active:scale-95 transition-transform"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-[20px] font-black text-[#003630] tracking-[-0.3px]">Review Center</h1>
-            <p className="text-[11px] font-bold text-gray-400">{selectedSchool || 'All schools'}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            hapticFeedback('light');
-            loadData();
-          }}
-          className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-        >
-          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-        </button>
-      </header>
-
-      <main className="w-full max-w-[680px] px-5 pt-6 pb-24">
-        <section className="mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="size-11 rounded-[12px] bg-[#003630]/5 border border-[#003630]/10 flex items-center justify-center text-[#003630]">
-              <ClipboardCheck size={22} />
-            </div>
+    <div className="min-h-screen bg-white flex flex-col items-center">
+      {/* ── Fixed Header ── */}
+      {isStaff ? (
+        <header className="h-[66px] w-full bg-white border-b border-gray-100 px-5 flex items-center justify-between sticky top-0 z-[100] backdrop-blur-md bg-white/90">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                hapticFeedback('light');
+                useAppStore.setState({ currentPage: 'search' });
+              }}
+              className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+            >
+              <ArrowLeft size={20} />
+            </button>
             <div>
-              <h2 className="text-[22px] font-black text-black tracking-[-0.5px]">Pending Reviews</h2>
-              <p className="text-[12px] text-gray-500">Resolve duplicate pupil requests and balance investigations.</p>
+              <h1 className="text-[20px] font-black text-[#003630] tracking-[-0.3px]">Review Center</h1>
+              <p className="text-[11px] font-bold text-gray-400">{selectedSchool || 'All schools'}</p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              hapticFeedback('light');
+              loadData();
+            }}
+            className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </header>
+      ) : (
+        <LogoHeader 
+          showBackButton 
+          onBack={() => {
+            hapticFeedback('light');
+            useAppStore.setState({ currentPage: 'search' });
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              hapticFeedback('light');
+              loadData();
+            }}
+            className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </LogoHeader>
+      )}
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-[12px] bg-gray-50 border border-gray-100 p-3">
-              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Duplicates</p>
-              <p className="text-[22px] font-black text-[#003630] mt-1">{pendingDuplicates.length}</p>
+      <main className="w-full max-w-[600px] flex flex-col pb-32">
+        {/* ── Hero Section ── */}
+        {!isStaff && (
+          <section className="px-6 py-8 bg-[#f9fafb]">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-[#003630] shadow-sm">
+                <FileWarning size={22} strokeWidth={2.5} />
+              </div>
+              <h2 className="text-xl font-bold font-['Inter'] text-black">Dispute Support</h2>
             </div>
-            <div className="rounded-[12px] bg-gray-50 border border-gray-100 p-3">
-              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Balances</p>
-              <p className="text-[22px] font-black text-[#003630] mt-1">{pendingBalances.length}</p>
-            </div>
-            <div className="rounded-[12px] bg-gray-50 border border-gray-100 p-3">
-              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.12em]">Closed</p>
-              <p className="text-[22px] font-black text-[#003630] mt-1">{historyItems.length}</p>
-            </div>
-          </div>
-        </section>
+            <p className="text-black text-[13px] leading-relaxed font-normal font-['Inter'] opacity-80 max-w-[400px]">
+              If you have noticed any discrepancies in your student's recorded balance or identity details, you can file a dispute here. Our team will review your request and get back to you.
+            </p>
+          </section>
+        )}
 
-        <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
-          {tabButton('duplicates', 'Duplicates', pendingDuplicates.length)}
-          {tabButton('balances', 'Balance Reviews', pendingBalances.length)}
-          {tabButton('history', 'History', historyItems.length)}
+        {/* ── Tabs ── */}
+        <div className="px-6 py-6 flex items-center gap-4">
+          <button
+            onClick={() => { hapticFeedback('light'); setActiveTab('balances'); }}
+            className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'balances' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
+          >
+            {activeTab === 'balances' && <div className="w-1.5 h-1.5 bg-[#4FE501] rounded-full" />}
+            <span className={`text-[12px] font-bold font-['Space_Grotesk'] ${activeTab === 'balances' ? 'text-black' : ''}`}>
+              {isStaff ? 'Pending Reviews' : 'My Pending'}
+            </span>
+          </button>
+          <button
+            onClick={() => { hapticFeedback('light'); setActiveTab('history'); }}
+            className={`h-10 px-6 rounded-xl flex items-center gap-2 transition-all ${activeTab === 'history' ? 'bg-[#95e36c]/10 border border-[#95e36c]/30' : 'bg-transparent text-neutral-500'}`}
+          >
+            {activeTab === 'history' && <div className="w-1.5 h-1.5 bg-[#4FE501] rounded-full" />}
+            <span className={`text-[12px] font-bold font-['Space_Grotesk'] ${activeTab === 'history' ? 'text-black' : ''}`}>
+              History
+            </span>
+          </button>
         </div>
 
-        {loading ? (
-          <div className="min-h-[360px] flex flex-col items-center justify-center">
-            <Loader2 className="animate-spin text-[#003630] mb-3" size={30} />
-            <p className="text-[13px] text-gray-500 font-bold">Loading review queue...</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {activeTab === 'duplicates' && (
-              pendingDuplicates.length > 0
-                ? pendingDuplicates.map(item => (
-                  <DuplicateCard key={item.id} item={item} onOpen={() => openReview({ kind: 'duplicate', item })} />
+        <div className="px-6 space-y-6">
+          {activeTab === 'balances' && (
+            <div className="space-y-4">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <RefreshCw size={24} className="animate-spin text-gray-300 mb-2" />
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Updating data...</p>
+                </div>
+              ) : pendingBalances.length > 0 ? (
+                pendingBalances.map(item => (
+                  <BalanceCard key={item.id} item={item} />
                 ))
-                : <EmptyState icon={Users} title="No duplicate requests" detail="When parents submit clear duplicate-looking pupils for school review, they will appear here." />
-            )}
+              ) : (
+                <div className="py-12 border border-dashed border-gray-200 rounded-[24px] flex flex-col items-center justify-center text-center px-8 bg-gray-50/30">
+                  <div className="size-14 rounded-full bg-white border border-gray-100 flex items-center justify-center text-gray-300 mb-4 shadow-sm">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <h3 className="text-[14px] font-black text-[#003630] mb-1">All Clear</h3>
+                  <p className="text-[11px] text-gray-400 font-bold leading-relaxed">
+                    You don't have any pending balance reviews at the moment.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
-            {activeTab === 'balances' && (
-              pendingBalances.length > 0
-                ? pendingBalances.map(item => (
-                  <BalanceCard key={item.id} item={item} onOpen={() => openReview({ kind: 'balance', item })} />
-                ))
-                : <EmptyState icon={FileWarning} title="No balance reviews" detail="Parent balance disputes and account investigations will appear here." />
-            )}
-
-            {activeTab === 'history' && (
-              historyItems.length > 0
-                ? historyItems.map(entry => entry.kind === 'duplicate'
-                  ? <DuplicateCard key={`d-${entry.item.id}`} item={entry.item} onOpen={() => openReview({ kind: 'duplicate', item: entry.item })} />
-                  : <BalanceCard key={`b-${entry.item.id}`} item={entry.item} onOpen={() => openReview({ kind: 'balance', item: entry.item })} />
-                )
-                : <EmptyState icon={ShieldAlert} title="No closed reviews" detail="Approved, rejected, and resolved reviews will be kept here." />
-            )}
-          </div>
-        )}
+          {activeTab === 'history' && (
+            <div className="space-y-3">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <RefreshCw size={24} className="animate-spin text-gray-300 mb-2" />
+                </div>
+              ) : historyItems.length > 0 ? (
+                historyItems.map(entry => {
+                  const req = entry.item;
+                  return (
+                    <div key={req.id} className="p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-black text-[13px] font-bold font-['Inter']">
+                          {'student' in req ? `${req.student?.first_name} ${req.student?.last_name}` : 'Investigation Request'}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          req.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          req.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-neutral-500 text-[11px]">
+                        <span>ID: <span className="text-black font-semibold uppercase">{req.id.slice(0,8)}</span></span>
+                        <span>{new Date('reviewedAt' in req ? req.reviewedAt || req.createdAt : req.updatedAt || req.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      {('reason' in req || 'note' in req) && (
+                        <p className="text-neutral-400 text-[11px] leading-relaxed border-t border-neutral-50 pt-2 mt-1 whitespace-pre-wrap line-clamp-2">
+                          {('reason' in req ? req.reason : (req as any).note) || 'No details provided.'}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-12 border border-dashed border-gray-200 rounded-[24px] flex flex-col items-center justify-center text-center px-8 bg-gray-50/30">
+                  <div className="size-14 rounded-full bg-white border border-gray-100 flex items-center justify-center text-gray-300 mb-4 shadow-sm">
+                    <History size={24} />
+                  </div>
+                  <h3 className="text-[14px] font-black text-[#003630] mb-1">No History</h3>
+                  <p className="text-[11px] text-gray-400 font-bold leading-relaxed">
+                    Your previous disputes will appear here once submitted.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </main>
 
+      {!isStaff && (
+        <div className="w-full fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-neutral-100 shadow-[0px_-10px_30px_rgba(0,0,0,0.03)] flex flex-col items-center z-[60]">
+          <div className="w-full max-w-[552px]">
+            <button
+              onClick={() => { hapticFeedback('medium'); setShowNewDispute(true); }}
+              style={{ backgroundColor: '#003630' }}
+              className="w-full h-14 text-white rounded-xl flex items-center justify-center gap-3 text-sm font-semibold font-['Inter'] shadow-xl shadow-teal-950/30 active:scale-[0.98] transition-all"
+            >
+              <AlertCircle size={18} />
+              File a New Dispute
+            </button>
+          </div>
+        </div>
+      )}
+
       <AnimatePresence>
-        {activeReview && (
+        {showNewDispute && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] bg-black/40 flex items-end sm:items-center justify-center px-0 sm:px-4"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200] flex items-end justify-center sm:items-center sm:p-4"
+            onClick={() => setShowNewDispute(false)}
           >
             <motion.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
-              className="w-full sm:max-w-[560px] max-h-[92dvh] bg-white rounded-t-[16px] sm:rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="w-full max-w-[600px] bg-white rounded-t-[32px] sm:rounded-[32px] overflow-hidden max-h-[90vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-gray-400">
-                    {activeReview.kind === 'duplicate' ? 'Duplicate Review' : 'Balance Review'}
-                  </p>
-                  <h3 className="text-[18px] font-black text-[#003630] mt-1">
-                    {activeReview.kind === 'duplicate'
-                      ? activeReview.item.requestedStudent.name || activeReview.item.existingStudent.name
-                      : activeReview.item.student.name}
-                  </h3>
+              <div className="px-6 py-6 border-b border-gray-50 flex items-center justify-between sticky top-0 bg-white z-10">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-[#003630]/5 flex items-center justify-center text-[#003630]">
+                    <AlertCircle size={20} />
+                  </div>
+                  <h3 className="text-[18px] font-bold text-[#003630]">New Dispute</h3>
                 </div>
                 <button
-                  type="button"
-                  onClick={closeReview}
-                  className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500"
+                  onClick={() => setShowNewDispute(false)}
+                  className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
-
-              <div className="overflow-y-auto px-5 py-4">
-                {activeReview.kind === 'duplicate' ? (
-                  <>
-                    <div className="rounded-[12px] bg-amber-50 border border-amber-100 p-4 mb-4 flex gap-3">
-                      <AlertTriangle size={20} className="text-amber-700 shrink-0 mt-0.5" />
-                      <p className="text-[12px] text-amber-800 leading-relaxed">
-                        {isGuardianConflictRequest(activeReview.item)
-                          ? 'The parent entered details that match an existing pupil who already has two guardians linked. Review the guardian names below and use this request to decide whether the school should intervene in the guardian assignment.'
-                          : 'The parent entered details that match an existing pupil. Approving marks the request as valid against the existing record; it does not create a duplicate student.'}
-                      </p>
-                    </div>
-                    <Field label="Parent" value={`${activeReview.item.parent.name}${activeReview.item.parent.phone ? ` - ${activeReview.item.parent.phone}` : ''}`} />
-                    <Field label="Existing pupil" value={`${activeReview.item.existingStudent.name} (${activeReview.item.existingStudent.grade || 'Grade unknown'} ${activeReview.item.existingStudent.className || ''})`} />
-                    <Field label="Admission number" value={activeReview.item.existingStudent.admissionNumber} />
-                    {activeReview.item.existingGuardianNames && activeReview.item.existingGuardianNames.length > 0 && (
-                      <Field label="Existing guardians" value={activeReview.item.existingGuardianNames.join(' and ')} />
-                    )}
-                    <Field label="Parent-entered pupil" value={`${activeReview.item.requestedStudent.name || 'Unknown'} (${activeReview.item.requestedStudent.grade || 'Grade unknown'} ${activeReview.item.requestedStudent.className || ''})`} />
-                    <Field label="Submitted" value={formatDate(activeReview.item.createdAt)} />
-                  </>
-                ) : (
-                  <>
-                    <div className="rounded-[12px] bg-[#f9fafb] border border-gray-100 p-4 mb-4">
-                      <p className="text-[12px] text-gray-600 leading-relaxed">
-                        Compare the account snapshot recorded when the parent disputed the balance. Resolving or rejecting unlocks the pupil profile for payments again.
-                      </p>
-                    </div>
-                    <Field label="Parent" value={`${activeReview.item.parent.name}${activeReview.item.parent.phone ? ` - ${activeReview.item.parent.phone}` : ''}`} />
-                    <Field label="Student" value={`${activeReview.item.student.name} (${activeReview.item.student.grade || 'Grade unknown'} ${activeReview.item.student.className || ''})`} />
-                    <Field label="Parent claimed balance" value={formatCurrency(activeReview.item.claimedBalance)} />
-                    <Field label="Recorded balance" value={formatCurrency(activeReview.item.recordedBalance)} />
-                    <Field label="Recorded charges" value={formatCurrency(activeReview.item.recordedChargedAmount)} />
-                    <Field label="Recorded paid" value={formatCurrency(activeReview.item.recordedPaidAmount)} />
-                    <Field label="Parent note" value={activeReview.item.reason} />
-                  </>
-                )}
-
-                <div className="mt-5">
-                  <label className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Reviewer note</label>
-                  <textarea
-                    value={reviewerNote}
-                    onChange={(event) => setReviewerNote(event.target.value)}
-                    placeholder="Optional note for the audit trail"
-                    className="mt-2 w-full min-h-[110px] rounded-[12px] border border-gray-200 px-4 py-3 text-[13px] text-[#003630] outline-none focus:border-[#003630] resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-gray-100 bg-white shrink-0">
-                {activeReview.kind === 'duplicate' ? (
-                  activeReview.item.status === 'pending' ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        disabled={isUpdating}
-                        onClick={() => handleDuplicateAction('rejected')}
-                        className="h-12 rounded-[10px] border border-red-100 bg-red-50 text-red-700 text-[13px] font-black disabled:opacity-50"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isUpdating}
-                        onClick={() => handleDuplicateAction('approved')}
-                        className="h-12 rounded-[10px] bg-[#003630] text-white text-[13px] font-black disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                        {isGuardianConflictRequest(activeReview.item) ? 'Approve Review' : 'Approve Request'}
-                      </button>
-                    </div>
-                  ) : (
-                    <StatusPill status={activeReview.item.status} />
-                  )
-                ) : activeReview.item.status === 'pending' ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => handleBalanceAction('rejected')}
-                      className="h-12 rounded-[10px] border border-red-100 bg-red-50 text-red-700 text-[13px] font-black disabled:opacity-50"
-                    >
-                      Reject Claim
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => handleBalanceAction('resolved')}
-                      className="h-12 rounded-[10px] bg-[#003630] text-white text-[13px] font-black disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                      Mark Resolved
-                    </button>
-                  </div>
-                ) : (
-                  <StatusPill status={activeReview.item.status} />
-                )}
+              
+              <div className="flex-1 overflow-y-auto p-6">
+                <NewDisputeForm 
+                  onSuccess={() => {
+                    setShowNewDispute(false);
+                    loadData();
+                  }} 
+                />
               </div>
             </motion.div>
           </motion.div>

@@ -18,6 +18,7 @@ import {
   Baby,
   ShieldCheck,
   Wallet,
+  AlertTriangle,
 } from "lucide-react";
 import masterFeesLogo from "../assets/header_logo.png";
 
@@ -214,6 +215,8 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
   }, [schoolName, storeSchoolName, userPhone]);
 
   const [showSettings, setShowSettings] = useState(false);
+  const students = useAppStore(state => state.students);
+  const isUnderReview = students.some(s => s.verificationStatus === 'unverified');
 
   const currentHour = new Date().getHours();
   const greeting = currentHour >= 5 && currentHour < 12 ? "Good Morning" : currentHour >= 12 && currentHour < 17 ? "Good Afternoon" : "Good Evening";
@@ -254,12 +257,22 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
               <span className="text-black text-2xl font-extrabold font-['Inter'] leading-tight tracking-[-0.5px]">{userName}</span>
             </div>
 
-            <div className="h-6 px-3 bg-[#95e36c]/10 rounded-full flex items-center gap-2 border border-[#95e36c]/30">
-              <div className="w-3.5 h-3.5 rounded-full bg-[#95e36c] flex items-center justify-center">
-                <Check size={10} strokeWidth={4} className="text-white gap-3" />
+            {isUnderReview ? (
+              <div 
+                className="h-6 px-3 rounded-full flex items-center gap-2 border shadow-sm"
+                style={{ backgroundColor: '#FFF1F1', borderColor: '#FBDEDE' }}
+              >
+                <AlertTriangle size={12} strokeWidth={3} style={{ color: '#9B4444' }} />
+                <span style={{ color: '#9B4444' }} className="text-[10px] font-black font-['Space_Grotesk'] uppercase tracking-wider">Under Review</span>
               </div>
-              <span className="text-[#004d45] text-[10px] font-bold font-['Space_Grotesk'] uppercase tracking-wider">Account Verified</span>
-            </div>
+            ) : (
+              <div className="h-6 px-3 bg-[#95e36c]/10 rounded-full flex items-center gap-2 border border-[#95e36c]/30">
+                <div className="w-3.5 h-3.5 rounded-full bg-[#95e36c] flex items-center justify-center">
+                  <Check size={10} strokeWidth={4} className="text-white" />
+                </div>
+                <span className="text-[#004d45] text-[10px] font-bold font-['Space_Grotesk'] uppercase tracking-wider">Account Verified</span>
+              </div>
+            )}
           </div>
 
           <div className="py-2">

@@ -442,33 +442,12 @@ export async function updateParent(
 /**
  * Log a parent dispute against a student's account.
  */
-export async function logDispute(studentId: string, parentId: string, reason: string): Promise<void> {
+export async function logDispute(studentId: string, parentId: string, reason: string, metaData: any = {}) {
     try {
-        const { data: currentStudent, error: fetchError } = await supabase
-            .from('students')
-            .select('metadata, school_id')
-            .eq('student_id', studentId)
-            .or(`parent_id.eq.${parentId},other_parent_id.eq.${parentId}`)
-            .maybeSingle();
-
-        if (fetchError) handleSupabaseError(fetchError, 'logDispute - fetch student');
-        if (!currentStudent) throw new Error('Student not found for this parent.');
-
-        const currentMetadata = (currentStudent as any).metadata;
-        const nextMetadata = currentMetadata && typeof currentMetadata === 'object'
-            ? { ...currentMetadata, verification_status: 'unverified' }
-            : { verification_status: 'unverified' };
-
-        const { error: verificationError } = await supabase
-            .from('students')
-            .update({
-                verification_status: 'unverified',
-                metadata: nextMetadata,
-            })
-            .eq('student_id', studentId)
-            .or(`parent_id.eq.${parentId},other_parent_id.eq.${parentId}`);
-
-        if (verificationError) handleSupabaseError(verificationError, 'logDispute - mark unverified');
+        const students = await getStudentsByParentId(parentId);
+        const currentStudent = students.find(s => s.id === studentId);
+        
+        if (!currentStudent) throw new Error('Student not found');
 
         const { error } = await supabase
             .from('refund_requests')
@@ -481,13 +460,13 @@ export async function logDispute(studentId: string, parentId: string, reason: st
                 status: 'pending',
                 meta_data: {
                     source: 'account_profile',
-                    type: 'student_account_dispute'
-                },
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                    type: 'student_account_dispute',
+                    ...metaData
+                }
             });
 
-        if (error) handleSupabaseError(error, 'logDispute');
+        if (error) throw error;
+        return true;
     } catch (error) {
         console.error('[logDispute] Error:', error);
         throw error;
@@ -542,7 +521,7 @@ function activeGradeFromStudent(row: any) {
 /**
  * School-facing review queue for duplicate guardian requests and balance reviews.
  */
-export async function getSchoolReviewCenterData(schoolId?: string | null): Promise<SchoolReviewCenterData> {
+export async function getSchoolReviewCenterData(schoolId?: string | null, parentId?: string | null): Promise<SchoolReviewCenterData> {
     try {
         let guardianQuery = supabase
             .from('guardian_link_requests')
@@ -558,6 +537,11 @@ export async function getSchoolReviewCenterData(schoolId?: string | null): Promi
         if (schoolId) {
             guardianQuery = guardianQuery.eq('school_id', schoolId);
             balanceQuery = balanceQuery.eq('school_id', schoolId);
+        }
+
+        if (parentId) {
+            guardianQuery = guardianQuery.eq('parent_id', parentId);
+            balanceQuery = balanceQuery.eq('parent_id', parentId);
         }
 
         const [
