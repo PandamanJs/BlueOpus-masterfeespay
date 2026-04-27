@@ -1069,12 +1069,7 @@ export default function AddServicesPage({
  * NEW Unified Services Popup
  * A plain slide-up for now to be customized
  */
-const POPUP_TABS = [
-    { id: 'fees', label: 'School Fees', icon: true },
-    { id: 'transport', label: 'Transport' },
-    { id: 'cafeteria', label: 'Cafeteria' },
-    { id: 'uniforms', label: 'Uniforms' }
-] as const;
+
 
 function UnifiedServicesPopup({
     onClose,
@@ -1100,6 +1095,9 @@ function UnifiedServicesPopup({
         transport: Service[];
         cafeteria: Service[];
         uniforms: Service[];
+        boarding: Service[];
+        tours: Service[];
+        clubs: Service[];
     };
     activeStudentId: string;
     financialSummary?: any;
@@ -1107,7 +1105,99 @@ function UnifiedServicesPopup({
     const [stagedItems, setStagedItems] = useState<Service[]>(initialItems);
     const [selectedGrade, setSelectedGrade] = useState<string>(activeStudent?.grade || "");
     const [selectedAcademicYear, setSelectedAcademicYear] = useState<number>(new Date().getFullYear());
-    const [activeTab, setActiveTab] = useState<string>('fees');
+    // Dynamically build tabs based on non-empty services in schoolData or outstanding debt
+    const tabs = useMemo(() => {
+        const simplify = (name: string) => {
+            if (!name) return "";
+            const lower = name.toLowerCase();
+            if (lower.includes('tuition')) return 'School Fees';
+            if (lower.includes('transport')) return 'Transport';
+            if (lower.includes('cafeteria') || lower.includes('meals') || lower.includes('canteen')) return 'Canteen';
+            if (lower.includes('uniform')) return 'Uniforms';
+            if (lower.includes('trip') || lower.includes('tour')) return 'Tours';
+            if (lower.includes('sport') || lower.includes('club')) return 'Clubs';
+            if (lower.includes('boarding')) return 'Boarding';
+            return name;
+        };
+
+        const t: { id: string; label: string; count?: number }[] = [];
+
+        // 1. School Fees - Include if offered OR has debt
+        if (schoolData?.grade_pricing?.length || debtSummary.fees.length) {
+            t.push({
+                id: 'fees',
+                label: simplify(schoolData?.category_names?.tuition || 'School Fees'),
+                count: stagedItems.filter(s => s.id.includes('fee') || s.description.toLowerCase().includes('tuition')).length
+            });
+        }
+
+        // 2. Transport - Include if offered OR has debt
+        if (schoolData?.bus_routes?.length || debtSummary.transport.length) {
+            t.push({
+                id: 'transport',
+                label: simplify(schoolData?.category_names?.transport || 'Transport'),
+                count: stagedItems.filter(s => s.id.includes('route') || s.description.toLowerCase().includes('transport') || s.description.toLowerCase().includes('bus')).length
+            });
+        }
+
+        // 3. Cafeteria - Include if offered OR has debt
+        if (schoolData?.canteen_plans?.length || debtSummary.cafeteria.length) {
+            t.push({
+                id: 'cafeteria',
+                label: simplify(schoolData?.category_names?.canteen || 'Canteen'),
+                count: stagedItems.filter(s => s.id.includes('canteen') || s.description.toLowerCase().includes('canteen') || s.description.toLowerCase().includes('meal')).length
+            });
+        }
+
+        // 4. Uniforms - Include if offered OR has debt
+        const hasUniformsOffered = schoolData?.other_services?.some(s => s.category?.toLowerCase().includes('uniform'));
+        if (hasUniformsOffered || debtSummary.uniforms.length) {
+            t.push({
+                id: 'uniforms',
+                label: 'Uniforms',
+                count: stagedItems.filter(s => s.category?.toLowerCase().includes('uniform') || s.description.toLowerCase().includes('uniform')).length
+            });
+        }
+
+        // 5. Tours/Trips - Include if offered OR has debt
+        const hasToursOffered = schoolData?.other_services?.some(s => s.category?.toLowerCase().includes('trip') || s.category?.toLowerCase().includes('tour'));
+        if (hasToursOffered || debtSummary.tours.length) {
+            t.push({
+                id: 'trips',
+                label: 'Tours',
+                count: stagedItems.filter(s => s.category?.toLowerCase().includes('trip') || s.category?.toLowerCase().includes('tour') || s.description.toLowerCase().includes('trip') || s.description.toLowerCase().includes('tour')).length
+            });
+        }
+
+        // 6. Clubs/Sports - Include if offered OR has debt
+        const hasClubsOffered = schoolData?.other_services?.some(s => s.category?.toLowerCase().includes('sport') || s.category?.toLowerCase().includes('club'));
+        if (hasClubsOffered || debtSummary.clubs.length) {
+            t.push({
+                id: 'sports',
+                label: 'Clubs',
+                count: stagedItems.filter(s => s.category?.toLowerCase().includes('sport') || s.category?.toLowerCase().includes('club') || s.description.toLowerCase().includes('club') || s.description.toLowerCase().includes('sport')).length
+            });
+        }
+
+        // 7. Boarding - Include if offered OR has debt
+        if (schoolData?.boarding_rooms?.length || debtSummary.boarding.length) {
+            t.push({
+                id: 'boarding',
+                label: 'Boarding',
+            });
+        }
+
+        return t;
+    }, [schoolData, stagedItems, debtSummary]);
+
+    const [activeTab, setActiveTab] = useState<string>(tabs[0]?.id || 'fees');
+
+    // Ensure activeTab is valid if tabs change
+    useEffect(() => {
+        if (tabs.length > 0 && !tabs.find(t => t.id === activeTab)) {
+            setActiveTab(tabs[0].id);
+        }
+    }, [tabs, activeTab]);
     const [selectedGradeId, setSelectedGradeId] = useState<string>(activeStudent?.gradeId || "");
     const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
     const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
@@ -1129,7 +1219,7 @@ function UnifiedServicesPopup({
     const [isBoardingDropdownOpen, setIsBoardingDropdownOpen] = useState(false);
     const [boardingFrequency, setBoardingFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
     const [transportFrequency, setTransportFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
-    const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('termly');
+    const [cafeteriaFrequency, setCafeteriaFrequency] = useState<'monthly' | 'termly' | 'yearly' | 'weekly' | 'daily'>('daily');
     const [sportsFrequency, setSportsFrequency] = useState<'monthly' | 'termly' | 'yearly'>('termly');
     const [selectedSportsPlanId, setSelectedSportsPlanId] = useState<string>("");
     const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
@@ -1141,7 +1231,7 @@ function UnifiedServicesPopup({
     const selectedCanteenPlan = schoolData?.canteen_plans?.find(p => p.id === selectedCanteenPlanId);
     const selectedBoardingRoom = schoolData?.boarding_rooms?.find(r => r.id === selectedBoardingRoomId);
     const selectedSportsPlan = schoolData?.other_services?.find(p => p.id === selectedSportsPlanId);
-    
+
     const extraCategories = useMemo(() => {
         if (!schoolData?.other_services) return ['All'];
         const cats = new Set(schoolData.other_services.map(s => s.category).filter(Boolean));
@@ -1152,9 +1242,33 @@ function UnifiedServicesPopup({
     const currentMonthIndex = new Date().getMonth();
     const activeStudentGradeId = activeStudent?.gradeId;
 
-    // Derived and helper functions
-    const isGradeMismatch = selectedGrade && activeStudent?.grade && selectedGrade.toLowerCase() !== activeStudent.grade.toLowerCase();
+    const checkGradeMismatch = () => {
+        if (!selectedGrade || !activeStudent?.grade) return false;
+        const sg = selectedGrade.toLowerCase().trim();
+        const ag = activeStudent.grade.toLowerCase().trim();
 
+        if (sg === ag) return false;
+
+        // Handle space-separated streams (e.g. "Grade 1" vs "Grade 1 B")
+        if (ag.startsWith(sg + ' ') || sg.startsWith(ag + ' ')) return false;
+
+        // Handle attached streams (e.g. "Grade 1" vs "Grade 1A")
+        // Also avoid false positives for "Grade 1" vs "Grade 10"
+        const longer = sg.length > ag.length ? sg : ag;
+        const shorter = sg.length > ag.length ? ag : sg;
+
+        if (longer.startsWith(shorter)) {
+            const remainder = longer.substring(shorter.length).trim();
+            // If the remainder is just a single letter, consider it a stream
+            if (/^[a-z]$/.test(remainder)) {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    const isGradeMismatch = checkGradeMismatch();
     const MONTHS_BY_TERM = ['Jan', 'Feb', 'Mar', 'May', 'Jun', 'Jul', 'Sep', 'Oct', 'Nov'];
     const MONTH_INDEX: Record<string, number> = {
         Jan: 0, Feb: 1, Mar: 2, May: 4, Jun: 5, Jul: 6, Sep: 8, Oct: 9, Nov: 10
@@ -1172,7 +1286,7 @@ function UnifiedServicesPopup({
     const isPastWeek = (weekStr: string) => {
         if (selectedAcademicYear > currentCalendarYear) return false;
         if (selectedAcademicYear < currentCalendarYear) return true;
-        
+
         // Simple heuristic: compare today's date within the month to 7-day intervals
         const weekNum = parseInt(weekStr.match(/\d+/)?.[0] || "0");
         const today = new Date();
@@ -1227,7 +1341,7 @@ function UnifiedServicesPopup({
     const isPastDate = (monthOrTerm: string | number, year: number) => {
         const now = new Date();
         const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth(); 
+        const currentMonth = now.getMonth();
         if (year < currentYear) return true;
         if (year > currentYear) return false;
         if (typeof monthOrTerm === 'number') {
@@ -1242,73 +1356,7 @@ function UnifiedServicesPopup({
     };
 
 
-    // Dynamically build tabs based on non-empty services in schoolData
-    const tabs = useMemo(() => {
-        const simplify = (name: string) => {
-            if (!name) return "";
-            const lower = name.toLowerCase();
-            if (lower.includes('tuition')) return 'School Fees';
-            if (lower.includes('transport')) return 'Transport';
-            if (lower.includes('cafeteria') || lower.includes('meals')) return 'Cafeteria';
-            if (lower.includes('uniform')) return 'Uniforms';
-            if (lower.includes('trip') || lower.includes('tour')) return 'Tours';
-            if (lower.includes('sport') || lower.includes('club')) return 'Clubs';
-            if (lower.includes('boarding')) return 'Boarding';
-            return name;
-        };
 
-        const t: { id: string; label: string; count?: number }[] = [];
-
-        // 1. School Fees
-        t.push({
-            id: 'fees',
-            label: simplify(schoolData?.category_names?.tuition || 'School Fees'),
-            count: stagedItems.filter(s => s.id.includes('fee')).length
-        });
-
-        // 2. Transport
-        t.push({
-            id: 'transport',
-            label: simplify(schoolData?.category_names?.transport || 'Transport'),
-            count: stagedItems.filter(s => s.id.includes('route')).length
-        });
-
-        // 3. Cafeteria
-        t.push({
-            id: 'cafeteria',
-            label: simplify(schoolData?.category_names?.canteen || 'Cafeteria'),
-            count: stagedItems.filter(s => s.id.includes('canteen')).length
-        });
-
-        // 4. Uniforms
-        t.push({
-            id: 'uniforms',
-            label: 'Uniforms',
-            count: stagedItems.filter(s => s.category?.toLowerCase() === 'uniform').length
-        });
-
-        // 5. Tours/Trips
-        t.push({
-            id: 'trips',
-            label: 'Tours',
-            count: stagedItems.filter(s => s.category?.toLowerCase() === 'trips').length
-        });
-
-        // 6. Clubs/Sports
-        t.push({
-            id: 'sports',
-            label: 'Clubs',
-            count: stagedItems.filter(s => s.category?.toLowerCase() === 'sports').length
-        });
-
-        // 7. Boarding
-        t.push({
-            id: 'boarding',
-            label: 'Boarding',
-        });
-
-        return t;
-    }, [schoolData, stagedItems, invoices]);
 
     const selectedOther = schoolData?.other_services?.find(s => s.id === selectedOtherId);
 
@@ -1464,67 +1512,33 @@ function UnifiedServicesPopup({
                             </button>
                         </div>
 
-                        {/* Multi-Row Tab Selector */}
-                        <div className="self-stretch p-2 bg-[#FAFAFA] rounded-[20px] outline outline-[0.50px] outline-offset-[-0.50px] outline-[#E6E6E6] flex flex-col justify-start items-start gap-2 overflow-hidden"
+                        {/* Edge-to-Edge Tab Selector */}
+                        <div className="self-stretch p-1 bg-[#FAFAFA] rounded-[24px] outline outline-[0.50px] outline-offset-[-0.50px] outline-[#E6E6E6] flex flex-wrap gap-1 overflow-hidden"
                             style={{ boxShadow: 'inset 0px 4px 12px rgba(0,0,0,0.08), inset 0px 8px 24px rgba(0,0,0,0.05), inset 0px 1px 4px rgba(0,0,0,0.1)' }}>
-                            {/* Row 1 */}
-                            <div className="w-full h-12 relative flex">
-                                {tabs.slice(0, 4).map((tab, idx) => {
-                                    const isActive = activeTab === tab.id;
-                                    return (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => {
-                                                haptics.selection();
-                                                setActiveTab(tab.id);
-                                            }}
-                                            className={`flex-1 flex justify-center items-center h-full relative z-10`}
-                                        >
-                                            {isActive && (
-                                                <motion.div
-                                                    layoutId="activeTabPill"
-                                                    className="absolute inset-0 bg-white rounded-[12px] shadow-[0px_8px_24px_rgba(0,0,0,0.12),0px_2px_4px_rgba(0,0,0,0.08)] border-[1.5px] border-[#95e36c]"
-                                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                                />
-                                            )}
-                                            <span className={`relative z-20 text-center text-[11px] font-['Inter',sans-serif] tracking-tight ${isActive ? 'text-black font-bold' : 'text-[#686868] font-normal'}`}>
-                                                {tab.label}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            {/* Row 2 */}
-                            <div className="w-full h-12 relative flex">
-                                {tabs.slice(4).map((tab, idx) => {
-                                    const isActive = activeTab === tab.id;
-                                    return (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => {
-                                                haptics.selection();
-                                                setActiveTab(tab.id);
-                                            }}
-                                            className={`flex-1 flex justify-center items-center h-full relative z-10`}
-                                        >
-                                            {isActive && (
-                                                <motion.div
-                                                    layoutId="activeTabPill"
-                                                    className="absolute inset-0 bg-white rounded-[12px] shadow-[0px_2px_4px_0px_rgba(0,0,0,0.15)] border-[1.5px] border-[#95e36c]"
-                                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                                />
-                                            )}
-                                            <span className={`relative z-20 text-center text-[11px] font-['Inter',sans-serif] tracking-tight ${isActive ? 'text-black font-bold' : 'text-[#686868] font-normal'}`}>
-                                                {tab.label}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                                {/* Empty filler if row is not full */}
-                                {tabs.slice(4).length < 4 && Array.from({ length: 4 - tabs.slice(4).length }).map((_, i) => (
-                                    <div key={`filler-${i}`} className="flex-1 h-full" />
-                                ))}
-                            </div>
+                            {tabs.map((tab) => {
+                                const isActive = activeTab === tab.id;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            haptics.selection();
+                                            setActiveTab(tab.id);
+                                        }}
+                                        className={`h-12 flex justify-center items-center relative z-10 transition-all rounded-[18px] px-2 ${tabs.length <= 4 ? 'flex-1' : 'flex-none min-w-[90px]'}`}
+                                    >
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="activeTabPill"
+                                                className="absolute inset-0 bg-white rounded-[18px] shadow-[0px_4px_12px_rgba(0,0,0,0.12),0px_2px_4px_rgba(0,0,0,0.08)] border-[1.5px] border-[#95e36c]"
+                                                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                            />
+                                        )}
+                                        <span className={`relative z-20 text-center text-[11px] font-['Inter',sans-serif] tracking-tight ${isActive ? 'text-black font-bold' : 'text-[#686868] font-normal'}`}>
+                                            {tab.label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -1947,61 +1961,15 @@ function UnifiedServicesPopup({
                                                             </div>
                                                         </div>
 
-                                                        <div className="mt-8 flex flex-col gap-3">
-                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
-                                                            <div className="grid grid-cols-2 gap-3 mb-4">
-                                                                {['monthly', 'termly', 'yearly'].map((freq) => (
-                                                                    <button
-                                                                        key={freq}
-                                                                        onClick={(e) => {
-                                                                            e.preventDefault();
-                                                                            haptics.selection();
-                                                                            const oldFreq = transportFrequency;
-                                                                            const newFreq = freq as any;
-                                                                            if (oldFreq !== newFreq) {
-                                                                                setTransportFrequency(newFreq);
-                                                                                // Clear all TRANSPORT items when switching frequency to ensure exclusivity
-                                                                                setStagedItems(prev => prev.filter(item => 
-                                                                                    !item.id.includes("route-") && 
-                                                                                    !(item.categoryId === schoolData?.category_ids?.transport)
-                                                                                ));
-                                                                            }
-                                                                        }}
-                                                                        className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${transportFrequency === freq
-                                                                            ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
-                                                                            : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
-                                                                            }`}
-                                                                    >
-                                                                        <div className={`size-3.5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${transportFrequency === freq ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
-                                                                            {transportFrequency === freq && (
-                                                                                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
-                                                                                    <polyline points="20 6 9 17 4 12" />
-                                                                                </svg>
-                                                                            )}
-                                                                        </div>
-                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] capitalize ${transportFrequency === freq ? 'text-white' : 'text-gray-900'}`}>
-                                                                            {freq}
-                                                                        </span>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="h-8" aria-hidden="true" />
-
-                                                        <div className="mb-6">
+                                                        <div className="mt-8 mb-6">
                                                             <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">
-                                                                {transportFrequency === 'monthly' ? 'Select Month' :
-                                                                    transportFrequency === 'yearly' ? 'Confirm Academic Year' :
-                                                                        transportFrequency === 'weekly' ? 'Select Week' :
-                                                                            transportFrequency === 'daily' ? 'Select Day' :
-                                                                                'Please Select the Periods to pay for'}
+                                                                Please Select the Periods to pay for
                                                             </h3>
                                                         </div>
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
-                                                            {transportFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                            {(selectedRoute ? detectFrequency(selectedRoute.description || '') : 'termly') === 'termly' ? (
+                                                                [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-term-${term}` : `route-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2017,7 +1985,7 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedRoute.name} - Term ${term}`,
-                                                                                    amount: selectedRoute.price * 3, // 3 months per term
+                                                                                    amount: selectedRoute.price,
                                                                                     invoiceNo: "203",
                                                                                     term: term,
                                                                                     academicYear: selectedAcademicYear,
@@ -2060,7 +2028,7 @@ function UnifiedServicesPopup({
                                                                         </button>
                                                                     );
                                                                 })
-                                                            ) : transportFrequency === 'monthly' ? (
+                                                            ) : (selectedRoute ? detectFrequency(selectedRoute.description || '') : 'termly') === 'monthly' ? (
                                                                 MONTHS_BY_TERM.filter(month => !isPastMonth(month)).map((month) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-month-${month}` : `route-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
@@ -2336,8 +2304,8 @@ function UnifiedServicesPopup({
                                                                             if (oldFreq !== newFreq) {
                                                                                 setBoardingFrequency(newFreq);
                                                                                 // Clear all BOARDING items when switching frequency
-                                                                                setStagedItems(prev => prev.filter(item => 
-                                                                                    !item.id.includes("room-") && 
+                                                                                setStagedItems(prev => prev.filter(item =>
+                                                                                    !item.id.includes("room-") &&
                                                                                     !(item.categoryId === schoolData?.category_ids?.boarding)
                                                                                 ));
                                                                             }
@@ -2376,7 +2344,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {boardingFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
                                                                     const termId = selectedBoardingRoom ? `room-${selectedBoardingRoomId}-term-${term}` : `room-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2392,7 +2360,7 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedBoardingRoom.name} - Term ${term}`,
-                                                                                    amount: selectedBoardingRoom.price * 3, // 3 months per term
+                                                                                    amount: selectedBoardingRoom.price,
                                                                                     invoiceNo: "203",
                                                                                     term: term,
                                                                                     academicYear: selectedAcademicYear,
@@ -2606,14 +2574,9 @@ function UnifiedServicesPopup({
 
                                                                                 // Smart Detection: Update frequency based on plan name
                                                                                 // Restricted to daily/weekly/monthly/termly for canteen
-                                                                                const detected = detectFrequency(plan.name);
-                                                                                if (['daily', 'weekly', 'monthly', 'termly'].includes(detected)) {
-                                                                                    setCafeteriaFrequency(detected as any);
-                                                                                    removeStagedByPrefixes([`canteen-${plan.id}-`]);
-                                                                                } else {
-                                                                                    setCafeteriaFrequency('monthly');
-                                                                                    removeStagedByPrefixes([`canteen-${plan.id}-`]);
-                                                                                }
+                                                                                // Force daily frequency for canteen as per school offering
+                                                                                setCafeteriaFrequency('daily');
+                                                                                removeStagedByPrefixes([`canteen-${plan.id}-`]);
 
                                                                                 haptics.selection();
                                                                             }}
@@ -2699,7 +2662,7 @@ function UnifiedServicesPopup({
                                                         <div className="mt-8 flex flex-col gap-3">
                                                             <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
                                                             <div className="grid grid-cols-2 gap-3 mb-4">
-                                                                {['daily', 'weekly', 'monthly', 'termly'].map((freq) => (
+                                                                {['daily'].map((freq) => (
                                                                     <button
                                                                         key={freq}
                                                                         onClick={(e) => {
@@ -2710,8 +2673,8 @@ function UnifiedServicesPopup({
                                                                             if (oldFreq !== newFreq) {
                                                                                 setCafeteriaFrequency(newFreq);
                                                                                 // Clear all CAFETERIA items when switching frequency
-                                                                                setStagedItems(prev => prev.filter(item => 
-                                                                                    !item.id.includes("canteen-") && 
+                                                                                setStagedItems(prev => prev.filter(item =>
+                                                                                    !item.id.includes("canteen-") &&
                                                                                     !(item.categoryId === schoolData?.category_ids?.canteen)
                                                                                 ));
                                                                             }
@@ -2749,7 +2712,7 @@ function UnifiedServicesPopup({
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
                                                             {cafeteriaFrequency === 'termly' ? (
-                                                            [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
+                                                                [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
                                                                     const termId = selectedCanteenPlan ? `canteen-${selectedCanteenPlanId}-term-${term}` : `canteen-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
 
@@ -2765,7 +2728,7 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedCanteenPlan.name} - Term ${term}`,
-                                                                                    amount: selectedCanteenPlan.price * 3, // 3 months per term
+                                                                                    amount: selectedCanteenPlan.price,
                                                                                     invoiceNo: "204",
                                                                                     term: term,
                                                                                     academicYear: selectedAcademicYear,
@@ -2831,10 +2794,10 @@ function UnifiedServicesPopup({
                                                                     );
                                                                 })
                                                             ) : cafeteriaFrequency === 'daily' ? (
-                                                                getWorkDayDates().filter(({ fullDate }) => fullDate >= new Date().setHours(0,0,0,0)).map(({ day, dateDisplay, fullDate }) => {
+                                                                getWorkDayDates().filter(({ fullDate }) => fullDate >= new Date().setHours(0, 0, 0, 0)).map(({ day, dateDisplay, fullDate }) => {
                                                                     const termId = `canteen-${selectedCanteenPlanId}-day-${day}`;
                                                                     const isTermStaged = isStaged(termId);
-                                                                    const isPast = fullDate < new Date().setHours(0,0,0,0);
+                                                                    const isPast = fullDate < new Date().setHours(0, 0, 0, 0);
                                                                     return (
                                                                         <button
                                                                             key={day}
@@ -2845,7 +2808,7 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedCanteenPlan.name} - ${day} ${dateDisplay}`,
-                                                                                    amount: selectedCanteenPlan.price / 20,
+                                                                                    amount: selectedCanteenPlan.price,
                                                                                     invoiceNo: "204",
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedCanteenPlanId,
