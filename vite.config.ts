@@ -40,6 +40,9 @@ export default defineConfig({
       }
     })
   ],
+  define: {
+    'process.env': {},
+  },
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
     alias: {
