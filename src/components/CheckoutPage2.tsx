@@ -7,6 +7,8 @@ import { getFeePolicies } from "../lib/supabase/api/schools";
 import type { CheckoutService as Service } from "../stores/useAppStore";
 import group16 from "../assets/decorations/Group 16.png";
 import group17 from "../assets/decorations/Group 17.png";
+import posthog from "../lib/posthog";
+
 
 interface CheckoutPage2Props {
   services: Service[];
@@ -320,6 +322,15 @@ export default function CheckoutPage2({
     }
   }, [activeStudent, studentNames]);
 
+  const handleStudentTabClick = (name: string) => {
+    posthog.capture({
+      event: 'checkout_partial_student_switched',
+      properties: { student_name: name }
+    });
+    setActiveStudent(name);
+  };
+
+
   const visibleServices = activeStudent
     ? servicesByStudent[activeStudent] || []
     : [];
@@ -381,7 +392,7 @@ export default function CheckoutPage2({
                     key={name}
                     name={name}
                     isActive={activeStudent === name}
-                    onClick={() => setActiveStudent(name)}
+                    onClick={() => handleStudentTabClick(name)}
                   />
                 ))}
               </div>
@@ -418,6 +429,14 @@ export default function CheckoutPage2({
           <button
             onClick={() => {
               hapticFeedback("heavy");
+              posthog.capture({
+                event: 'checkout_partial_proceed_clicked',
+                properties: {
+                  total_amount: total,
+                  student_count: studentNames.length,
+                  item_count: activeServices.length
+                }
+              });
               onProceed(total);
             }}
             disabled={total <= 0 || hasPolicyViolation}

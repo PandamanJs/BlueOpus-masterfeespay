@@ -641,7 +641,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader showBackButton onBack={onBack}>
+      <LogoHeader>
         <OnboardingProgressBar currentStep={2} totalSteps={3} className="py-0" />
       </LogoHeader>
 
@@ -735,16 +735,16 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
         )}
       </AnimatePresence>
 
-      <div className={`flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full transition-opacity duration-300 ${showSmartMatchModal ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`flex-1 px-6 pt-8 pb-32 max-w-lg mx-auto w-full transition-opacity duration-300 ${showSmartMatchModal ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.8px] mb-2 leading-tight">
+          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-smart-h1 text-[#003630] tracking-[-0.8px] mb-2 leading-tight">
             Add Pupils to your Account
           </h1>
-          <div className="text-[14px] text-gray-500 tracking-[-0.2px] leading-relaxed">
+          <div className="text-smart-body text-gray-500 tracking-[-0.2px] leading-relaxed">
             <p>Add your child(ren) to your account.</p>
             <p className="mt-1 text-gray-400">
               If you cannot find your child, please add them manually by entering their details.

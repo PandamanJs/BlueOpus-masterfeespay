@@ -1,10 +1,7 @@
 import { hapticFeedback } from "../../utils/haptics";
 import { useAppStore } from "../../stores/useAppStore";
-import { ChevronLeft } from "lucide-react";
 
 interface LogoHeaderProps {
-    onBack?: () => void;
-    showBackButton?: boolean;
     className?: string;
     showLogo?: boolean;
     children?: React.ReactNode;
@@ -21,52 +18,35 @@ function Logo() {
     );
 }
 
-export default function LogoHeader({ onBack, showBackButton = false, className, showLogo = true, children }: LogoHeaderProps) {
+export default function LogoHeader({ className, showLogo = true, children }: LogoHeaderProps) {
 
     const handleHomeClick = () => {
         hapticFeedback('medium');
-        
+
         // Use store's reset capability to avoid being stuck in an inconsistent state
         useAppStore.getState().resetCheckoutFlow();
-        
+
         // Force navigation to home with forward transition (since it's a reset)
-        useAppStore.setState({ 
-          currentPage: 'search',
-          navigationDirection: 'back',
-          selectedSchool: null 
+        useAppStore.setState({
+            currentPage: 'search',
+            navigationDirection: 'back',
+            selectedSchool: null
         });
 
         // Update browser history explicitly
         window.history.pushState({ page: 'search' }, '', '#search');
     };
 
-    const handleBackClick = () => {
-        if (onBack) {
-            hapticFeedback('light');
-            onBack();
-        }
-    };
-
     return (
-        <div className={`h-[66px] w-full sticky top-0 z-[100] bg-white/95 backdrop-blur-[20px] flex items-center px-4 ${className}`}>
+        <div className={`h-[50px] pt-safe w-full relative z-[100] bg-white border-b border-gray-100 flex items-center px-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] ${className || ''}`}>
             <div className="flex items-center gap-4 w-full">
-                {showBackButton && (
-                    <button 
-                        onClick={handleBackClick}
-                        className="p-2 -ml-2 rounded-full active:scale-90 transition-transform flex items-center justify-center"
-                        aria-label="Go back"
-                    >
-                        <ChevronLeft size={24} strokeWidth={2.5} />
-                    </button>
-                )}
-
-                <button 
+                <button
                     onClick={handleHomeClick}
                     className="relative flex items-center gap-[8px] touch-manipulation active:scale-95 transition-transform shrink-0"
                     title="Go to Home"
                 >
                     {showLogo && <Logo />}
-                    <p className="font-['Inter:Bold',sans-serif] font-bold leading-[normal] not-italic text-[22px] text-black text-nowrap whitespace-pre tracking-[-0.03em]">masterfees</p>
+                    <p className="font-['Inter:Bold',sans-serif] font-bold leading-[normal] not-italic text-smart-h2 text-black text-nowrap whitespace-pre tracking-[-0.03em]">masterfees</p>
                 </button>
 
                 {children && (

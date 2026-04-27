@@ -233,7 +233,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           ? 'border-[#95e36c] ring-4 ring-[#95e36c]/10'
           : 'border-[#e5e7eb] hover:border-gray-300'
       }
-      text-[15px] font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#003630] 
+      text-smart-body font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-[#003630] 
       placeholder:text-gray-300 outline-none
     `;
   };
@@ -242,11 +242,11 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
 
   return (
     <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader showBackButton={!!onBack} onBack={onBack}>
+      <LogoHeader>
         <OnboardingProgressBar currentStep={1} totalSteps={3} className="py-0" />
       </LogoHeader>
 
-      <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full relative z-0">
+      <div className="flex-1 px-6 pt-8 pb-32 max-w-lg mx-auto w-full relative z-0">
         {/* Header - Matching SearchPage style */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -255,11 +255,11 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           className="mb-8"
         >
           <div className="mb-[12px]">
-            <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.5px]">
+            <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-smart-h1 text-[#003630] tracking-[-0.5px]">
               Parent/Guardian Info
             </h1>
           </div>
-          <p className="text-[14px] text-[#6b7280] tracking-[-0.2px] pl-[11px]">
+          <p className="text-smart-body text-[#6b7280] tracking-[-0.2px] pl-[11px]">
             Enter your contact details so we can securely link your child's school records.
           </p>
         </motion.div>
@@ -583,7 +583,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 100 }}
               style={{ borderRadius: '12px 12px 0 0' }}
-              className="relative w-full sm:max-w-[440px] bg-white overflow-hidden shadow-2xl flex flex-col p-6 sm:p-8 sm:!rounded-[12px]"
+              className="relative w-full sm:max-w-[440px] bg-white overflow-hidden shadow-2xl flex flex-col p-6 pb-safe sm:p-8 sm:!rounded-[12px]"
             >
               <div className="flex items-center gap-4 mb-6">
                 <div className="size-12 flex items-center justify-center shrink-0">

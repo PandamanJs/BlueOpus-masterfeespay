@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Search, X, ChevronRight } from "lucide-react";
 import { haptics } from "../utils/haptics";
 import type { School } from "../types";
+import posthog from "../lib/posthog";
+
 
 
 
@@ -38,6 +40,13 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
   }, [searchQuery]);
 
   const handleSchoolSelect = (school: School) => {
+    posthog.capture({
+      event: 'school_selected',
+      properties: {
+        school_name: school.name,
+        school_id: school.id
+      }
+    });
     onSchoolSelect(school);
   };
 
@@ -47,6 +56,12 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
 
   const handleProceed = () => {
     if (selectedSchool) {
+      posthog.capture({
+        event: 'school_selection_confirmed',
+        properties: {
+          school_name: selectedSchool
+        }
+      });
       onProceed();
     }
   };
@@ -64,16 +79,16 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
   return (
     <div className="bg-white min-h-screen flex flex-col">
       {/* Header - Premium */}
-      <div className="px-6 pt-10 pb-6">
+      <div className="px-6 pt-safe pb-6">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
           <div className="flex flex-col mb-[12px]">
-            <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#003630] tracking-[-0.5px]">Select Your School</h1>
+            <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-smart-h1 text-[#003630] tracking-[-0.5px]">Select Your School</h1>
           </div>
-          <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[14px] text-[#6b7280] tracking-[-0.2px]">
+          <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-smart-body text-[#6b7280] tracking-[-0.2px]">
             Choose your school to continue with payment
           </p>
         </motion.div>
@@ -322,7 +337,7 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className="
               fixed bottom-0 left-0 right-0
-              px-6 pb-6 pt-4
+              px-6 pb-safe pb-6 pt-4
               bg-gradient-to-t from-white via-white to-transparent
               z-50
             "

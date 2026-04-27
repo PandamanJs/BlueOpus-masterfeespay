@@ -14,8 +14,11 @@ import {
   RefreshCw,
   ShieldAlert,
   Users,
-  X
+  X,
+  ChevronLeft
 } from 'lucide-react';
+
+
 import { toast } from 'sonner';
 import { useAppStore } from '../stores/useAppStore';
 import { hapticFeedback } from '../utils/haptics';
@@ -392,11 +395,11 @@ function BalanceCard({ item }: { item: BalanceReviewRequest }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="p-3 bg-[#f9fafb] rounded-xl border border-neutral-50">
           <p className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest mb-1">Recorded</p>
-          <p className="text-black text-[13px] font-black font-['Inter']">{formatCurrency(item.recordedBalance)}</p>
+          <p className="text-black text-[11px] sm:text-[13px] font-black font-['Inter']">{formatCurrency(item.recordedBalance)}</p>
         </div>
         <div className="p-3 bg-[#f9fafb] rounded-xl border border-neutral-50">
           <p className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest mb-1">Parent Claim</p>
-          <p className="text-black text-[13px] font-black font-['Inter']">{formatCurrency(item.claimedBalance)}</p>
+          <p className="text-black text-[11px] sm:text-[13px] font-black font-['Inter']">{formatCurrency(item.claimedBalance)}</p>
         </div>
       </div>
     </div>
@@ -450,70 +453,48 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center">
       {/* ── Fixed Header ── */}
-      {isStaff ? (
-        <header className="h-[66px] w-full bg-white border-b border-gray-100 px-5 flex items-center justify-between sticky top-0 z-[100] backdrop-blur-md bg-white/90">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                hapticFeedback('light');
-                useAppStore.setState({ currentPage: 'search' });
-              }}
-              className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-[20px] font-black text-[#003630] tracking-[-0.3px]">Review Center</h1>
-              <p className="text-[11px] font-bold text-gray-400">{selectedSchool || 'All schools'}</p>
+      <header className="w-full h-[50px] pt-safe px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="size-6 flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 12L12 22L22 12L12 2Z" />
+                <path d="M9 13L12 10L15 13" />
+              </svg>
             </div>
+            <h1 className="text-black text-[22px] font-bold font-['Inter'] tracking-tight">masterfees</h1>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              hapticFeedback('light');
-              loadData();
-            }}
-            className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-          >
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </header>
-      ) : (
-        <LogoHeader 
-          showBackButton 
-          onBack={() => {
+        </div>
+        
+        <button
+          type="button"
+          onClick={() => {
             hapticFeedback('light');
-            useAppStore.setState({ currentPage: 'search' });
+            loadData();
           }}
+          className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
         >
-          <button
-            type="button"
-            onClick={() => {
-              hapticFeedback('light');
-              loadData();
-            }}
-            className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-          >
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </LogoHeader>
-      )}
+          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </header>
+
 
       <main className="w-full max-w-[600px] flex flex-col pb-32">
         {/* ── Hero Section ── */}
-        {!isStaff && (
-          <section className="px-6 py-8 bg-[#f9fafb]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-[#003630] shadow-sm">
-                <FileWarning size={22} strokeWidth={2.5} />
-              </div>
-              <h2 className="text-xl font-bold font-['Inter'] text-black">Dispute Support</h2>
+        <section className="px-6 py-8 bg-[#f9fafb]">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-black shadow-sm">
+              <FileWarning size={22} strokeWidth={2.5} />
             </div>
-            <p className="text-black text-[13px] leading-relaxed font-normal font-['Inter'] opacity-80 max-w-[400px]">
-              If you have noticed any discrepancies in your student's recorded balance or identity details, you can file a dispute here. Our team will review your request and get back to you.
-            </p>
-          </section>
-        )}
+            <h2 className="text-smart-h2 font-bold font-['Inter'] text-black">{isStaff ? 'Review Center' : 'Audit & Disputes'}</h2>
+          </div>
+          <p className="text-black text-smart-body leading-relaxed font-normal font-['Inter'] opacity-80 max-w-[400px]">
+            {isStaff 
+              ? 'Review and manage all pending student record disputes and balance discrepancies submitted by parents.'
+              : 'If you have noticed any discrepancies in your student\'s recorded balance or identity details, you can file a dispute here.'}
+          </p>
+        </section>
+
 
         {/* ── Tabs ── */}
         <div className="px-6 py-6 flex items-center gap-4">
@@ -554,8 +535,8 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
                   <div className="size-14 rounded-full bg-white border border-gray-100 flex items-center justify-center text-gray-300 mb-4 shadow-sm">
                     <CheckCircle2 size={24} />
                   </div>
-                  <h3 className="text-[14px] font-black text-[#003630] mb-1">All Clear</h3>
-                  <p className="text-[11px] text-gray-400 font-bold leading-relaxed">
+                  <h3 className="text-smart-h3 font-black text-[#003630] mb-1">All Clear</h3>
+                  <p className="text-smart-small text-gray-400 font-bold leading-relaxed">
                     You don't have any pending balance reviews at the moment.
                   </p>
                 </div>
@@ -615,7 +596,7 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
       </main>
 
       {!isStaff && (
-        <div className="w-full fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-neutral-100 shadow-[0px_-10px_30px_rgba(0,0,0,0.03)] flex flex-col items-center z-[60]">
+        <div className="w-full fixed bottom-0 left-0 right-0 p-6 pb-safe bg-white border-t border-neutral-100 shadow-[0px_-10px_30px_rgba(0,0,0,0.03)] flex flex-col items-center z-[60]">
           <div className="w-full max-w-[552px]">
             <button
               onClick={() => { hapticFeedback('medium'); setShowNewDispute(true); }}
@@ -642,23 +623,24 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              className="w-full max-w-[600px] bg-white rounded-t-[32px] sm:rounded-[32px] overflow-hidden max-h-[90vh] flex flex-col"
+              className="w-full max-w-[600px] bg-white rounded-t-[32px] sm:rounded-[32px] overflow-hidden max-h-[90vh] flex flex-col pb-safe"
               onClick={e => e.stopPropagation()}
             >
-              <div className="px-6 py-6 border-b border-gray-50 flex items-center justify-between sticky top-0 bg-white z-10">
-                <div className="flex items-center gap-3">
+              <div className="px-6 py-6 border-b border-gray-50 flex items-center relative bg-white z-10">
+                <button
+                  onClick={() => setShowNewDispute(false)}
+                  className="absolute left-6 top-1/2 -translate-y-1/2 size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 active:scale-90 transition-all"
+                >
+                  <X size={20} />
+                </button>
+                <div className="flex-1 flex items-center justify-center gap-3">
                   <div className="size-10 rounded-xl bg-[#003630]/5 flex items-center justify-center text-[#003630]">
                     <AlertCircle size={20} />
                   </div>
                   <h3 className="text-[18px] font-bold text-[#003630]">New Dispute</h3>
                 </div>
-                <button
-                  onClick={() => setShowNewDispute(false)}
-                  className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400"
-                >
-                  <X size={20} />
-                </button>
               </div>
+
               
               <div className="flex-1 overflow-y-auto p-6">
                 <NewDisputeForm 

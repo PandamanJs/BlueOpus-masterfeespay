@@ -327,7 +327,7 @@ export default function PayForSchoolFees({
       <div className="relative w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen mx-auto bg-white flex flex-col overflow-hidden">
         {/* Header - Fixed height */}
         <div className="flex-shrink-0 bg-white relative z-10">
-          <LogoHeader showBackButton={false} />
+          <LogoHeader />
         </div>
 
         {/* Content - Scrollable area */}

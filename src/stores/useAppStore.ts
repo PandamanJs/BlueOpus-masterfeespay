@@ -45,7 +45,8 @@ export type PageType =
   | "account-profile"
   | "children-details"
   | "audit-disputes"
-  | "student-manage";
+  | "student-manage"
+  | "settings";
 
 /**
  * CheckoutService Interface
@@ -397,10 +398,6 @@ export const useAppStore = create<AppState>()(
         userPhone: state.userPhone,
         userEmail: state.userEmail,
         userId: state.userId,
-        selectedSchool: state.selectedSchool,
-        selectedSchoolId: state.selectedSchoolId,
-        selectedSchoolLogo: state.selectedSchoolLogo,
-        vatEnabled: state.vatEnabled,
         isStaff: state.isStaff,
 
         currentPage: state.currentPage,

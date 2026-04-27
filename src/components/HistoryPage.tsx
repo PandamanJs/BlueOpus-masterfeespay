@@ -22,6 +22,8 @@ import type { FinancialSummary } from "../lib/supabase/api/transactions";
 import { haptics } from "../utils/haptics";
 import { toast } from "sonner";
 import cardBg from "../assets/background images/Frame 1707478741.png";
+import posthog from "../lib/posthog";
+
 
 function AnimatedNumber({ value }: { value: number }) {
   const spring = useSpring(0, {
@@ -154,6 +156,11 @@ export default function HistoryPage({
   useEffect(() => {
     if (!selectedStudentId) return;
 
+    posthog.capture({
+      event: 'history_student_switched',
+      properties: { student_id: selectedStudentId }
+    });
+
     const loadSummary = async () => {
       setIsSummaryLoading(true);
       try {
@@ -167,6 +174,7 @@ export default function HistoryPage({
     };
     loadSummary();
   }, [selectedStudentId]);
+
 
   useEffect(() => {
     if (!selectedStudentId) return;
@@ -363,6 +371,14 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
 
   const handleDownload = () => {
     try {
+      posthog.capture({
+        event: 'history_receipt_downloaded',
+        properties: {
+          invoice_number: item.invoice_number,
+          student_name: studentName,
+          amount_paid: amountPaid
+        }
+      });
       generateReceiptPDF({
         schoolName: schoolName,
         totalAmount: amountPaid,
@@ -395,6 +411,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
       toast.error("Download failed");
     }
   };
+
 
   return (
     <div

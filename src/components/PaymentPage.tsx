@@ -21,6 +21,8 @@ import RollingNumber from "./ui/RollingNumber";
 import LogoHeader from "./common/LogoHeader";
 import group16 from "../assets/decorations/Group 16.png";
 import group17 from "../assets/decorations/Group 17.png";
+import posthog from "../lib/posthog";
+
 
 interface PaymentPageProps {
   onBack: () => void;
@@ -399,6 +401,14 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
       const { first, last } = getNames(userName);
 
+      posthog.capture({
+        event: 'payment_modal_opened',
+        properties: {
+          amount: gatewayAmount,
+          school_name: selectedSchoolName
+        }
+      });
+
       // 5. Initiate payment with SCHOOL-SPECIFIC Lenco key
       initiatePayment({
         key: school.lenco_public_key, // ✅ Each school gets their own payments
@@ -414,6 +424,15 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
         },
         onSuccess: async function (response: any) {
           console.log("Payment successful:", response);
+          posthog.capture({
+            event: 'payment_successful',
+            properties: {
+              amount: gatewayAmount,
+              reference: response.reference,
+              school_name: selectedSchoolName
+            }
+          });
+
 
           try {
             // 1. Get Parent ID
@@ -551,6 +570,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
           // Unlock on close
           isSubmittingRef.current = false;
           setIsProcessing(false);
+          posthog.capture({ event: 'payment_cancelled' });
           toast("Payment cancelled");
         },
         onConfirmationPending: function () {
@@ -577,7 +597,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
       <div className="flex flex-col w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-full relative overflow-hidden">
 
         {/* ── 1. Header ── */}
-        <LogoHeader showBackButton={false} className="shadow-md" />
+        <LogoHeader className="shadow-md" />
 
         {/* ── Scrollable Body ── */}
         <div className="flex-1 overflow-y-auto no-scrollbar relative">
@@ -601,7 +621,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                     <RollingNumber
                       value={finalAmount}
                       currency="K"
-                      className="text-[40px] font-black justify-start"
+                      className="text-[32px] sm:text-[40px] font-black justify-start"
                     />
                   </div>
                 </div>
@@ -853,7 +873,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
         </div>
 
         {/* ── 4. Fixed Bottom Bar ── */}
-        <div className="bg-white border-t border-neutral-200 px-6 pt-6 pb-8 flex flex-col gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+        <div className="bg-white border-t border-neutral-200 px-6 pt-6 pb-safe pb-8 flex flex-col gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
           <div className="flex items-center justify-center gap-2.5">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M16.6667 10.8331C16.6667 14.9997 13.75 17.0831 10.2834 18.2914C10.1018 18.3529 9.90466 18.35 9.72504 18.2831C6.25004 17.0831 3.33337 14.9997 3.33337 10.8331V4.99972C3.33337 4.77871 3.42117 4.56675 3.57745 4.41047C3.73373 4.25419 3.94569 4.16639 4.16671 4.16639C5.83337 4.16639 7.91671 3.16639 9.36671 1.89972C9.54325 1.74889 9.76784 1.66602 10 1.66602C10.2322 1.66602 10.4568 1.74889 10.6334 1.89972C12.0917 3.17472 14.1667 4.16639 15.8334 4.16639C16.0544 4.16639 16.2663 4.25419 16.4226 4.41047C16.5789 4.56675 16.6667 4.77871 16.6667 4.99972V10.8331Z" stroke="#003129" strokeLinecap="round" strokeLinejoin="round" />

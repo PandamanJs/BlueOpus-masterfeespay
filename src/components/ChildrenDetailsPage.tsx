@@ -47,17 +47,8 @@ export default function ChildrenDetailsPage({ navigateToPage }: { navigateToPage
   return (
     <div className="min-h-screen bg-white flex flex-col items-center font-['Inter',sans-serif]">
       {/* ── Fixed Header ── */}
-      <header className="w-full h-20 px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
+      <header className="w-full h-[50px] pt-safe px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              hapticFeedback('medium');
-              navigateToPage('services', 'back');
-            }}
-            className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-black active:scale-90 transition-transform"
-          >
-            <ChevronLeft size={20} />
-          </button>
           <div className="flex items-center gap-3">
             <div className="size-6 flex items-center justify-center">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

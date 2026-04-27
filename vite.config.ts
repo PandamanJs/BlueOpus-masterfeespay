@@ -41,13 +41,7 @@ export default defineConfig({
     })
   ],
   define: {
-    'process.env': { NODE_ENV: '"development"' },
-    'process.browser': 'true',
-    'process.version': '"v20.0.0"',
-    'process.platform': '"browser"',
-    'process.argv': '[]',
-    'process.cwd': '(() => "/")',
-    'process.nextTick': '((fn) => setTimeout(fn, 0))',
+    'global': 'globalThis',
   },
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
@@ -58,6 +52,7 @@ export default defineConfig({
       'node:fs': path.resolve(__dirname, './src/lib/stubs/fs.ts'),
       'node:readline': path.resolve(__dirname, './src/lib/stubs/readline.ts'),
       'node:path': path.resolve(__dirname, './src/lib/stubs/path.ts'),
+      'process': path.resolve(__dirname, './src/lib/stubs/process.ts'),
       // 'path' (bare specifier) is also used by posthog-node error tracking modifiers
       // Vite aliases only apply to the browser bundle, not this config file itself
       'path': path.resolve(__dirname, './src/lib/stubs/path.ts'),

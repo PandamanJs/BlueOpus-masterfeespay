@@ -15,6 +15,8 @@ import { getSchoolByName } from "../lib/supabase/api/schools";
 import type { School } from "../types";
 import { useAppStore } from "../stores/useAppStore";
 import type { CheckoutService } from "../stores/useAppStore";
+import posthog from "../lib/posthog";
+
 
 interface AddServicesPageProps {
     selectedStudentIds: string[];
@@ -554,7 +556,16 @@ export default function AddServicesPage({
     }, 0);
 
     const handleClearOutstandingDebt = (type: 'tuition' | 'other' | 'all') => {
+        posthog.capture({
+            event: 'debt_cleared_clicked',
+            properties: {
+                type: type,
+                student_id: activeStudentId,
+                school_name: schoolName
+            }
+        });
         const debtsToAdd: Service[] = [];
+
         // Get all current services to avoid duplicates by invoice number
         const currentServices = studentServices[activeStudentId] || [];
         const existingInvoices = new Set(currentServices.map(s => s.invoiceNo));
@@ -658,6 +669,7 @@ export default function AddServicesPage({
     };
 
     const handleAddSchoolFees = () => {
+        posthog.capture({ event: 'add_school_fees_opened' });
         setShowAddFeesForm(true);
     };
 
@@ -683,6 +695,7 @@ export default function AddServicesPage({
     };
 
     const handleAddOtherServices = () => {
+        posthog.capture({ event: 'add_other_services_opened' });
         setShowOtherServicesPopup(true);
     };
 
@@ -777,6 +790,13 @@ export default function AddServicesPage({
     };
 
     const handleRemoveService = (serviceId: string) => {
+        posthog.capture({
+            event: 'service_removed',
+            properties: {
+                service_id: serviceId,
+                student_id: activeStudentId
+            }
+        });
         setStudentServices(prev => ({
             ...prev,
             [activeStudentId]: (prev[activeStudentId] || []).filter(s => s.id !== serviceId)
@@ -809,7 +829,18 @@ export default function AddServicesPage({
             id: service.id || `fallback-${Date.now()}`
         };
 
+        posthog.capture({
+            event: 'service_added',
+            properties: {
+                service_name: safeService.description,
+                amount: safeService.amount,
+                student_id: activeStudentId,
+                is_debt: !!safeService.isDebt
+            }
+        });
+
         console.log(`[AddServicesPage] Adding service for ${activeStudentId}:`, safeService);
+
 
         setStudentServices(prev => {
             const current = (prev[activeStudentId] || []).filter(s => s && s.id);
@@ -835,7 +866,17 @@ export default function AddServicesPage({
     const handleNextOrCheckout = () => {
         haptics.success();
 
+        posthog.capture({
+            event: 'checkout_initiated',
+            properties: {
+                total_amount: totalAmount,
+                student_count: selectedStudentIds.length,
+                school_name: schoolName
+            }
+        });
+
         // Final aggregation of all selected services for all students
+
         const allCheckoutServices: CheckoutService[] = [];
 
         Object.entries(studentServices).forEach(([studentId, services]) => {
@@ -886,10 +927,7 @@ export default function AddServicesPage({
     return (
         <div className="bg-white h-screen w-full overflow-hidden flex items-center justify-center gap-3">
             <div className="relative w-full max-w-[600px] md:max-w-[700px] lg:max-w-[800px] h-screen mx-auto shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] flex flex-col">
-                <LogoHeader showBackButton={false} onBack={() => {
-                    haptics.selection();
-                    onBack();
-                }} />
+                <LogoHeader />
 
                 {/* Sticky Header: Cart Info & Student Tabs */}
                 <div className="bg-white z-20 border-b border-gray-100/50 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.04)]">
@@ -985,20 +1023,20 @@ export default function AddServicesPage({
 
                         {/* Unified Checkout Bar */}
                         <div
-                            className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] h-[70px]"
+                            className="bg-white rounded-[12px] p-2 flex items-center justify-between border-[2px] border-[#e2e8f0] h-[60px]"
                             style={{ boxShadow: '0px 25px 60px rgba(0,0,0,0.15), 0px 4px 12px rgba(0,0,0,0.08)' }}
                         >
                             <div className="flex items-center gap-[14px] pl-[16px]">
                                 <div className="text-[#003630]">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
                                     </svg>
                                 </div>
                                 <div className="flex flex-col">
-                                    <p className="font-['Inter',sans-serif] font-bold text-[18px] text-black leading-none tracking-tight">
+                                    <p className="font-['Inter',sans-serif] font-bold text-[15px] text-black leading-none tracking-tight">
                                         K{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                                     </p>
-                                    <p className="font-['Inter',sans-serif] text-[10px] text-[#a1a1a1] font-light uppercase tracking-[0.8px] mt-1">GRAND TOTAL</p>
+                                    <p className="font-['Inter',sans-serif] text-[8px] text-[#a1a1a1] font-light uppercase tracking-[0.8px] mt-1">GRAND TOTAL</p>
                                 </div>
                             </div>
 
@@ -1011,13 +1049,13 @@ export default function AddServicesPage({
                                         }
                                     }}
                                     disabled={!hasServices}
-                                    className={`h-[50px] w-[155px] relative rounded-[14px] transition-all duration-300 flex items-center justify-center gap-[16px] z-30 ${hasServices
+                                    className={`h-[40px] w-[110px] relative rounded-[8px] transition-all duration-300 flex items-center justify-center gap-[16px] z-30 ${hasServices
                                         ? 'bg-[#003630] touch-manipulation cursor-pointer active:scale-[0.97] drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)]'
                                         : 'bg-gray-50 cursor-not-allowed'
                                         }`}
                                 >
                                     <div className="relative z-10 flex items-center justify-center gap-[16px] h-full w-full">
-                                        <p className={`font-['Inter',sans-serif] font-extrabold text-[13px] ${hasServices ? 'text-white' : 'text-gray-300'}`}>
+                                        <p className={`font-['Inter',sans-serif] font-extrabold text-[10px] ${hasServices ? 'text-white' : 'text-gray-300'}`}>
                                             {totalAmount > 0 ? "Checkout" : "Next"}
                                         </p>
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={hasServices ? "text-[#95e36c]" : "text-gray-200"}>
@@ -1344,10 +1382,11 @@ function UnifiedServicesPopup({
         const low = name.toLowerCase();
         if (low.includes('month')) return 'monthly';
         if (low.includes('week')) return 'weekly';
-        if (low.includes('day')) return 'daily';
+        if (low.includes('day') || low.includes('daily') || low.includes('meal') || low.includes('lunch') || low.includes('canteen') || low.includes('food')) return 'daily';
         if (low.includes('year')) return 'yearly';
         return 'termly';
     };
+
 
     const getBaseFrequency = (plan: any): "monthly" | "termly" | "yearly" | "weekly" | "daily" => {
         if (!plan) return 'termly';
@@ -2869,18 +2908,18 @@ function UnifiedServicesPopup({
                                                                                 e.stopPropagation();
                                                                                 if (!selectedCanteenPlan) return;
 
-                                                                                    const newService = {
-                                                                                        id: termId,
-                                                                                        description: `${selectedCanteenPlan.name} - Term ${term}`,
-                                                                                        amount: calculateRate(selectedCanteenPlan, 'termly'),
-                                                                                        invoiceNo: "204",
-                                                                                        term: term,
-                                                                                        academicYear: selectedAcademicYear,
-                                                                                        pricing_id: selectedCanteenPlanId,
-                                                                                        categoryId: schoolData?.category_ids?.canteen,
-                                                                                        studentId: activeStudentId,
-                                                                                        studentName: activeStudent?.name
-                                                                                    };
+                                                                                const newService = {
+                                                                                    id: termId,
+                                                                                    description: `${selectedCanteenPlan.name} - Term ${term}`,
+                                                                                    amount: calculateRate(selectedCanteenPlan, 'termly'),
+                                                                                    invoiceNo: "204",
+                                                                                    term: term,
+                                                                                    academicYear: selectedAcademicYear,
+                                                                                    pricing_id: selectedCanteenPlanId,
+                                                                                    categoryId: schoolData?.category_ids?.canteen,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
+                                                                                };
 
                                                                                 toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-day-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
@@ -3341,7 +3380,7 @@ function UnifiedServicesPopup({
                                                                                                 const newService = {
                                                                                                     id: termId,
                                                                                                     description: `${selectedSportsPlan.name} Membership - Term ${term}`,
-                                                                                                    amount: selectedSportsPlan.price * 3,
+                                                                                                    amount: selectedSportsPlan.price,
                                                                                                     invoiceNo: "205",
                                                                                                     term: term,
                                                                                                     academicYear: selectedAcademicYear,
@@ -3403,7 +3442,8 @@ function UnifiedServicesPopup({
                                                                                         const newService = {
                                                                                             id: termId,
                                                                                             description: `${selectedSportsPlan.name} - Full Year ${selectedAcademicYear}`,
-                                                                                            amount: selectedSportsPlan.price * 9,
+                                                                                            amount: selectedSportsPlan.price,
+
                                                                                             invoiceNo: "205",
                                                                                             academicYear: selectedAcademicYear,
                                                                                             pricing_id: selectedSportsPlanId,
@@ -3574,8 +3614,8 @@ function UnifiedServicesPopup({
                 {/* Standard Flex Footer - High Fidelity Design */}
                 <div className="w-full shrink-0 bg-white pt-5 border-t border-gray-100 shadow-[0px_-20px_50px_rgba(0,0,0,0.05)] z-[80] pb-[env(safe-area-inset-bottom)] pb-6 relative">
                     <div className="flex items-center justify-between mb-5 px-6">
-                        <span className="text-[17px] font-bold text-black tracking-tight font-['Inter',sans-serif]">Subtotal</span>
-                        <span className="text-[17px] font-bold text-black tracking-tight uppercase font-['Inter',sans-serif]">
+                        <span className="text-[10px] font-bold text-black tracking-tight font-['Inter',sans-serif]">Subtotal</span>
+                        <span className="text-[10px] font-bold text-black tracking-tight uppercase font-['Inter',sans-serif]">
                             K{stagedItems.reduce((sum, s) => sum + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                     </div>

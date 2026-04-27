@@ -139,12 +139,7 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
       <div className="flex flex-col w-full max-w-[440px] h-full relative" data-name="Checkout page 1">
 
         {/* ── Header ── */}
-        <div className="h-20 w-full flex items-center border-b border-[#E6E6E6] bg-white sticky top-0 z-30">
-          <LogoHeader showBackButton={true} onBack={() => {
-            hapticFeedback('light');
-            onBackToServices();
-          }} />
-        </div>
+        <LogoHeader className="sticky top-0 z-30" />
 
 
         <div className="flex-1 overflow-y-auto no-scrollbar bg-white">
@@ -238,7 +233,7 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
 
         {/* ── Bottom Action Bar ── */}
         {/* ── Bottom Action Area ── */}
-        <div className="px-6 pt-2 pb-4 bg-white border-t border-[#F0F0F0] flex flex-col gap-4 shadow-[0_-15px_40px_-20px_rgba(0,0,0,0.05)]">
+        <div className="px-6 pt-2 pb-safe pb-4 bg-white border-t border-[#F0F0F0] flex flex-col gap-4 shadow-[0_-15px_40px_-20px_rgba(0,0,0,0.05)]">
 
           {/* Unified Checkout Bar (Transformed into a single full-width button) */}
           <button

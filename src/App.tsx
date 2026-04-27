@@ -17,6 +17,8 @@ import { getSchools } from "./lib/supabase/api/schools";
 import { hapticFeedback } from "./utils/haptics";
 import { getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "./lib/supabase/api/transactions";
 import { checkIfStaff } from "./lib/supabase/api/parents";
+import posthog from "./lib/posthog";
+
 
 import { UpdateNotification } from "./components/UpdateNotification";
 import { useOfflineManager } from "./hooks/useOfflineManager";
@@ -146,6 +148,11 @@ const LazyViewPaymentPlansPage = lazyLoadWithTracking(
 const LazyPoliciesPage = lazyLoadWithTracking(
   () => import("./components/PoliciesPage"),
   { componentName: "PoliciesPage" }
+);
+
+const LazySettingsPage = lazyLoadWithTracking(
+  () => import("./components/SettingsPage"),
+  { componentName: "SettingsPage" }
 );
 
 /**
@@ -781,6 +788,7 @@ export default function App() {
 
   // Shared student fetching logic
   const fetchStudents = async (phone: string) => {
+
     if (!phone) {
       setStudents([]);
       setIsStaff(false);
@@ -824,6 +832,32 @@ export default function App() {
     }
   }, [userPhone, hasHydrated]);
 
+  // PostHog Page Tracking
+  useEffect(() => {
+    if (hasHydrated) {
+      posthog.capture({
+        event: 'page_viewed',
+        properties: {
+          page: currentPage,
+          school: selectedSchool,
+          school_id: useAppStore.getState().selectedSchoolId
+        }
+      });
+    }
+  }, [currentPage, hasHydrated, selectedSchool]);
+
+  // PostHog User Identification
+  useEffect(() => {
+    if (hasHydrated && userPhone) {
+      posthog.identify(userPhone, {
+        phone: userPhone,
+        name: userName,
+        email: userEmail
+      });
+    }
+  }, [userPhone, userName, userEmail, hasHydrated]);
+
+
 
 
   // Security: Validate if user can access a restricted page
@@ -831,7 +865,7 @@ export default function App() {
     const state = useAppStore.getState();
 
     // Anyone can access these pages
-    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage', 'pay-fees', 'add-services'];
+    const publicPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'registration-portal', 'registration-form', 'registration-success', 'account-profile', 'policies', 'audit-disputes', 'children-details', 'student-manage', 'pay-fees', 'add-services', 'settings'];
     if (publicPages.includes(page)) return true;
 
     // Payment flow pages require proper context
@@ -900,7 +934,7 @@ export default function App() {
 
     // Check if there's a hash in the URL on initial load
     const hash = window.location.hash.slice(1);
-    const validPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'pay-fees', 'add-services', 'checkout', 'payment', 'processing', 'failed', 'success', 'download-receipt', 'registration-portal', 'registration-form', 'registration-success', 'policies', 'account-profile', 'audit-disputes', 'children-details', 'student-manage'];
+    const validPages: PageType[] = ['search', 'details', 'services', 'history', 'receipts', 'pay-fees', 'add-services', 'checkout', 'payment', 'processing', 'failed', 'success', 'download-receipt', 'registration-portal', 'registration-form', 'registration-success', 'policies', 'account-profile', 'audit-disputes', 'children-details', 'student-manage', 'settings'];
 
     if (hash && validPages.includes(hash as PageType)) {
       const targetPage = hash as PageType;
@@ -1668,6 +1702,29 @@ export default function App() {
                 }
                 navigateToPage("registration-success");
               }}
+            />
+          </motion.div>
+        )}
+
+        {currentPage === "settings" && (
+          <motion.div
+            key="settings"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <LazySettingsPage
+              userName={userName}
+              userPhone={userPhone}
+              onLogout={() => {
+                haptics.warning?.();
+                posthog.capture({ event: 'user_logged_out' });
+                posthog.reset();
+                resetAll();
+              }}
+              onBack={() => navigateToPage("services", "back")}
+              navigateToPage={navigateToPage}
             />
           </motion.div>
         )}

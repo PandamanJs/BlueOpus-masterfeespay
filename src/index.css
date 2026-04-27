@@ -8158,3 +8158,39 @@ button {
 .font-bold        { font-weight: 700; }
 .font-extrabold   { font-weight: 800; }
 .font-black       { font-weight: 900; }
+ 
+/* ── Safe Area Utilities ── */
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .mt-safe { margin-top: env(safe-area-inset-top); }
+  .mb-safe { margin-bottom: env(safe-area-inset-bottom); }
+  .top-safe { top: env(safe-area-inset-top); }
+  .bottom-safe { bottom: env(safe-area-inset-bottom); }
+  .h-screen-safe { height: calc(100vh - (env(safe-area-inset-top) + env(safe-area-inset-bottom))); }
+  .min-h-screen-safe { min-height: calc(100vh - (env(safe-area-inset-top) + env(safe-area-inset-bottom))); }
+
+  /* ── Fluid Typography & Smart Resizing ── */
+  .text-smart-h1 { font-size: clamp(1.375rem, 6vw, 1.75rem); } /* 22px to 28px */
+  .text-smart-h2 { font-size: clamp(1.125rem, 5vw, 1.5rem); }  /* 18px to 24px */
+  .text-smart-h3 { font-size: clamp(1rem, 4vw, 1.25rem); }     /* 16px to 20px */
+  .text-smart-body { font-size: clamp(0.8125rem, 3.5vw, 0.9375rem); } /* 13px to 15px */
+  .text-smart-small { font-size: clamp(0.6875rem, 3vw, 0.8125rem); }   /* 11px to 13px */
+  .text-smart-tiny { font-size: clamp(0.5625rem, 2.5vw, 0.6875rem); }  /* 9px to 11px */
+
+  .p-smart { padding: clamp(1rem, 5vw, 1.5rem); }
+  .px-smart { padding-left: clamp(1rem, 5vw, 1.5rem); padding-right: clamp(1rem, 5vw, 1.5rem); }
+  .py-smart { padding-top: clamp(1rem, 5vw, 1.5rem); padding-bottom: clamp(1rem, 5vw, 1.5rem); }
+  .gap-smart { gap: clamp(0.5rem, 3vw, 1.25rem); }
+  .rounded-smart { border-radius: clamp(0.75rem, 4vw, 1.25rem); }
+
+  /* High Quality Logo Rendering */
+  .logo-crisp {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}

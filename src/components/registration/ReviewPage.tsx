@@ -115,17 +115,17 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
 
   return (
     <div className="bg-white min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-      <LogoHeader showBackButton onBack={onBack}>
+      <LogoHeader>
         <OnboardingProgressBar currentStep={3} totalSteps={3} className="py-0" />
       </LogoHeader>
 
-      <div className="flex-1 px-6 pt-2 pb-32 max-w-lg mx-auto w-full">
+      <div className="flex-1 px-6 pt-8 pb-32 max-w-lg mx-auto w-full">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[28px] text-[#000000] leading-tight mb-4">
+          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-smart-h1 text-[#000000] leading-tight mb-4">
             Please Review your<br />Child’s School Account
           </h1>
-          <p className="text-[10px] text-gray-500 leading-relaxed">
+          <p className="text-smart-small text-gray-500 leading-relaxed">
             Please review the information carefully and confirm whether the records are correct or need to be corrected.
           </p>
         </div>
@@ -155,7 +155,7 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
         </div>
 
         {/* Balance Card Container */}
-        <div className="bg-white rounded-[12px] border-[1px] border-[#e5e7eb] p-6 shadow-[0px_8px_24px_rgba(0,0,0,0.04)] min-h-[480px] relative">
+        <div className="bg-white rounded-[12px] border-[1px] border-[#e5e7eb] p-4 sm:p-6 shadow-[0px_8px_24px_rgba(0,0,0,0.04)] min-h-[360px] sm:min-h-[480px] relative">
           <AnimatePresence mode="wait">            {isLoading ? (
             <motion.div
               key="loading"
@@ -420,7 +420,7 @@ if (!isTemporaryStudentId(activeStudentId)) {
       </div>
 
       {/* Fixed Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#f0f1f3] px-[28px] py-8 shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#f0f1f3] px-[28px] pt-8 pb-safe shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">
         <div className="max-w-lg mx-auto">
           <button
             onClick={() => { haptics.heavy(); onConfirm(); }}

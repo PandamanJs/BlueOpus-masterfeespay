@@ -10,8 +10,10 @@ import {
   History,
   Check,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft
 } from 'lucide-react';
+
 import { haptics } from '../utils/haptics';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase/client';
@@ -280,21 +282,9 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center">
       {/* ── Fixed Header ── */}
-      <header className="w-full h-20 px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
+      <header className="w-full h-[50px] pt-safe px-6 bg-white border-b border-neutral-100 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              haptics.medium?.();
-              if (showRefundForm) {
-                setShowRefundForm(false);
-              } else {
-                onBack();
-              }
-            }}
-            className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-black active:scale-90 transition-transform"
-          >
 
-          </button>
           <div className="flex items-center gap-3">
             <div className="size-6 flex items-center justify-center">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -302,7 +292,7 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
                 <path d="M9 13L12 10L15 13" />
               </svg>
             </div>
-            <h1 className="text-black text-[22px] font-bold font-['Inter'] tracking-tight">masterfees</h1>
+            <h1 className="text-black text-smart-h2 font-bold font-['Inter'] tracking-tight">masterfees</h1>
           </div>
         </div>
       </header>
@@ -314,9 +304,9 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
             <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-black shadow-sm">
               <ShieldCheck size={22} strokeWidth={2.5} />
             </div>
-            <h2 className="text-xl font-bold font-['Inter'] text-black">Policies & Refunds</h2>
+            <h2 className="text-smart-h2 font-bold font-['Inter'] text-black">Policies & Refunds</h2>
           </div>
-          <p className="text-black text-[13px] leading-relaxed font-normal font-['Inter'] opacity-80 max-w-[340px]">
+          <p className="text-black text-smart-body leading-relaxed font-normal font-['Inter'] opacity-80 max-w-[340px]">
             You can read through the School's Different Policies related to school fees from here. You can also make a Request to get a Refund.
           </p>
         </section>
