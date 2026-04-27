@@ -212,14 +212,7 @@ export interface ReceiptData {
   parentPhone: string;
 }
 
-/**
- * Tutorial step
- */
-export interface TutorialStep {
-  title: string;
-  description: string;
-  position: "center" | "top" | "bottom";
-}
+
 
 /**
  * Form validation error

@@ -126,9 +126,7 @@ interface AppState {
   receiptParentName: string;
   receiptPaymentData: Record<string, PaymentData[]>;
 
-  // Tutorial State
-  showTutorial: boolean;
-  hasSeenTutorial: boolean;
+
 
   // Security State - Prevents users from navigating to success page without actually paying
   // We track timestamps to prevent bookmarking the success page and coming back later
@@ -172,9 +170,7 @@ interface AppState {
   setReceiptStudent: (name: string, id: string, grade: string, parentName: string) => void;
   setReceiptPaymentData: (data: Record<string, PaymentData[]>) => void;
 
-  // Tutorial Actions
-  setShowTutorial: (show: boolean) => void;
-  completeTutorial: () => void;
+
 
   // Security Actions
   markPaymentComplete: () => void;
@@ -229,8 +225,7 @@ export const useAppStore = create<AppState>()(
       receiptStudentGrade: '',
       receiptParentName: '',
       receiptPaymentData: {},
-      showTutorial: false,
-      hasSeenTutorial: false,
+
       lastCompletedPaymentTimestamp: null,
       paymentInProgress: false,
       editingStudentId: null,
@@ -328,13 +323,7 @@ export const useAppStore = create<AppState>()(
 
       setReceiptPaymentData: (data) => set({ receiptPaymentData: data }),
 
-      // Tutorial Actions
-      setShowTutorial: (show) => set({ showTutorial: show }),
 
-      completeTutorial: () => set({
-        showTutorial: false,
-        hasSeenTutorial: true
-      }),
 
       setEditingStudentId: (id) => set({ editingStudentId: id }),
 
@@ -413,7 +402,7 @@ export const useAppStore = create<AppState>()(
         selectedSchoolLogo: state.selectedSchoolLogo,
         vatEnabled: state.vatEnabled,
         isStaff: state.isStaff,
-        hasSeenTutorial: state.hasSeenTutorial,
+
         currentPage: state.currentPage,
         checkoutServices: state.checkoutServices,
         studentServices: state.studentServices,
@@ -467,8 +456,4 @@ export const useCheckoutData = () => useAppStore((state) => ({
   selectedStudentIds: state.selectedStudentIds,
 }));
 
-// Tutorial Selectors
-export const useTutorialState = () => useAppStore((state) => ({
-  showTutorial: state.showTutorial,
-  hasSeenTutorial: state.hasSeenTutorial,
-}));
+

@@ -121,10 +121,7 @@ const LazyStudentManagePage = lazyLoadWithTracking(
   { componentName: "StudentManagePage" }
 );
 
-const LazyTutorial = lazyLoadWithTracking(
-  () => import("./components/Tutorial"),
-  { componentName: "Tutorial" }
-);
+
 
 const LazyIOSFeaturesDemo = lazyLoadWithTracking(
   () => import("./components/IOSFeaturesDemo"),
@@ -720,8 +717,7 @@ export default function App() {
   const selectedStudentIds = useAppStore((state) => state.selectedStudentIds);
   const checkoutServices = useAppStore((state) => state.checkoutServices);
   const paymentAmount = useAppStore((state) => state.paymentAmount);
-  const showTutorial = useAppStore((state) => state.showTutorial);
-  const hasSeenTutorial = useAppStore((state) => state.hasSeenTutorial);
+
   const lastCompletedPaymentTimestamp = useAppStore((state) => state.lastCompletedPaymentTimestamp);
   const paymentInProgress = useAppStore((state) => state.paymentInProgress);
   const hasHydrated = useAppStore((state) => state.hasHydrated);
@@ -768,19 +764,13 @@ export default function App() {
   const setPaymentAmount = useAppStore((state) => state.setPaymentAmount);
   const setReceiptStudent = useAppStore((state) => state.setReceiptStudent);
   const setReceiptPaymentData = useAppStore((state) => state.setReceiptPaymentData);
-  const setShowTutorial = useAppStore((state) => state.setShowTutorial);
-  const completeTutorial = useAppStore((state) => state.completeTutorial);
+
   const resetCheckoutFlow = useAppStore((state) => state.resetCheckoutFlow);
   const markPaymentComplete = useAppStore((state) => state.markPaymentComplete);
   const startPaymentProcess = useAppStore((state) => state.startPaymentProcess);
   const clearPaymentSecurity = useAppStore((state) => state.clearPaymentSecurity);
 
-  // Check if user has seen tutorial on mount
-  useEffect(() => {
-    if (!hasSeenTutorial) {
-      setShowTutorial(true);
-    }
-  }, [hasSeenTutorial, setShowTutorial]);
+
 
   // Clear selected school when navigating TO the search page
   useEffect(() => {
@@ -834,9 +824,7 @@ export default function App() {
     }
   }, [userPhone, hasHydrated]);
 
-  const handleTutorialComplete = () => {
-    completeTutorial();
-  };
+
 
   // Security: Validate if user can access a restricted page
   const canAccessPage = (page: PageType): boolean => {
@@ -1778,7 +1766,7 @@ export default function App() {
       <DynamicIsland data={dynamicIsland.islandData} onDismiss={dynamicIsland.hide} />
       <Toaster />
       <UpdateNotification />
-      {showTutorial && <LazyTutorial onComplete={handleTutorialComplete} />}
+
       {showIOSDemo && <LazyIOSFeaturesDemo onClose={() => setShowIOSDemo(false)} />}
     </>
   );

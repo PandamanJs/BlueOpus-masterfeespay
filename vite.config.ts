@@ -41,7 +41,13 @@ export default defineConfig({
     })
   ],
   define: {
-    'process.env': {},
+    'process.env': { NODE_ENV: '"development"' },
+    'process.browser': 'true',
+    'process.version': '"v20.0.0"',
+    'process.platform': '"browser"',
+    'process.argv': '[]',
+    'process.cwd': '(() => "/")',
+    'process.nextTick': '((fn) => setTimeout(fn, 0))',
   },
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],

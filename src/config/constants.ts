@@ -30,7 +30,7 @@ export const PAYMENT_CONFIG = {
 export const STORAGE_KEYS = {
   USER_PREFERENCES: 'master-fees-preferences',
   PAYMENT_HISTORY: 'master-fees-payment-history',
-  TUTORIAL_COMPLETED: 'hasSeenTutorial',
+
   APP_STATE: 'master-fees-storage',
 } as const;
 
@@ -103,7 +103,7 @@ export const FEATURES = {
   ENABLE_MOBILE_MONEY: true,
   ENABLE_RECEIPT_DOWNLOAD: true,
   ENABLE_PAYMENT_HISTORY: true,
-  ENABLE_TUTORIAL: true,
+
   ENABLE_ANALYTICS: false,
 } as const;
 
