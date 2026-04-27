@@ -27,6 +27,7 @@ import {
   type BalanceReviewRequest,
   type DuplicateReviewRequest
 } from '../lib/supabase/api/parents';
+import posthog from '../lib/posthog';
 
 type ReviewTab = 'duplicates' | 'balances' | 'history' | 'new-dispute';
 
@@ -90,6 +91,15 @@ function NewDisputeForm({
     setIsSubmitting(true);
     try {
       await logDispute(selectedStudentId, userId, finalReason, metaData);
+      posthog.capture({
+        distinctId: userId || 'anonymous',
+        event: 'dispute_submitted',
+        properties: {
+          dispute_type: disputeType,
+          student_id: selectedStudentId,
+          student_name: selectedStudent?.name,
+        },
+      });
       toast.success('Dispute submitted successfully.');
       hapticFeedback('success');
       setReason('');

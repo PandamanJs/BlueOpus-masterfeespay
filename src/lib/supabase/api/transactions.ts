@@ -4,6 +4,7 @@ import type { PaymentHistoryRecord } from '../types';
 import { projectId, publicAnonKey } from '../../../utils/supabase/info';
 import { offlineDB } from '../../offlineDatabase';
 import { phoneOrFilter, phoneVariants, sanitizeTransactionMetadata } from '../../../utils/reconciliation';
+import posthog from '../../posthog';
 
 export type TransactionInput = {
     parent_id: string;
@@ -118,6 +119,16 @@ export async function createTransaction(transaction: TransactionInput): Promise<
         meta_data: sanitizedMeta,
     };
 
+    const sharedEventProps = {
+        reference: transaction.reference,
+        amount: transaction.amount,
+        service_fee: transaction.service_fee,
+        total_amount: transaction.total_amount,
+        payment_method: transaction.payment_method,
+        school_id: transaction.school_id,
+        student_id: transaction.student_id,
+    };
+
     if (!isOnline) {
         await offlineDB.put('transaction_queue', {
             reference: transaction.reference,
@@ -125,8 +136,19 @@ export async function createTransaction(transaction: TransactionInput): Promise<
             timestamp: new Date().toISOString(),
             retryCount: 0
         });
+        posthog.capture({
+            distinctId: transaction.parent_id,
+            event: 'payment_queued_offline',
+            properties: sharedEventProps,
+        });
         return { success: true, queued: true };
     }
+
+    posthog.capture({
+        distinctId: transaction.parent_id,
+        event: 'payment_initiated',
+        properties: sharedEventProps,
+    });
 
     try {
         // Fetch Edge Function
@@ -150,11 +172,27 @@ export async function createTransaction(transaction: TransactionInput): Promise<
                 timestamp: new Date().toISOString(),
                 retryCount: 0
             });
+            posthog.capture({
+                distinctId: transaction.parent_id,
+                event: 'payment_queued_offline',
+                properties: { ...sharedEventProps, reason: 'edge_function_error' },
+            });
             return { success: true, queued: true };
         }
+        posthog.capture({
+            distinctId: transaction.parent_id,
+            event: 'payment_completed',
+            properties: sharedEventProps,
+        });
         return { success: true, data: result.data };
     } catch (error) {
         console.error('Exception in createTransaction:', error);
+        posthog.captureException(error, transaction.parent_id, sharedEventProps);
+        posthog.capture({
+            distinctId: transaction.parent_id,
+            event: 'payment_failed',
+            properties: { ...sharedEventProps, error: String(error) },
+        });
         await offlineDB.put('transaction_queue', {
             reference: transaction.reference,
             data: txData,

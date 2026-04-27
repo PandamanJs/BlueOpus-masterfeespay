@@ -8,6 +8,7 @@ import { useAppStore } from "../stores/useAppStore";
 import type { CheckoutService as Service } from "../stores/useAppStore";
 import group16 from "../assets/decorations/Group 16.png";
 import group17 from "../assets/decorations/Group 17.png";
+import posthog from "../lib/posthog";
 
 interface CheckoutPageProps {
   services: Service[];
@@ -79,25 +80,38 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
       if (prev.includes(serviceId)) return prev;
       return [...prev, serviceId];
     });
-    
+
     // 2. Remove from global studentServices state (primary cart source)
     const serviceToRemove = services.find(s => s.id === serviceId);
     if (serviceToRemove && serviceToRemove.studentId) {
       setStudentServices(prev => {
         const studentId = serviceToRemove.studentId!;
         const currentItems = prev[studentId] || [];
-        
+
         // The serviceId in checkout is prefixed: `${studentId}-${originalId}`
         // So the original ID in studentServices is serviceId minus the prefix
         const prefix = `${studentId}-`;
         const originalId = serviceId.startsWith(prefix) ? serviceId.slice(prefix.length) : serviceId;
-        
+
         return {
           ...prev,
           [studentId]: currentItems.filter(item => item.id !== originalId)
         };
       });
     }
+
+    const userId = useAppStore.getState().userId;
+    posthog.capture({
+      distinctId: userId || 'anonymous',
+      event: 'checkout_item_removed',
+      properties: {
+        service_id: serviceId,
+        service_description: serviceToRemove?.description,
+        service_amount: serviceToRemove?.amount,
+        student_id: serviceToRemove?.studentId,
+        student_name: serviceToRemove?.studentName,
+      },
+    });
 
     hapticFeedback('light');
   };
@@ -230,6 +244,16 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
           <button
             onClick={() => {
               hapticFeedback('medium');
+              const userId = useAppStore.getState().userId;
+              posthog.capture({
+                distinctId: userId || 'anonymous',
+                event: 'checkout_started',
+                properties: {
+                  payment_type: 'full',
+                  total_amount: totalAmountValue,
+                  item_count: activeServices.length,
+                },
+              });
               setInputAmounts({}); // Clear partial payments if paying in full
               onProceed(totalAmountValue);
             }}
@@ -252,6 +276,16 @@ export default function CheckoutPage({ services, onProceed, onBackToServices }: 
           <div
             onClick={() => {
               hapticFeedback('medium');
+              const userId = useAppStore.getState().userId;
+              posthog.capture({
+                distinctId: userId || 'anonymous',
+                event: 'checkout_started',
+                properties: {
+                  payment_type: 'partial',
+                  total_amount: totalAmountValue,
+                  item_count: activeServices.length,
+                },
+              });
               setShowPayInPart(true);
             }}
             className="bg-white rounded-[16px] p-2 flex items-center justify-center h-[60px] active:scale-[0.98] transition-all cursor-pointer"

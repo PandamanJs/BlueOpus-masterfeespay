@@ -159,10 +159,10 @@ export interface School {
   lenco_public_key?: string; // Each school's unique Lenco API key
   uses_forms?: boolean;
   grade_pricing?: Array<{ name: string; label: string; value: string; price: number }>;
-  other_services?: Array<{ id: string; name: string; price: number; category: string; category_name?: string }>;
-  bus_routes?: Array<{ id: string; name: string; price: number; description?: string }>;
-  boarding_rooms?: Array<{ id: string; name: string; price: number; capacity?: number }>;
-  canteen_plans?: Array<{ id: string; name: string; price: number; description?: string }>;
+  other_services?: Array<{ id: string; name: string; price: number; category: string; category_name?: string; billing_cycle?: string }>;
+  bus_routes?: Array<{ id: string; name: string; price: number; description?: string; billing_cycle?: string }>;
+  boarding_rooms?: Array<{ id: string; name: string; price: number; capacity?: number; billing_cycle?: string }>;
+  canteen_plans?: Array<{ id: string; name: string; price: number; description?: string; billing_cycle?: string }>;
   category_names?: Record<string, string>;
   category_ids?: {
     tuition?: string;

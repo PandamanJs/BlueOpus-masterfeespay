@@ -6,6 +6,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import posthog from '../lib/posthog';
 
 interface Props {
   children: ReactNode;
@@ -54,8 +55,18 @@ export class ErrorBoundary extends Component<Props, State> {
       errorInfo,
     });
 
-    // TODO: Send to error tracking service (Sentry, LogRocket, etc.)
-    // logErrorToService(error, errorInfo);
+    posthog.captureException(error, undefined, {
+      componentStack: errorInfo.componentStack,
+    });
+    posthog.capture({
+      distinctId: 'anonymous',
+      event: 'error_caught',
+      properties: {
+        error_message: error.message,
+        error_name: error.name,
+        component_stack: errorInfo.componentStack?.slice(0, 500),
+      },
+    });
   }
 
   handleReset = (): void => {

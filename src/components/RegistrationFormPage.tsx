@@ -9,6 +9,7 @@ import { type StudentData, registerParent, linkStudentsToParent } from '../lib/s
 import { getSchools } from '../lib/supabase/api/schools';
 import type { School } from '../types';
 import { useAppStore } from '../stores/useAppStore';
+import posthog from '../lib/posthog';
 
 interface RegistrationFormPageProps {
   onBack: () => void;
@@ -240,6 +241,29 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
         const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || "";
         console.log('[Registration] Finalizing with school:', schoolName);
 
+        posthog.identify({
+          distinctId: resolvedParentId,
+          properties: {
+            $set: {
+              name: parentData.fullName,
+              phone: parentData.phone,
+              school_id: parentData.schoolId,
+              school_name: schoolName,
+            },
+            $set_once: { first_registered_at: new Date().toISOString() },
+          },
+        });
+        posthog.capture({
+          distinctId: resolvedParentId,
+          event: 'parent_registered',
+          properties: {
+            school_id: parentData.schoolId,
+            school_name: schoolName,
+            student_count: studentsWithDisputes.length,
+            has_school_review_request: hasSchoolReviewRequests,
+          },
+        });
+
         clearPersistence();
         onComplete({
           name: parentData.fullName,
@@ -340,6 +364,28 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
           await linkStudentsToParent(newParent.parent_id, studentsWithDisputes, parentData.schoolId);
           toast.success('Registration completed successfully!');
           const schoolName = schools.find(s => s.id === parentData.schoolId)?.name || '';
+          posthog.identify({
+            distinctId: newParent.parent_id,
+            properties: {
+              $set: {
+                name: parentData.fullName,
+                phone: parentData.phone,
+                school_id: parentData.schoolId,
+                school_name: schoolName,
+              },
+              $set_once: { first_registered_at: new Date().toISOString() },
+            },
+          });
+          posthog.capture({
+            distinctId: newParent.parent_id,
+            event: 'parent_registered',
+            properties: {
+              school_id: parentData.schoolId,
+              school_name: schoolName,
+              student_count: studentsWithDisputes.length,
+              has_school_review_request: false,
+            },
+          });
           clearPersistence();
           onComplete({ name: parentData.fullName, phone: parentData.phone, schoolName, userId: newParent.parent_id });
         }

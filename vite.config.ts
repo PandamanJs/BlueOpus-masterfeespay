@@ -43,6 +43,15 @@ export default defineConfig({
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
     alias: {
+      // Browser stubs for Node.js built-ins used by posthog-node
+      'node:async_hooks': path.resolve(__dirname, './src/lib/stubs/async_hooks.ts'),
+      'async_hooks': path.resolve(__dirname, './src/lib/stubs/async_hooks.ts'),
+      'node:fs': path.resolve(__dirname, './src/lib/stubs/fs.ts'),
+      'node:readline': path.resolve(__dirname, './src/lib/stubs/readline.ts'),
+      'node:path': path.resolve(__dirname, './src/lib/stubs/path.ts'),
+      // 'path' (bare specifier) is also used by posthog-node error tracking modifiers
+      // Vite aliases only apply to the browser bundle, not this config file itself
+      'path': path.resolve(__dirname, './src/lib/stubs/path.ts'),
       'sonner@2.0.3': 'sonner',
       'next-themes@0.4.6': 'next-themes',
       'lucide-react@0.487.0': 'lucide-react',

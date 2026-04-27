@@ -38,6 +38,8 @@ interface Service {
     categoryId?: string; // Link to fee category ID
     category?: string;
     quantity?: number;
+    studentId?: string;
+    studentName?: string;
 }
 
 function getServiceDedupKey(service: Service, studentId?: string) {
@@ -1058,6 +1060,9 @@ export default function AddServicesPage({
                         debtSummary={debtSummary}
                         activeStudentId={activeStudentId}
                         financialSummary={financialSummary}
+                        allStudents={allStudents}
+                        selectedStudentIds={selectedStudentIds}
+                        setActiveStudentId={setActiveStudentId}
                     />
                 )}
             </AnimatePresence>
@@ -1081,7 +1086,10 @@ function UnifiedServicesPopup({
     initialItems,
     debtSummary,
     activeStudentId,
-    financialSummary
+    financialSummary,
+    allStudents,
+    selectedStudentIds,
+    setActiveStudentId
 }: {
     onClose: () => void;
     onConfirm: (items: Service[]) => void;
@@ -1101,8 +1109,23 @@ function UnifiedServicesPopup({
     };
     activeStudentId: string;
     financialSummary?: any;
+    allStudents: Student[];
+    selectedStudentIds: string[];
+    setActiveStudentId: (id: string) => void;
 }) {
     const [stagedItems, setStagedItems] = useState<Service[]>(initialItems);
+
+    // Sync staged items when student changes
+    useEffect(() => {
+        setStagedItems(initialItems);
+    }, [initialItems]);
+
+    // Update selected grade when student changes
+    useEffect(() => {
+        if (activeStudent?.grade) {
+            setSelectedGrade(activeStudent.grade);
+        }
+    }, [activeStudent?.grade]);
     const [selectedGrade, setSelectedGrade] = useState<string>(activeStudent?.grade || "");
     const [selectedAcademicYear, setSelectedAcademicYear] = useState<number>(new Date().getFullYear());
     // Dynamically build tabs based on non-empty services in schoolData or outstanding debt
@@ -1326,6 +1349,51 @@ function UnifiedServicesPopup({
         return 'termly';
     };
 
+    const getBaseFrequency = (plan: any): "monthly" | "termly" | "yearly" | "weekly" | "daily" => {
+        if (!plan) return 'termly';
+        const cycle = plan.billing_cycle || '';
+        if (cycle) {
+            const low = cycle.toLowerCase();
+            if (low.includes('day')) return 'daily';
+            if (low.includes('week')) return 'weekly';
+            if (low.includes('month')) return 'monthly';
+            if (low.includes('year')) return 'yearly';
+            if (low.includes('term')) return 'termly';
+        }
+        return detectFrequency(plan.name || plan.description || '');
+    };
+
+    const getAvailableFrequencies = (plan: any): ("monthly" | "termly" | "yearly" | "weekly" | "daily")[] => {
+        if (!plan) return ['termly'];
+        const cycle = plan.billing_cycle || '';
+        if (cycle) {
+            const lowCycle = cycle.toLowerCase();
+            const found: ("monthly" | "termly" | "yearly" | "weekly" | "daily")[] = [];
+            if (lowCycle.includes('day') || lowCycle.includes('daily')) found.push('daily');
+            if (lowCycle.includes('week') || lowCycle.includes('weekly')) found.push('weekly');
+            if (lowCycle.includes('month') || lowCycle.includes('monthly')) found.push('monthly');
+            if (lowCycle.includes('term') || lowCycle.includes('termly')) found.push('termly');
+            if (lowCycle.includes('year') || lowCycle.includes('yearly')) found.push('yearly');
+            if (found.length > 0) return found;
+        }
+        return [detectFrequency(plan.name || plan.description || '')];
+    };
+
+    const calculateRate = (plan: any, targetFreq: string) => {
+        const basePrice = plan.price || 0;
+        const baseFreq = getBaseFrequency(plan);
+        const daysInFreq = {
+            daily: 1,
+            weekly: 5,
+            monthly: 20,
+            termly: 60,
+            yearly: 240
+        };
+        const baseDays = daysInFreq[baseFreq] || 60;
+        const targetDays = daysInFreq[targetFreq as keyof typeof daysInFreq] || 60;
+        return (basePrice / baseDays) * targetDays;
+    };
+
     const handleStageService = (service: Service) => {
         setStagedItems(prev => {
             const exists = prev.some(s => s.id === service.id);
@@ -1488,12 +1556,12 @@ function UnifiedServicesPopup({
                         className="sticky top-0 px-6 pt-8 pb-4 bg-white border-b border-gray-100/60 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]"
                         style={{ zIndex: 99999, isolation: 'isolate' }}
                     >
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex flex-col">
                                 <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] font-bold text-black tracking-tight">
                                     Add Products/Services
                                 </h2>
+                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">{schoolName}</p>
                             </div>
 
                             <button
@@ -1512,9 +1580,40 @@ function UnifiedServicesPopup({
                             </button>
                         </div>
 
-                        {/* Edge-to-Edge Tab Selector */}
-                        <div className="self-stretch p-1 bg-[#FAFAFA] rounded-[24px] outline outline-[0.50px] outline-offset-[-0.50px] outline-[#E6E6E6] flex flex-wrap gap-1 overflow-hidden"
-                            style={{ boxShadow: 'inset 0px 4px 12px rgba(0,0,0,0.08), inset 0px 8px 24px rgba(0,0,0,0.05), inset 0px 1px 4px rgba(0,0,0,0.1)' }}>
+                        {/* Student Switcher inside Popup */}
+                        {selectedStudentIds.length > 1 && (
+                            <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar -mx-1 px-1">
+                                {selectedStudentIds.map((id) => {
+                                    const student = allStudents.find(s => s.id === id);
+                                    if (!student) return null;
+                                    const isActive = activeStudentId === id;
+                                    return (
+                                        <button
+                                            key={id}
+                                            onClick={() => {
+                                                if (!isActive) {
+                                                    haptics.selection();
+                                                    // Save current changes before switching
+                                                    onConfirm(stagedItems);
+                                                    setActiveStudentId(id);
+                                                }
+                                            }}
+                                            className={`h-[32px] px-4 rounded-full flex items-center gap-2 transition-all whitespace-nowrap border ${isActive
+                                                ? 'bg-[#003630] border-[#003630] text-white shadow-md'
+                                                : 'bg-white border-gray-100 text-gray-600 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            <div className={`size-1.5 rounded-full ${isActive ? 'bg-[#95e36c]' : 'bg-gray-300'}`} />
+                                            <span className="text-[11px] font-semibold">{student.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Edge-to-Edge Tab Selector - Now Scrollable for 5+ items */}
+                        <div className="self-stretch p-1 bg-[#FAFAFA] rounded-[24px] outline outline-[0.50px] outline-offset-[-0.50px] outline-[#E6E6E6] flex flex-nowrap gap-1 overflow-x-auto no-scrollbar scroll-smooth"
+                            style={{ boxShadow: 'inset 0px 4px 12px rgba(0,0,0,0.08), inset 0px 8px 24px rgba(0,0,0,0.05), inset 0px 1px 4px rgba(0,0,0,0.1)', scrollbarWidth: 'none' }}>
                             {tabs.map((tab) => {
                                 const isActive = activeTab === tab.id;
                                 return (
@@ -1524,7 +1623,7 @@ function UnifiedServicesPopup({
                                             haptics.selection();
                                             setActiveTab(tab.id);
                                         }}
-                                        className={`h-12 flex justify-center items-center relative z-10 transition-all rounded-[18px] px-2 ${tabs.length <= 4 ? 'flex-1' : 'flex-none min-w-[90px]'}`}
+                                        className={`h-12 flex justify-center items-center relative z-10 transition-all rounded-[18px] px-4 whitespace-nowrap ${tabs.length <= 4 ? 'flex-1' : 'flex-none min-w-[80px]'}`}
                                     >
                                         {isActive && (
                                             <motion.div
@@ -1758,7 +1857,9 @@ function UnifiedServicesPopup({
                                                                                 term: term,
                                                                                 academicYear: selectedAcademicYear,
                                                                                 pricing_id: selectedFee.value,
-                                                                                categoryId: schoolData?.category_ids?.tuition
+                                                                                categoryId: schoolData?.category_ids?.tuition,
+                                                                                studentId: activeStudentId,
+                                                                                studentName: activeStudent?.name
                                                                             };
 
                                                                             toggleScopedService(newService, [`fee-${selectedFee.value}-`], 'multi');
@@ -1869,14 +1970,10 @@ function UnifiedServicesPopup({
                                                                                 setSelectedRouteId(route.id);
                                                                                 setIsRouteDropdownOpen(false);
 
-                                                                                // Smart Detection: Update frequency based on route name
-                                                                                // Restricted to monthly/termly/yearly for transport
-                                                                                const detected = detectFrequency(route.name);
-                                                                                if (['monthly', 'termly', 'yearly'].includes(detected)) {
-                                                                                    setTransportFrequency(detected as any);
-                                                                                    removeStagedByPrefixes([`route-${route.id}-`]);
-                                                                                } else {
-                                                                                    setTransportFrequency('monthly');
+                                                                                // Dynamic Detection: Update frequency based on plan billing cycle
+                                                                                const available = getAvailableFrequencies(route);
+                                                                                if (available.length > 0) {
+                                                                                    setTransportFrequency(available[0]);
                                                                                     removeStagedByPrefixes([`route-${route.id}-`]);
                                                                                 }
 
@@ -1961,14 +2058,52 @@ function UnifiedServicesPopup({
                                                             </div>
                                                         </div>
 
-                                                        <div className="mt-8 mb-6">
+                                                        <div className="mt-8 flex flex-col gap-3">
+                                                            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
+                                                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                                                {getAvailableFrequencies(selectedRoute).map((freq) => (
+                                                                    <button
+                                                                        key={freq}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            haptics.selection();
+                                                                            const oldFreq = transportFrequency;
+                                                                            const newFreq = freq as any;
+                                                                            if (oldFreq !== newFreq) {
+                                                                                setTransportFrequency(newFreq);
+                                                                                removeStagedByPrefixes([`route-${selectedRouteId}-`]);
+                                                                            }
+                                                                        }}
+                                                                        className={`h-[48px] w-full rounded-[12px] border-[1.5px] transition-all active:scale-[0.95] flex items-center justify-center gap-3 ${transportFrequency === freq
+                                                                            ? 'bg-[#003630] border-[#003630] shadow-[0px_8px_25px_rgba(0,54,48,0.25)]'
+                                                                            : 'bg-white border-gray-100 shadow-[0px_4px_16px_rgba(0,0,0,0.03)]'
+                                                                            }`}
+                                                                    >
+                                                                        <div className={`size-3.5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${transportFrequency === freq ? 'border-[#95e36c] bg-[#95e36c]' : 'border-gray-200 bg-transparent'}`}>
+                                                                            {transportFrequency === freq && (
+                                                                                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="5.0" strokeLinecap="round" strokeLinejoin="round">
+                                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className={`font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[11px] capitalize ${transportFrequency === freq ? 'text-white' : 'text-gray-900'}`}>
+                                                                            {freq}
+                                                                        </span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-2 mb-6">
                                                             <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">
-                                                                Please Select the Periods to pay for
+                                                                {transportFrequency === 'monthly' ? 'Select Month' :
+                                                                    transportFrequency === 'termly' ? 'Select Term' :
+                                                                        'Please Select the Periods to pay for'}
                                                             </h3>
                                                         </div>
 
                                                         <div className="grid grid-cols-3 gap-4 mb-8">
-                                                            {(selectedRoute ? detectFrequency(selectedRoute.description || '') : 'termly') === 'termly' ? (
+                                                            {transportFrequency === 'termly' ? (
                                                                 [1, 2, 3].filter(term => !isPastDate(term, selectedAcademicYear)).map((term) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-term-${term}` : `route-term-${term}`;
                                                                     const isTermStaged = isStaged(termId);
@@ -1985,12 +2120,14 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedRoute.name} - Term ${term}`,
-                                                                                    amount: selectedRoute.price,
+                                                                                    amount: calculateRate(selectedRoute, 'termly'),
                                                                                     invoiceNo: "203",
                                                                                     term: term,
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedRouteId,
-                                                                                    categoryId: schoolData?.category_ids?.transport
+                                                                                    categoryId: schoolData?.category_ids?.transport,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
                                                                                 };
 
                                                                                 setStagedItems(prev => {
@@ -2028,7 +2165,7 @@ function UnifiedServicesPopup({
                                                                         </button>
                                                                     );
                                                                 })
-                                                            ) : (selectedRoute ? detectFrequency(selectedRoute.description || '') : 'termly') === 'monthly' ? (
+                                                            ) : transportFrequency === 'monthly' ? (
                                                                 MONTHS_BY_TERM.filter(month => !isPastMonth(month)).map((month) => {
                                                                     const termId = selectedRoute ? `route-${selectedRouteId}-month-${month}` : `route-month-${month}`;
                                                                     const isTermStaged = isStaged(termId);
@@ -2052,12 +2189,14 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedRoute.name} - ${month} ${selectedAcademicYear}`,
-                                                                                    amount: selectedRoute.price, // Base monthly price
+                                                                                    amount: calculateRate(selectedRoute, 'monthly'),
                                                                                     invoiceNo: "203",
                                                                                     term: monthMap[month],
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedRouteId,
-                                                                                    categoryId: schoolData?.category_ids?.transport
+                                                                                    categoryId: schoolData?.category_ids?.transport,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
                                                                                 };
 
                                                                                 toggleScopedService(newService, [`route-${selectedRouteId}-yearly-`], 'multi');
@@ -2092,7 +2231,9 @@ function UnifiedServicesPopup({
                                                                             invoiceNo: "203",
                                                                             academicYear: selectedAcademicYear,
                                                                             pricing_id: selectedRouteId,
-                                                                            categoryId: schoolData?.category_ids?.transport
+                                                                            categoryId: schoolData?.category_ids?.transport,
+                                                                            studentId: activeStudentId,
+                                                                            studentName: activeStudent?.name
                                                                         };
                                                                         toggleScopedService(newService, [`route-${selectedRouteId}-term-`, `route-${selectedRouteId}-month-`], 'single');
                                                                     }}
@@ -2200,15 +2341,12 @@ function UnifiedServicesPopup({
                                                                                 setIsBoardingDropdownOpen(false);
 
                                                                                 // Restricted to termly/yearly for boarding
-                                                                                const detected = detectFrequency(room.name);
-                                                                                if (['termly', 'yearly'].includes(detected)) {
-                                                                                    setBoardingFrequency(detected as any);
-                                                                                    removeStagedByPrefixes([`room-${room.id}-`]);
-                                                                                } else {
-                                                                                    setBoardingFrequency('termly');
+                                                                                // Dynamic Detection: Update frequency based on plan billing cycle
+                                                                                const available = getAvailableFrequencies(room);
+                                                                                if (available.length > 0) {
+                                                                                    setBoardingFrequency(available[0]);
                                                                                     removeStagedByPrefixes([`room-${room.id}-`]);
                                                                                 }
-
                                                                                 haptics.selection();
                                                                             }}
                                                                             className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedBoardingRoomId === room.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
@@ -2293,7 +2431,7 @@ function UnifiedServicesPopup({
                                                         <div className="mt-8 flex flex-col gap-3">
                                                             <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
                                                             <div className="grid grid-cols-2 gap-3 mb-4">
-                                                                {['termly', 'yearly'].map((freq) => (
+                                                                {getAvailableFrequencies(selectedBoardingRoom).map((freq) => (
                                                                     <button
                                                                         key={freq}
                                                                         onClick={(e) => {
@@ -2365,7 +2503,9 @@ function UnifiedServicesPopup({
                                                                                     term: term,
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedBoardingRoomId,
-                                                                                    categoryId: schoolData?.category_ids?.boarding
+                                                                                    categoryId: schoolData?.category_ids?.boarding,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
                                                                                 };
 
                                                                                 setStagedItems(prev => {
@@ -2432,7 +2572,9 @@ function UnifiedServicesPopup({
                                                                                     term: monthMap[month],
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedBoardingRoomId,
-                                                                                    categoryId: schoolData?.category_ids?.boarding
+                                                                                    categoryId: schoolData?.category_ids?.boarding,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
                                                                                 };
 
                                                                                 toggleScopedService(newService, [`room-${selectedBoardingRoomId}-yearly-`], 'multi');
@@ -2467,7 +2609,9 @@ function UnifiedServicesPopup({
                                                                             invoiceNo: "203",
                                                                             academicYear: selectedAcademicYear,
                                                                             pricing_id: selectedBoardingRoomId,
-                                                                            categoryId: schoolData?.category_ids?.boarding
+                                                                            categoryId: schoolData?.category_ids?.boarding,
+                                                                            studentId: activeStudentId,
+                                                                            studentName: activeStudent?.name
                                                                         };
                                                                         toggleScopedService(newService, [`room-${selectedBoardingRoomId}-term-`, `room-${selectedBoardingRoomId}-month-`], 'single');
                                                                     }}
@@ -2572,12 +2716,12 @@ function UnifiedServicesPopup({
                                                                                 setSelectedCanteenPlanId(plan.id);
                                                                                 setIsCanteenDropdownOpen(false);
 
-                                                                                // Smart Detection: Update frequency based on plan name
-                                                                                // Restricted to daily/weekly/monthly/termly for canteen
-                                                                                // Force daily frequency for canteen as per school offering
-                                                                                setCafeteriaFrequency('daily');
-                                                                                removeStagedByPrefixes([`canteen-${plan.id}-`]);
-
+                                                                                // Dynamic Detection: Update frequency based on plan billing cycle
+                                                                                const available = getAvailableFrequencies(plan);
+                                                                                if (available.length > 0) {
+                                                                                    setCafeteriaFrequency(available[0]);
+                                                                                    removeStagedByPrefixes([`canteen-${plan.id}-`]);
+                                                                                }
                                                                                 haptics.selection();
                                                                             }}
                                                                             className={`w-full px-5 py-4 text-left rounded-[18px] transition-all flex items-center justify-between group pointer-events-auto cursor-pointer ${selectedCanteenPlanId === plan.id ? 'bg-[#003630] text-white' : 'hover:bg-gray-50 text-gray-700'}`}
@@ -2662,7 +2806,7 @@ function UnifiedServicesPopup({
                                                         <div className="mt-8 flex flex-col gap-3">
                                                             <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[10px] text-gray-500 uppercase tracking-[0.15em] ml-1 opacity-100 text-left w-full">Subscription Frequency</h3>
                                                             <div className="grid grid-cols-2 gap-3 mb-4">
-                                                                {['daily'].map((freq) => (
+                                                                {getAvailableFrequencies(selectedCanteenPlan).map((freq) => (
                                                                     <button
                                                                         key={freq}
                                                                         onClick={(e) => {
@@ -2725,16 +2869,18 @@ function UnifiedServicesPopup({
                                                                                 e.stopPropagation();
                                                                                 if (!selectedCanteenPlan) return;
 
-                                                                                const newService = {
-                                                                                    id: termId,
-                                                                                    description: `${selectedCanteenPlan.name} - Term ${term}`,
-                                                                                    amount: selectedCanteenPlan.price,
-                                                                                    invoiceNo: "204",
-                                                                                    term: term,
-                                                                                    academicYear: selectedAcademicYear,
-                                                                                    pricing_id: selectedCanteenPlanId,
-                                                                                    categoryId: schoolData?.category_ids?.canteen
-                                                                                };
+                                                                                    const newService = {
+                                                                                        id: termId,
+                                                                                        description: `${selectedCanteenPlan.name} - Term ${term}`,
+                                                                                        amount: calculateRate(selectedCanteenPlan, 'termly'),
+                                                                                        invoiceNo: "204",
+                                                                                        term: term,
+                                                                                        academicYear: selectedAcademicYear,
+                                                                                        pricing_id: selectedCanteenPlanId,
+                                                                                        categoryId: schoolData?.category_ids?.canteen,
+                                                                                        studentId: activeStudentId,
+                                                                                        studentName: activeStudent?.name
+                                                                                    };
 
                                                                                 toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-day-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
@@ -2772,11 +2918,13 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedCanteenPlan.name} - ${week}`,
-                                                                                    amount: selectedCanteenPlan.price / 4,
+                                                                                    amount: calculateRate(selectedCanteenPlan, 'weekly'),
                                                                                     invoiceNo: "204",
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedCanteenPlanId,
-                                                                                    categoryId: schoolData?.category_ids?.canteen
+                                                                                    categoryId: schoolData?.category_ids?.canteen,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
                                                                                 };
                                                                                 toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-day-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
@@ -2808,11 +2956,13 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedCanteenPlan.name} - ${day} ${dateDisplay}`,
-                                                                                    amount: selectedCanteenPlan.price,
+                                                                                    amount: calculateRate(selectedCanteenPlan, 'daily'),
                                                                                     invoiceNo: "204",
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedCanteenPlanId,
-                                                                                    categoryId: schoolData?.category_ids?.canteen
+                                                                                    categoryId: schoolData?.category_ids?.canteen,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
                                                                                 };
                                                                                 toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-month-`], 'multi');
                                                                             }}
@@ -2853,12 +3003,14 @@ function UnifiedServicesPopup({
                                                                                 const newService = {
                                                                                     id: termId,
                                                                                     description: `${selectedCanteenPlan.name} - ${month} ${selectedAcademicYear}`,
-                                                                                    amount: selectedCanteenPlan.price, // Base monthly price
+                                                                                    amount: calculateRate(selectedCanteenPlan, 'monthly'),
                                                                                     invoiceNo: "204",
                                                                                     term: monthMap[month],
                                                                                     academicYear: selectedAcademicYear,
                                                                                     pricing_id: selectedCanteenPlanId,
-                                                                                    categoryId: schoolData?.category_ids?.canteen
+                                                                                    categoryId: schoolData?.category_ids?.canteen,
+                                                                                    studentId: activeStudentId,
+                                                                                    studentName: activeStudent?.name
                                                                                 };
 
                                                                                 toggleScopedService(newService, [`canteen-${selectedCanteenPlanId}-term-`, `canteen-${selectedCanteenPlanId}-week-`, `canteen-${selectedCanteenPlanId}-day-`], 'multi');
@@ -2953,7 +3105,9 @@ function UnifiedServicesPopup({
                                                                                 quantity: newQty,
                                                                                 invoiceNo: "205",
                                                                                 pricing_id: svc.id,
-                                                                                categoryId: schoolData?.category_ids?.trips || schoolData?.category_ids?.other
+                                                                                categoryId: schoolData?.category_ids?.trips || schoolData?.category_ids?.other,
+                                                                                studentId: activeStudentId,
+                                                                                studentName: activeStudent?.name
                                                                             }];
                                                                         });
                                                                     }
@@ -3192,7 +3346,9 @@ function UnifiedServicesPopup({
                                                                                                     term: term,
                                                                                                     academicYear: selectedAcademicYear,
                                                                                                     pricing_id: selectedSportsPlanId,
-                                                                                                    categoryId: schoolData?.category_ids?.other
+                                                                                                    categoryId: schoolData?.category_ids?.other,
+                                                                                                    studentId: activeStudentId,
+                                                                                                    studentName: activeStudent?.name
                                                                                                 };
 
                                                                                                 toggleScopedService(newService, [`sports-${selectedSportsPlanId}-month-`, `sports-${selectedSportsPlanId}-year`], 'multi');
@@ -3224,7 +3380,9 @@ function UnifiedServicesPopup({
                                                                                                     invoiceNo: "205",
                                                                                                     academicYear: selectedAcademicYear,
                                                                                                     pricing_id: selectedSportsPlanId,
-                                                                                                    categoryId: schoolData?.category_ids?.other
+                                                                                                    categoryId: schoolData?.category_ids?.other,
+                                                                                                    studentId: activeStudentId,
+                                                                                                    studentName: activeStudent?.name
                                                                                                 };
 
                                                                                                 toggleScopedService(newService, [`sports-${selectedSportsPlanId}-term-`, `sports-${selectedSportsPlanId}-year`], 'multi');
@@ -3249,7 +3407,9 @@ function UnifiedServicesPopup({
                                                                                             invoiceNo: "205",
                                                                                             academicYear: selectedAcademicYear,
                                                                                             pricing_id: selectedSportsPlanId,
-                                                                                            categoryId: schoolData?.category_ids?.other
+                                                                                            categoryId: schoolData?.category_ids?.other,
+                                                                                            studentId: activeStudentId,
+                                                                                            studentName: activeStudent?.name
                                                                                         };
                                                                                         toggleScopedService(newService, [`sports-${selectedSportsPlanId}-term-`, `sports-${selectedSportsPlanId}-month-`], 'single');
                                                                                     }}

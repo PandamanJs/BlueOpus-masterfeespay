@@ -137,7 +137,8 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                         id: i.id,
                         name: i.name,
                         price: Number(i.amount),
-                        description: `${i.name} - ${i.billing_cycle || 'Monthly'}`
+                        description: `${i.name} - ${i.billing_cycle || 'Monthly'}`,
+                        billing_cycle: i.billing_cycle
                     }));
 
                 // Map Canteen to canteen_plans
@@ -147,7 +148,8 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                         id: i.id,
                         name: i.name,
                         price: Number(i.amount),
-                        description: `${i.name} - ${i.billing_cycle || 'Cycle'}`
+                        description: `${i.name} - ${i.billing_cycle || 'Cycle'}`,
+                        billing_cycle: i.billing_cycle
                     }));
 
                 // Map Boarding to boarding_rooms
@@ -157,7 +159,8 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                         id: i.id,
                         name: i.name,
                         price: Number(i.amount),
-                        capacity: 1 // Default
+                        capacity: 1, // Default
+                        billing_cycle: i.billing_cycle
                     }));
 
                 // Map Others
@@ -170,6 +173,7 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                         id: i.id,
                         name: i.name,
                         description: i.billing_cycle || '',
+                        billing_cycle: i.billing_cycle,
                         price: Number(i.amount),
                         category: (i.category as any)?.category || 'other',
                         category_name: (i.category as any)?.name || 'Other'
