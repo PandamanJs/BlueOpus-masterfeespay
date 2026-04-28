@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { User, Mail, Phone, School as SchoolIcon, Lock, Loader2, ChevronDown, CheckCircle2, AlertTriangle, X, Info, ChevronRight, Sparkles } from 'lucide-react';
 import { validatePhoneNumber, validateEmail, validateName } from '../../utils/validation';
 import { getSchools } from '../../lib/supabase/api/schools';
-import { verifySchoolCode } from '../../lib/supabase/api/security';
 import { getParentByPhone, getParentByEmail } from '../../lib/supabase/api/parents';
 import { haptics } from '../../utils/haptics';
 import { toast } from 'sonner';
@@ -24,7 +23,7 @@ export interface ParentData {
   email: string;
   phone: string;
   schoolId: string;
-  accessCode: string;
+  accessCode?: string;
 }
 
 export default function ParentInformationPage({ onNext, onBack, initialData }: ParentInformationPageProps) {
@@ -34,13 +33,13 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
 
   // Read the school name the user already picked on the home screen
   const storeSelectedSchool = useAppStore((state) => state.selectedSchool);
+  const storeSelectedSchoolId = useAppStore((state) => state.selectedSchoolId);
 
   const [formData, setFormData] = useState<ParentData>(initialData || {
     fullName: '',
     email: '',
     phone: '',
-    schoolId: '',
-    accessCode: '',
+    schoolId: storeSelectedSchoolId || '',
   });
 
   const [errors, setErrors] = useState({
@@ -48,7 +47,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
     email: '',
     phone: '',
     schoolId: '',
-    accessCode: '',
   });
 
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -84,16 +82,16 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
       
       if (hasPhone) {
         try {
-          const parent = await getParentByPhone(data.phone);
+          const parent = await getParentByPhone(data.phone, data.schoolId);
           if (parent) {
-            const inSameSchool = parent.students.some(s => s.school_id === data.schoolId);
+            const inSameSchool = parent.students.length > 0;
             const cleanName = parent.name.toLowerCase().replace(/\s+/g, ' ').trim();
             const cleanInputName = data.fullName.toLowerCase().replace(/\s+/g, ' ').trim();
             const nameMatches = cleanName === cleanInputName;
             const emailMatches = parent.email?.toLowerCase().trim() === data.email.toLowerCase().trim();
 
-            // PERFECT MATCH CHECK
-            if (nameMatches && (emailMatches || (hasPhone && data.phone === parent.phone))) {
+            // PERFECT MATCH CHECK - Only trigger if associated with this school
+            if (inSameSchool && nameMatches && (emailMatches || (hasPhone && data.phone === parent.phone))) {
                if (!showSmartCheckModal) {
                  console.log('[Registration] [Scanner] PERFECT MATCH via Phone block. Found ID:', parent.id);
                  setSmartMatchData({ id: parent.id, name: parent.name, type: 'update' });
@@ -115,16 +113,16 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
 
       if (hasEmail) {
         try {
-          const parent = await getParentByEmail(data.email);
+          const parent = await getParentByEmail(data.email, data.schoolId);
           if (parent) {
-            const inSameSchool = parent.students.some(s => s.school_id === data.schoolId);
+            const inSameSchool = parent.students.length > 0;
             const cleanName = parent.name.toLowerCase().replace(/\s+/g, ' ').trim();
             const cleanInputName = data.fullName.toLowerCase().replace(/\s+/g, ' ').trim();
             const nameMatches = cleanName === cleanInputName;
             const phoneMatches = parent.phone.replace(/\D/g, '') === data.phone.replace(/\D/g, '');
 
-            // PERFECT MATCH CHECK
-            if (nameMatches && (phoneMatches || (hasEmail && data.email === parent.email))) {
+            // PERFECT MATCH CHECK - Only trigger if associated with this school
+            if (inSameSchool && nameMatches && (phoneMatches || (hasEmail && data.email === parent.email))) {
                if (!showSmartCheckModal) {
                  console.log('[Registration] [Scanner] PERFECT MATCH via Email block. Found ID:', parent.id);
                  setSmartMatchData({ id: parent.id, name: parent.name, type: 'update' });
@@ -187,7 +185,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
       email: formData.email ? validateEmail(formData.email) : '',
       phone: validatePhoneNumber(formData.phone),
       schoolId: formData.schoolId ? '' : 'Select your school',
-      accessCode: formData.accessCode.trim() ? '' : 'Code required',
     };
 
     setErrors(newErrors);
@@ -197,22 +194,7 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
   const handleSubmit = async () => {
     haptics.buttonPress();
     if (validateForm()) {
-      setIsVerifying(true);
-      try {
-        // Step 1: Verify school access code
-        const isValid = await verifySchoolCode(formData.schoolId, formData.accessCode);
-        if (isValid) {
-          setShowConfirmModal(true);
-        } else {
-          toast.error('Invalid School Access Code');
-          setErrors(prev => ({ ...prev, accessCode: 'Invalid code' }));
-        }
-      } catch (error) {
-        toast.error('Verification failed. Try again.');
-        console.error('Registration verification error:', error);
-      } finally {
-        setIsVerifying(false);
-      }
+      setShowConfirmModal(true);
     }
   };
 
@@ -364,32 +346,18 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
           ))}
 
           <div className="space-y-1.5">
-            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Select Institution</label>
-
-
+            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Institution</label>
             <div className="relative group">
               <SchoolIcon
                 size={18}
-                className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'schoolId' ? 'text-[#95e36c]' : 'text-gray-400'}`}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10"
               />
-              <select
-                value={formData.schoolId}
-                onFocus={() => setFocusedField('schoolId')}
-                onBlur={() => setFocusedField(null)}
-                onChange={(e) => {
-                  setFormData({ ...formData, schoolId: e.target.value });
-                  setErrors({ ...errors, schoolId: '' });
-                }}
-                className={`${inputClasses('schoolId')} appearance-none pr-10 cursor-pointer`}
-                style={{ WebkitAppearance: 'none' }}
+              <div
+                className={`relative bg-gray-50/80 rounded-[16px] overflow-hidden transition-all duration-300 w-full h-[56px] px-12 border-[1.5px] border-gray-200 flex items-center`}
               >
-                <option value="">Select a school</option>
-                {schools.map((school) => (
-                  <option key={school.id} value={school.id}>{school.name}</option>
-                ))}
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                <ChevronDown size={18} />
+                <span className="text-smart-body font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-gray-500 select-none">
+                  {storeSelectedSchool || schools.find((s) => s.id.toString() === formData.schoolId)?.name || 'Loading institution...'}
+                </span>
               </div>
             </div>
             <div className="min-h-[22px] mt-1 pl-1 flex items-center">
@@ -411,51 +379,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
             </div>
           </div>
 
-          {/* Access Code */}
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">School Access Code</label>
-            <div className="relative group">
-              <Lock
-                size={18}
-                className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'accessCode' ? 'text-[#95e36c]' : 'text-gray-400'}`}
-              />
-              <input
-                type="text"
-                value={formData.accessCode}
-                onFocus={() => setFocusedField('accessCode')}
-                onBlur={() => setFocusedField(null)}
-                onChange={(e) => {
-                  let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                  if (value.length > 3) {
-                    value = value.slice(0, 3) + '-' + value.slice(3, 7);
-                  } else {
-                    value = value.slice(0, 3);
-                  }
-                  setFormData({ ...formData, accessCode: value });
-                  setErrors({ ...errors, accessCode: '' });
-                }}
-                placeholder="PRO-XXXX"
-                className={`${inputClasses('accessCode')} tracking-[2px] font-bold text-center pl-4`}
-              />
-            </div>
-            <div className="min-h-[22px] mt-1 pl-1 flex items-center">
-              <AnimatePresence mode="wait">
-                {errors.accessCode && (
-                  <motion.div
-                    key="access-error"
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-[10px] text-red-500 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] flex items-center gap-1.5"
-                  >
-                    <div className="size-3.5 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-                      <AlertTriangle size={9} className="text-red-500" />
-                    </div>
-                    {errors.accessCode}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -543,10 +466,6 @@ export default function ParentInformationPage({ onNext, onBack, initialData }: P
                 <div>
                   <span className="block text-[10px] uppercase font-bold text-gray-400 mb-0.5">Phone</span>
                   <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-gray-800">{formData.phone}</span>
-                </div>
-                <div>
-                  <span className="block text-[10px] uppercase font-bold text-gray-400 mb-0.5">School Code</span>
-                  <span className="font-['IBM_Plex_Sans_Devanagari:Medium',sans-serif] text-gray-800 tracking-wider">{formData.accessCode}</span>
                 </div>
               </div>
 

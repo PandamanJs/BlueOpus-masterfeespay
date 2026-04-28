@@ -14,7 +14,7 @@ import type { School } from "./types";
 import { toast } from "sonner";
 import DynamicIsland, { useDynamicIsland } from "./components/DynamicIsland";
 import { getSchools } from "./lib/supabase/api/schools";
-import { hapticFeedback } from "./utils/haptics";
+import { hapticFeedback, haptics } from "./utils/haptics";
 import { getInvoicesWithBalanceForStudent, getStudentFinancialSummary } from "./lib/supabase/api/transactions";
 import { checkIfStaff } from "./lib/supabase/api/parents";
 import posthog from "./lib/posthog";
@@ -22,6 +22,7 @@ import posthog from "./lib/posthog";
 
 import { UpdateNotification } from "./components/UpdateNotification";
 import { useOfflineManager } from "./hooks/useOfflineManager";
+import { useRealtimeInvalidation } from "./hooks/useRealtimeInvalidation";
 import type { ParentData as RegistrationParentData } from "./components/registration/ParentInformationPage";
 
 // School logos imports removed as we now fetch from database
@@ -730,6 +731,10 @@ export default function App() {
   const hasHydrated = useAppStore((state) => state.hasHydrated);
   const students = useAppStore((state) => state.students);
   const isStaff = useAppStore((state) => state.isStaff);
+  const syncVersion = useAppStore((state) => state.syncVersion);
+
+  // 🛡️ Financial Data Hardening: Live Synchronization
+  useRealtimeInvalidation(selectedSchoolId);
 
   // HYDRATION GUARD: Prevent rendering anything until the store is loaded from localStorage.
   // This prevents flash-of-empty-state and accidental redirects to search on refresh.
@@ -776,6 +781,7 @@ export default function App() {
   const markPaymentComplete = useAppStore((state) => state.markPaymentComplete);
   const startPaymentProcess = useAppStore((state) => state.startPaymentProcess);
   const clearPaymentSecurity = useAppStore((state) => state.clearPaymentSecurity);
+  const resetAll = useAppStore((state) => state.resetAll);
 
 
 
@@ -830,7 +836,7 @@ export default function App() {
     if (hasHydrated && userPhone) {
       fetchStudents(userPhone);
     }
-  }, [userPhone, hasHydrated]);
+  }, [userPhone, hasHydrated, selectedSchoolId, syncVersion]);
 
   // PostHog Page Tracking
   useEffect(() => {
@@ -1160,17 +1166,34 @@ export default function App() {
   /*                             EVENT HANDLERS                                 */
   /* -------------------------------------------------------------------------- */
 
-  const handleProceed = () => {
-    if (selectedSchool) {
-      navigateToPage("details");
-    } else {
-      // Safety check: show error if user somehow clicks without selection
+  const handleSearchProceed = async () => {
+    if (!selectedSchool) {
       toast.error("Please select a school", {
         description: "You must select a school before proceeding.",
         duration: 3000,
       });
-      console.log("Proceed blocked - No school selected. Current state:", { selectedSchool });
+      return;
     }
+
+    // Smart Auto-Login Check:
+    // If we already have their phone, see if they're registered at this specific school.
+    if (userPhone) {
+      try {
+        const students = await fetchStudents(userPhone);
+        const staffStatus = useAppStore.getState().isStaff;
+
+        if ((students && students.length > 0) || staffStatus) {
+          // They are already known at this school! Skip the login page.
+          navigateToPage("services");
+          return;
+        }
+      } catch (e) {
+        console.error('[handleSearchProceed] Auto-login check failed:', e);
+      }
+    }
+
+    // Otherwise, go to the school details page (Login/Register)
+    navigateToPage("details");
   };
 
   const handleRegistration = () => {
@@ -1195,7 +1218,7 @@ export default function App() {
       email: userEmail || "",
       phone: userPhone,
       schoolId: resolvedSchoolId,
-      accessCode: "",
+
     });
     setRegistrationInitialStep("students");
     navigateToPage("registration-form");
@@ -1210,7 +1233,8 @@ export default function App() {
 
   const handleRegistrationComplete = async (parentPhone: string, parentName: string, parentId: string) => {
     // After successful registration, automatically log in the parent
-    // Set user info in the store
+    // Set user info and remember the phone for next time
+    saveLastPhone(parentPhone);
     setUserInfo(parentName, parentPhone, '', parentId);
 
     // Fetch their students to populate the app
@@ -1224,12 +1248,12 @@ export default function App() {
         autoHide: 3000
       });
 
-      // Navigate to pay-fees page so they can immediately make a payment
-      navigateToPage("pay-fees");
+      // Navigate to school details page (login page)
+      navigateToPage("details");
     } catch (error) {
       console.error('Error fetching students after registration:', error);
       toast.error('Registration successful, but failed to load students. Please try logging in again.');
-      navigateToPage("search");
+      navigateToPage("details");
     }
   };
 
@@ -1244,7 +1268,16 @@ export default function App() {
 
       // 3. SECURE GATE: If no students found AND not staff, block access
       if ((!studentsData || studentsData.length === 0) && !staffStatus) {
-        toast.error(`No records found for this number at ${selectedSchool || 'this school'}. Please verify the number or register.`);
+        toast.error(`No records found at ${selectedSchool || 'this school'}`, {
+          id: 'login-error',
+          description: "This number isn't linked to any students at this school yet. Please register your account to continue.",
+          duration: Infinity,
+          style: {
+            background: '#dc2626',
+            color: '#fff',
+            border: 'none'
+          }
+        });
         // Note: we don't navigate or set user info here
         return;
       }
@@ -1667,7 +1700,7 @@ export default function App() {
             exit="exit"
           >
             <SearchPage
-              onProceed={handleProceed}
+              onProceed={handleSearchProceed}
               selectedSchool={selectedSchool}
               onSchoolSelect={handleSchoolSelection}
             />

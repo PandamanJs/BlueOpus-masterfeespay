@@ -31,7 +31,13 @@ export function UpdateNotification() {
         // Listen for service worker updates
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('controllerchange', () => {
-                setUpdateAvailable(true);
+                // If a new service worker has taken over, we reload the page
+                // to ensure the user is seeing the latest version of the app.
+                // We only do this if it's within our scheduled update window
+                // to avoid interrupting active users during peak hours.
+                if (isWithinUpdateWindow()) {
+                    window.location.reload();
+                }
             });
         }
 
@@ -92,7 +98,13 @@ export function UpdateNotification() {
         }
     };
 
-    if (!updateAvailable) return null;
+    const isWithinUpdateWindow = () => {
+        const hour = new Date().getHours();
+        // Only show updates between 06:00 - 08:00 and 22:00 - 00:00
+        return (hour >= 6 && hour < 8) || (hour >= 22 && hour < 24);
+    };
+
+    if (!updateAvailable || !isWithinUpdateWindow()) return null;
 
     return (
         <AnimatePresence>

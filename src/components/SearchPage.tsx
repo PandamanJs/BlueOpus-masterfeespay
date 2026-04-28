@@ -29,15 +29,68 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
     loadSchools();
   }, []);
 
-  // Filter schools based on search query
+  // Filter and rank schools based on search query
   const filteredSchools = useMemo(() => {
-    if (!searchQuery.trim()) return schools;
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return schools;
 
-    const query = searchQuery.toLowerCase();
-    return schools.filter(school =>
-      school.name.toLowerCase().includes(query)
-    );
-  }, [searchQuery]);
+    const normalize = (str: string) => 
+      str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+
+    const isFuzzyMatch = (s1: string, s2: string) => {
+      if (Math.abs(s1.length - s2.length) > 1) return false;
+      let edits = 0;
+      let i = 0, j = 0;
+      while (i < s1.length && j < s2.length) {
+        if (s1[i] !== s2[j]) {
+          edits++;
+          if (s1.length > s2.length) i++;
+          else if (s2.length > s1.length) j++;
+          else { i++; j++; }
+        } else { i++; j++; }
+        if (edits > 1) return false;
+      }
+      edits += (s1.length - i) + (s2.length - j);
+      return edits <= 1;
+    };
+
+    const qNormalized = normalize(query);
+    const qTokens = qNormalized.split(' ');
+
+    return schools
+      .map(school => {
+        const nNormalized = normalize(school.name);
+        const nTokens = nNormalized.split(' ');
+        let score = 0;
+
+        // Exact match (highest priority)
+        if (nNormalized === qNormalized) score += 1000;
+        
+        // Phrase match
+        else if (nNormalized.includes(qNormalized)) score += 500;
+        
+        // Token matches
+        qTokens.forEach(qt => {
+          if (nTokens.includes(qt)) {
+            score += 200;
+          } else {
+            // Fuzzy token match for words with length > 3
+            if (qt.length > 3) {
+              const hasFuzzy = nTokens.some(nt => isFuzzyMatch(qt, nt));
+              if (hasFuzzy) score += 100;
+            }
+          }
+        });
+
+        // Starts with bonus
+        if (nNormalized.startsWith(qNormalized)) score += 150;
+
+        return { school, score };
+      })
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.school);
+  }, [searchQuery, schools]);
 
   const handleSchoolSelect = (school: School) => {
     posthog.capture({

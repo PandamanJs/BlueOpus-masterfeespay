@@ -183,6 +183,10 @@ interface AppState {
   editingStudentId: string | null;
   setEditingStudentId: (id: string | null) => void;
   resetAll: () => void;
+
+  // Sync State
+  syncVersion: number;
+  triggerSync: () => void;
 }
 
 /**
@@ -230,6 +234,7 @@ export const useAppStore = create<AppState>()(
       lastCompletedPaymentTimestamp: null,
       paymentInProgress: false,
       editingStudentId: null,
+      syncVersion: 0,
 
       // Navigation Actions
       navigateToPage: (page, direction = 'forward') => {
@@ -381,7 +386,10 @@ export const useAppStore = create<AppState>()(
         lastCompletedPaymentTimestamp: null,
         paymentInProgress: false,
         editingStudentId: null,
+        syncVersion: 0,
       }),
+
+      triggerSync: () => set((state) => ({ syncVersion: state.syncVersion + 1 })),
     }),
     {
       name: 'master-fees-storage', // Key in localStorage

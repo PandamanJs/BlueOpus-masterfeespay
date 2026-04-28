@@ -741,9 +741,9 @@ export interface RegisterParentResult {
 export async function registerParent(parentData: ParentData): Promise<RegisterParentResult> {
     console.log('[Registration] Registering parent:', { phone: parentData.phone, existingId: parentData.parentId });
 
-    // 0. If we already have an ID (from a deliberate UI match), skip detection
+    // 0. If we already have an ID (from a deliberate UI match or smart check), skip detection
     if (parentData.parentId) {
-        return { parentId: parentData.parentId, isExisting: true };
+        return { parentId: parentData.parentId, isExisting: false, wasCreated: false };
     }
     
     // 1. Credential-based duplicate detection only. Names are not unique.
@@ -761,7 +761,27 @@ export async function registerParent(parentData: ParentData): Promise<RegisterPa
     if (phoneMatch) {
         const existingName = `${phoneMatch.first_name} ${phoneMatch.last_name}`.trim();
         const isNameMatch = parentData.fullName.trim().toLowerCase() === existingName.toLowerCase();
-        return { parentId: phoneMatch.parent_id, isExisting: true, wasCreated: false, existingName, duplicateField: 'phone', matchType: 'phone', isNameMatch };
+        
+        // Check if this parent already has students at THIS school
+        const { data: schoolLink } = await supabase
+            .from('students')
+            .select('student_id')
+            .eq('school_id', parentData.schoolId)
+            .or(`parent_id.eq.${phoneMatch.parent_id},other_parent_id.eq.${phoneMatch.parent_id}`)
+            .limit(1)
+            .maybeSingle();
+
+        const isExistingInSchool = !!schoolLink;
+
+        return { 
+            parentId: phoneMatch.parent_id, 
+            isExisting: isExistingInSchool, 
+            wasCreated: false, 
+            existingName, 
+            duplicateField: 'phone', 
+            matchType: 'phone', 
+            isNameMatch 
+        };
     }
 
     // 2. Email-based fallback
@@ -778,7 +798,26 @@ export async function registerParent(parentData: ParentData): Promise<RegisterPa
         
         if (emailMatch) {
             const existingName = `${emailMatch.first_name} ${emailMatch.last_name}`.trim();
-            return { parentId: emailMatch.parent_id, isExisting: true, wasCreated: false, existingName, duplicateField: 'email', matchType: 'email' };
+            
+            // Check if this parent already has students at THIS school
+            const { data: schoolLink } = await supabase
+                .from('students')
+                .select('student_id')
+                .eq('school_id', parentData.schoolId)
+                .or(`parent_id.eq.${emailMatch.parent_id},other_parent_id.eq.${emailMatch.parent_id}`)
+                .limit(1)
+                .maybeSingle();
+
+            const isExistingInSchool = !!schoolLink;
+
+            return { 
+                parentId: emailMatch.parent_id, 
+                isExisting: isExistingInSchool, 
+                wasCreated: false, 
+                existingName, 
+                duplicateField: 'email', 
+                matchType: 'email' 
+            };
         }
     }
 
@@ -1314,7 +1353,14 @@ async function syncLegacyParentLinkIfAvailable(studentId: string, parentId: stri
             .maybeSingle();
 
         if (readError) {
-            if (/column .* does not exist/i.test(readError.message || '')) return;
+            const combined = `${readError.message} ${readError.details} ${readError.hint}`.toLowerCase();
+            if (
+                combined.includes('does not exist') || 
+                combined.includes('unknown column') ||
+                combined.includes('student_parent_id')
+            ) {
+                return;
+            }
             throw readError;
         }
         if (!legacyRow) return;

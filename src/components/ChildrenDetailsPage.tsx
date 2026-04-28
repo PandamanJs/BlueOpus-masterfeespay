@@ -23,6 +23,7 @@ import type { PageType } from '../stores/useAppStore';
 export default function ChildrenDetailsPage({ navigateToPage }: { navigateToPage: (page: PageType, direction?: 'forward' | 'back') => void }) {
   const userId = useAppStore(state => state.userId);
   const userPhone = useAppStore(state => state.userPhone);
+  const selectedSchoolId = useAppStore(state => state.selectedSchoolId);
   
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +33,7 @@ export default function ChildrenDetailsPage({ navigateToPage }: { navigateToPage
     const fetchStudents = async () => {
       setIsLoading(true);
       try {
-        const data = await getStudentsByPhone(userPhone);
+        const data = await getStudentsByPhone(userPhone, selectedSchoolId || undefined);
         setStudents(data);
       } catch (error) {
         console.error('Error fetching students:', error);

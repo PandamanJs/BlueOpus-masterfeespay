@@ -47,18 +47,19 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
   const isUniversity = institutionType === 'university';
 
   const storeSchoolName = useAppStore(state => state.selectedSchool);
+  const selectedSchoolId = useAppStore(state => state.selectedSchoolId);
   const [inferredSchoolName, setInferredSchoolName] = useState("");
   const displaySchoolName = schoolName || storeSchoolName || inferredSchoolName || "";
 
   useEffect(() => {
     if (!schoolName && !storeSchoolName && userPhone) {
-      getStudentsByPhone(userPhone).then(students => {
+      getStudentsByPhone(userPhone, selectedSchoolId || undefined).then(students => {
         if (students && students.length > 0) {
           setInferredSchoolName(students[0].schoolName);
         }
       });
     }
-  }, [schoolName, storeSchoolName, userPhone]);
+  }, [schoolName, storeSchoolName, userPhone, selectedSchoolId]);
 
   const students = useAppStore(state => state.students);
   const isUnderReview = students.some(s => s.verificationStatus === 'unverified');

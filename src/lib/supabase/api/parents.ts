@@ -197,7 +197,7 @@ export async function getParentByPhone(phone: string, schoolId?: string): Promis
 /**
  * Get parent by email address.
  */
-export async function getParentByEmail(email: string): Promise<ParentWithStudents | null> {
+export async function getParentByEmail(email: string, schoolId?: string): Promise<ParentWithStudents | null> {
     try {
         const { data: parentRaw, error: parentError } = await supabase
             .from('parents')
@@ -219,7 +219,11 @@ export async function getParentByEmail(email: string): Promise<ParentWithStudent
             updated_at: null,
         } as unknown as Parent;
 
-        const mappedStudents = await fetchStudentsForParentId(parent.id);
+        let mappedStudents = await fetchStudentsForParentId(parent.id);
+
+        if (schoolId) {
+            mappedStudents = mappedStudents.filter((student: any) => student.school_id === schoolId);
+        }
 
         return { ...parent, students: mappedStudents as StudentWithSchool[] };
     } catch (error) {

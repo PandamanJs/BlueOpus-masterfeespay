@@ -1025,7 +1025,7 @@ export async function syncTransactionToQuickBooks(transactionId: string): Promis
         const serviceRoleKey = import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'];
         if (!serviceRoleKey) return { success: false, error: 'Service role key not configured' };
         const response = await fetch(
-            `${import.meta.env['VITE_SUPABASE_URL']}/functions/v1/quickbooks-sync`,
+            `${import.meta.env['VITE_SUPABASE_URL']}/functions/v1/quickbooks-sync?RequestId=${transactionId}`,
             { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` }, body: JSON.stringify({ transaction_id: transactionId }) }
         );
         if (!response.ok) return { success: false, error: `HTTP ${response.status}` };

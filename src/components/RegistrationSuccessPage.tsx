@@ -88,7 +88,7 @@ export default function RegistrationSuccessPage({ onContinue }: RegistrationSucc
         {/* Content */}
         <div className="relative z-10 flex items-center justify-center gap-2 h-full px-6 group-active:translate-y-[2px] transition-transform">
           <span className="font-['IBM_Plex_Sans:SemiBold',sans-serif] text-base text-white">
-            Pay for School Fee's
+            Login
           </span>
           <ChevronRight className="size-5 text-white" />
         </div>

@@ -23,6 +23,7 @@ import { haptics } from "../utils/haptics";
 import { toast } from "sonner";
 import cardBg from "../assets/background images/Frame 1707478741.png";
 import posthog from "../lib/posthog";
+import { useAppStore } from "../stores/useAppStore";
 
 
 function AnimatedNumber({ value }: { value: number }) {
@@ -127,14 +128,16 @@ export default function HistoryPage({
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const syncVersion = useAppStore((state) => state.syncVersion);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const selectedSchoolId = useAppStore(state => state.selectedSchoolId);
   const historyStudents = students; // Include all students, even unverified ones, for history visibility
 
   // 1. Fetch Students on Mount
   useEffect(() => {
     const loadStudents = async () => {
       try {
-        const data = await getStudentsByPhone(userPhone);
+        const data = await getStudentsByPhone(userPhone, selectedSchoolId || undefined);
         setStudents(data);
         const eligibleStudents = data; // Allow selection of all students
         if (eligibleStudents.length > 0) {
@@ -150,7 +153,7 @@ export default function HistoryPage({
       }
     };
     loadStudents();
-  }, [userPhone]);
+  }, [userPhone, syncVersion]);
 
   // 2. Fetch Financial Summary when selected student changes
   useEffect(() => {
@@ -173,7 +176,7 @@ export default function HistoryPage({
       }
     };
     loadSummary();
-  }, [selectedStudentId]);
+  }, [selectedStudentId, syncVersion]);
 
 
   useEffect(() => {

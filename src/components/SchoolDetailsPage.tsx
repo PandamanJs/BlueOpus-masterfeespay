@@ -5,6 +5,7 @@ import { saveLastPhone, getLastPhone } from "../utils/preferences";
 import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
 import { getParentDataByPhone } from "../data/students";
+import { useAppStore } from "../stores/useAppStore";
 import LogoHeader from "./common/LogoHeader";
 
 interface SchoolDetailsPageProps {
@@ -27,7 +28,7 @@ function SchoolBadge({ schoolName, schoolLogo }: { schoolName: string; schoolLog
         {schoolLogo ? (
           <img src={schoolLogo} alt={schoolName} className="max-w-full max-h-full object-contain" />
         ) : (
-          <div className="w-[120px] h-[120px] rounded-[32px] bg-[#00e676] flex items-center justify-center text-[#003630] font-['Inter',sans-serif] font-bold text-[48px] shadow-sm">
+          <div className="w-[120px] h-[120px] rounded-[32px] bg-[#00e676] flex items-center justify-center text-[#003630] font-['Inter',sans-serif] font-bold text-[40px] shadow-sm">
             <svg width="84" height="84" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L2 12L12 22L22 12L12 2Z" />
               <path d="M9 13L12 10L15 13" />
@@ -45,15 +46,22 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
   const [isValidating, setIsValidating] = useState(false);
   const [hasInputError, setHasInputError] = useState(false);
 
+  const storePhone = useAppStore((state) => state.userPhone);
+
   useEffect(() => {
-    const lastPhone = getLastPhone();
-    if (lastPhone) setPhoneNumber(lastPhone);
-  }, []);
+    // Priority: Use the phone from the active session if available,
+    // otherwise fallback to the last used phone from storage.
+    const phoneToUse = storePhone || getLastPhone();
+    if (phoneToUse) {
+      setPhoneNumber(phoneToUse);
+    }
+  }, [storePhone]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, "").slice(0, 10);
     setPhoneNumber(val);
     setHasInputError(false);
+    toast.dismiss('login-error');
   };
 
   const validateAndProceed = async () => {
@@ -68,7 +76,16 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
       const parentData = await getParentDataByPhone(phoneNumber);
       if (!parentData) {
         setHasInputError(true);
-        toast.error("Account not found", { description: "This number is not registered." });
+        toast.error("Account not found", { 
+          id: 'login-error', // Static ID so we can dismiss it easily
+          description: "We couldn't find an account for this number. If you're new, please click 'Register Now' below to get started.",
+          duration: Infinity,
+          style: {
+            background: '#dc2626', // High-visibility red
+            color: '#fff',
+            border: 'none'
+          }
+        });
         return;
       }
       saveLastPhone(phoneNumber);
@@ -77,10 +94,10 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
     } catch (error: any) {
       console.error('[validateAndProceed] Error:', error);
       const isNetworkError = !navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Network');
-      
+
       if (isNetworkError) {
-        toast.error("Network Error", { 
-          description: "Unable to reach the server. Please check your internet connection and try again." 
+        toast.error("Network Error", {
+          description: "Unable to reach the server. Please check your internet connection and try again."
         });
       } else {
         toast.error("Validation failed", {
@@ -108,7 +125,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
           <SchoolBadge schoolName={schoolName} schoolLogo={schoolLogo} />
         </div>
 
-        <h1 className="text-[32px] font-['Agrandir:Grand_Heavy',sans-serif] font-black text-[#003630] text-center mb-1 tracking-[-0.03em] leading-tight">
+        <h1 className="text-[24px] font-['Agrandir:Grand_Heavy',sans-serif] font-black text-[#003630] text-center mb-1 tracking-[-0.03em] leading-tight">
           {schoolName}
         </h1>
 
@@ -118,7 +135,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
 
         <div className="w-full space-y-4">
           <div className="relative group">
-            <div 
+            <div
               className="absolute top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-black transition-colors pointer-events-none"
               style={{ left: '10px' }}
             >
@@ -137,7 +154,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
           <button
             onClick={validateAndProceed}
             disabled={isValidating || !isOnline}
-            className="w-full h-[60px] rounded-[18px] btn-dark btn-tactile transition-all flex items-center justify-center gap-2 text-white font-semibold text-[16px]"
+            className={`w-full h-[60px] rounded-[18px] btn-dark btn-tactile transition-all flex items-center justify-center gap-2 text-white font-semibold text-[16px] ${isValidating ? 'opacity-60 grayscale-[0.5] cursor-not-allowed' : ''}`}
           >
             {isValidating ? (
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -149,12 +166,15 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
             )}
           </button>
 
-          <div className="flex items-center justify-center py-6">
+          <div className="flex items-center justify-center py-3">
             <span className="text-[13px] font-bold text-gray-200 tracking-[0.2em] uppercase">OR</span>
           </div>
 
           <button
-            onClick={onRegistration}
+            onClick={() => {
+              toast.dismiss('login-error');
+              onRegistration();
+            }}
             className="w-full h-[54px] rounded-[12px] border border-gray-100 hover:bg-gray-50 active:scale-[0.98] transition-all flex items-center justify-center text-gray-500 font-semibold text-[16px]"
           >
             Register Now

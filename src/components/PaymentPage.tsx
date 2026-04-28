@@ -22,6 +22,7 @@ import LogoHeader from "./common/LogoHeader";
 import group16 from "../assets/decorations/Group 16.png";
 import group17 from "../assets/decorations/Group 17.png";
 import posthog from "../lib/posthog";
+import { calculateTieredFee } from "../utils/feeCalculator";
 
 
 interface PaymentPageProps {
@@ -318,7 +319,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
     vatAmount = discountedInvoicePortion - (discountedInvoicePortion / (1 + vatRate));
   }
 
-  const platformFee = discountedTotal * 0.02; // 2% platform standard fee
+  const platformFee = calculateTieredFee(discountedTotal); // Tiered fee structure
   const gatewayAmount = discountedTotal + platformFee; // This is what we SEND to Lenco
   const processingFee = gatewayAmount * 0.01; // 1% Lenco processing surcharge (added by gateway)
   const serviceFee = platformFee + processingFee;
