@@ -84,7 +84,7 @@ export async function serveHttp(req: Request) {
     if (event.event === 'transaction.successful') {
       const { error } = await supabase
         .from('transactions')
-        .update({ status: 'successful', completed_at: new Date().toISOString() })
+        .update({ status: 'success', completed_at: new Date().toISOString() })
         .eq('reference', event.data.transactionReference);
 
       if (error) throw error;

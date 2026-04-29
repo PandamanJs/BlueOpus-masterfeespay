@@ -123,10 +123,9 @@ export const ModernReceipt: React.FC<ModernReceiptProps> = ({
             <div style={{ width: 515, height: 58, left: 40, top: 243, position: 'absolute', background: '#F9FAFB', borderRadius: 8, border: '1px solid #F2F2F2', justifyContent: 'flex-start', alignItems: 'center', display: 'inline-flex' }}>
                 {[
                     { label: 'BILLED TO', value: billedTo },
-                    { label: 'GRADE', value: displayGrade },
-                    { label: 'STUDENT ID', value: displayStudentId }
+                    { label: 'GRADE', value: displayGrade }
                 ].map((item, i) => (
-                    <div key={i} style={{ flex: '1 1 0', borderRight: i < 2 ? '1px solid #EEE' : 'none', padding: '0 10px', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 4, display: 'inline-flex' }}>
+                    <div key={i} style={{ flex: '1 1 0', borderRight: i < 1 ? '1px solid #EEE' : 'none', padding: '0 10px', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 4, display: 'inline-flex' }}>
                         <div style={{ textAlign: 'center', color: '#BFBFBF', fontSize: 9, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', letterSpacing: '0.5px' }}>{item.label}</div>
                         <div style={{ textAlign: 'center', color: 'black', fontSize: 11, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>{item.value}</div>
                     </div>
@@ -137,7 +136,7 @@ export const ModernReceipt: React.FC<ModernReceiptProps> = ({
             <div style={{ width: 515, padding: '16px 12px', left: 40, top: 332, position: 'absolute', background: 'white', borderRadius: 12, border: '1px #F2F2F2 solid', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center', gap: 8, display: 'inline-flex' }}>
                 {/* Header Row */}
                 <div style={{ alignSelf: 'stretch', height: 32, padding: '0 12px', background: '#F9FAFB', borderRadius: 6, justifyContent: 'flex-start', alignItems: 'center', gap: 10, display: 'inline-flex' }}>
-                    <div style={{ width: 80, color: '#73808C', fontSize: 8, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>STUDENT</div>
+                    <div style={{ width: 120, color: '#73808C', fontSize: 8, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>STUDENT</div>
                     <div style={{ flex: '1 1 0', color: '#73808C', fontSize: 8, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>DETAILS</div>
                     <div style={{ width: 40, textAlign: 'center', color: '#73808C', fontSize: 8, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>QTY</div>
                     <div style={{ width: 60, textAlign: 'center', color: '#73808C', fontSize: 8, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>K/UNIT</div>
@@ -149,7 +148,7 @@ export const ModernReceipt: React.FC<ModernReceiptProps> = ({
                 {/* Rows */}
                 {items.map((item, i) => (
                     <div key={i} style={{ alignSelf: 'stretch', minHeight: 30, padding: '10px 12px', borderBottom: i === items.length -1 ? 'none' : '1px solid #FAFAFA', justifyContent: 'flex-start', alignItems: 'center', gap: 10, display: 'inline-flex' }}>
-                        <div style={{ width: 80, color: 'black', fontSize: 10, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>{item.studentName}</div>
+                        <div style={{ width: 120, color: 'black', fontSize: 11, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600' }}>{item.studentName}</div>
                         <div style={{ flex: '1 1 0', color: '#585858', fontSize: 10, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '400' }}>{item.details}</div>
                         <div style={{ width: 40, textAlign: 'center', color: '#585858', fontSize: 10, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '400' }}>{item.qty}</div>
                         <div style={{ width: 60, textAlign: 'center', color: '#585858', fontSize: 10, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '500' }}>{item.unitPrice.toLocaleString()}</div>

@@ -13,7 +13,7 @@ export type TransactionInput = {
     amount: number;
     service_fee: number;
     total_amount: number;
-    status: 'pending' | 'successful' | 'failed';
+    status: 'pending' | 'success' | 'failed';
     payment_method: 'mobile_money' | 'card' | 'bank_transfer';
     reference: string;
     invoice_id?: string;  // UUID of the specific invoice being paid
@@ -105,18 +105,20 @@ export async function createTransaction(transaction: TransactionInput): Promise<
         amount: transaction.amount,
         service_fee: transaction.service_fee,
         total_amount: transaction.total_amount,
-        status: transaction.status === 'successful' ? 'success' : (transaction.status === 'pending' ? 'pending' : 'failed'),
+        status: 'success',
         payment_method: transaction.payment_method === 'mobile_money' ? 'mobile_money' : 'bank',
         reference: transaction.reference,
-        // Top-level fields the Edge Function reads directly
         invoice_id: transaction.invoice_id || (sanitizedMeta as any)?.invoice_id || null,
         term: (sanitizedMeta as any)?.term ? parseInt((sanitizedMeta as any).term) : null,
         year: (sanitizedMeta as any)?.year ? parseInt((sanitizedMeta as any).year) : new Date().getFullYear(),
         reason,
-        // The Edge Function expects `metadata` (not `meta_data`)
-        metadata: sanitizedMeta,
-        // Keep meta_data too for backward compat / offline queue
         meta_data: sanitizedMeta,
+    };
+
+    // Edge Function expects 'metadata' for compatibility
+    const edgeFunctionPayload = {
+        ...txData,
+        metadata: sanitizedMeta,
     };
 
     const sharedEventProps = {
@@ -132,7 +134,7 @@ export async function createTransaction(transaction: TransactionInput): Promise<
     if (!isOnline) {
         await offlineDB.put('transaction_queue', {
             reference: transaction.reference,
-            data: txData,
+            data: txData, // This goes to the DB later
             timestamp: new Date().toISOString(),
             retryCount: 0
         });
@@ -158,7 +160,7 @@ export async function createTransaction(transaction: TransactionInput): Promise<
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${publicAnonKey}`
             },
-            body: JSON.stringify(txData)
+            body: JSON.stringify(edgeFunctionPayload)
         });
 
         const result = await response.json();

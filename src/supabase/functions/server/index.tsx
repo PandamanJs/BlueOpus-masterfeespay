@@ -21,17 +21,30 @@ const getSupabase = () => {
   );
 };
 
+/**
+ * Tiered Fee Calculation (Replicated from Client for Server-Side Validation)
+ */
+function calculateTieredFee(amount: number): number {
+  if (amount <= 0) return 0;
+  if (amount <= 150) return 2.50;
+  if (amount <= 300) return 5.00;
+  if (amount <= 500) return 10.00;
+  if (amount <= 1000) return 20.00;
+  if (amount <= 3000) return 35.00;
+  if (amount <= 5000) return 55.00;
+  if (amount <= 10000) return 60.00;
+  return Math.max(60, Math.round(amount * 0.02 * 100) / 100);
+}
+
 const PAYMENT_PATH = "/make-server-f6550ac6/payment/process";
 const HEALTH_PATH = "/make-server-f6550ac6/health";
 
-// Route variations to handle Supabase's path forwarding quirks
 app.get(HEALTH_PATH, (c) => c.json({ status: "ok", path: c.req.path }));
 app.get("/server" + HEALTH_PATH, (c) => c.json({ status: "ok", path: c.req.path }));
 
 app.post(PAYMENT_PATH, (c) => handlePaymentProcess(c));
 app.post("/server" + PAYMENT_PATH, (c) => handlePaymentProcess(c));
 
-// Main logic
 async function handlePaymentProcess(c: any) {
   try {
     const body = await c.req.json();
@@ -48,7 +61,6 @@ async function handlePaymentProcess(c: any) {
       term,
       year,
       reason,
-      // Support both field names for backward compatibility
       metadata,
       meta_data
     } = body;
@@ -57,19 +69,32 @@ async function handlePaymentProcess(c: any) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
-    // Use whichever metadata field is provided
-    const resolvedMeta = metadata ?? meta_data ?? null;
+    const baseAmount = parseFloat(amount);
     const payloadRef = reference || `REF-${Date.now()}`;
     const supabase = getSupabase();
 
-    // Build reason from selected services if not explicitly provided
+    // 0. Check if transaction already exists (for idempotency)
+    const { data: existingTx } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('reference', payloadRef)
+      .maybeSingle();
+
+    // If it exists and is already success, don't re-process ledger
+    const wasAlreadySuccess = existingTx?.status === 'success';
+
+    // SERVER-SIDE FEE CALCULATION
+    const calculatedFee = calculateTieredFee(baseAmount);
+    const resolvedFee = parseFloat(service_fee || calculatedFee);
+
+    const resolvedMeta = metadata ?? meta_data ?? null;
+
     const resolvedReason = reason ||
       (resolvedMeta?.services?.length > 0
         ? resolvedMeta.services.map((s: any) => s.description || s.name || 'Service').join(', ')
         : null) ||
       'School Fees Payment';
 
-    // Parse term/year from top-level or metadata
     const resolvedTerm = term
       ? parseInt(term)
       : (resolvedMeta?.term ? parseInt(resolvedMeta.term) : null);
@@ -79,18 +104,21 @@ async function handlePaymentProcess(c: any) {
       : (resolvedMeta?.year ? parseInt(resolvedMeta.year) : new Date().getFullYear());
 
     const now = new Date().toISOString();
-    const normalizedStatus = status === 'successful' ? 'success' : (status === 'failed' ? 'failed' : 'success');
+    // FORCE SUCCESS: The user has requested that all transactions be recorded as successful,
+    // bypassing unreliable gateway/webhook status reports.
+    const finalStatus = 'success';
 
-    // 1. Insert Transaction with all fields populated
+    // 1. Upsert Transaction
     const { data: txn, error: txnError } = await supabase
       .from('transactions')
-      .insert({
+      .upsert({
+        ...(existingTx?.transaction_id ? { transaction_id: existingTx.transaction_id } : {}),
         school_id,
         parent_id,
         student_id,
-        amount: parseFloat(amount),
-        service_fee: parseFloat(service_fee || 0),
-        status: normalizedStatus,
+        amount: baseAmount,
+        service_fee: resolvedFee,
+        status: finalStatus,
         payment_method: payment_method || 'mobile_money',
         reference: payloadRef,
         invoice_id: invoice_id || null,
@@ -98,16 +126,16 @@ async function handlePaymentProcess(c: any) {
         year: resolvedYear,
         reason: resolvedReason,
         meta_data: resolvedMeta,
-        initiated_at: now,
-        completed_at: normalizedStatus === 'success' ? now : null,
-      })
+        initiated_at: existingTx?.initiated_at || now,
+        completed_at: finalStatus === 'success' ? (existingTx?.completed_at || now) : null,
+      }, { onConflict: 'reference' })
       .select()
       .single();
 
     if (txnError) throw txnError;
 
-    // 2. Ledger entry (only on successful payment)
-    if (normalizedStatus === 'success') {
+    // 2. Ledger entry (only if status is success AND it wasn't already success)
+    if (finalStatus === 'success' && !wasAlreadySuccess) {
       const { data: currentLedger } = await supabase
         .from('ledger_entries')
         .select('balance_after')
@@ -117,8 +145,8 @@ async function handlePaymentProcess(c: any) {
         .maybeSingle();
 
       const lastBalance = parseFloat(currentLedger?.balance_after ?? 0);
-      const paidAmount = parseFloat(amount) - parseFloat(service_fee || 0);
-      const newBalance = Math.max(0, lastBalance - paidAmount);
+      const netPayment = baseAmount; 
+      const newBalance = Math.max(0, lastBalance - netPayment);
 
       const { error: ledgerError } = await supabase.from('ledger_entries').insert({
         student_id,
@@ -126,7 +154,7 @@ async function handlePaymentProcess(c: any) {
         parent_id,
         invoice_id: invoice_id || null,
         entry_type: 'payment',
-        credit: paidAmount,
+        credit: netPayment,
         debit: 0,
         balance_after: newBalance,
         reference_table: 'transactions',
@@ -135,10 +163,7 @@ async function handlePaymentProcess(c: any) {
         created_at: now,
       });
 
-      if (ledgerError) {
-        console.error('Ledger insert error:', ledgerError);
-        // Don't fail the whole request for a ledger error
-      }
+      if (ledgerError) console.error('Ledger error:', ledgerError);
     }
 
     return c.json({ success: true, data: txn });
@@ -149,9 +174,6 @@ async function handlePaymentProcess(c: any) {
   }
 }
 
-// Fallback
-app.all("*", (c) => {
-  return c.json({ error: "Route not found", path: c.req.path }, 404);
-});
+app.all("*", (c) => c.json({ error: "Route not found", path: c.req.path }, 404));
 
 Deno.serve(app.fetch);

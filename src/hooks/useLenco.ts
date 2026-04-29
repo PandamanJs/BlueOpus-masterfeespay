@@ -15,6 +15,7 @@ interface LencoPaymentConfig {
     email: string; // Required by Lenco
     channels: string[];
     customer: Omit<LencoCustomer, 'email'>; // Email is top-level param
+    split?: Array<{ account: string; amount: number }>; // Optional Split Inflow
     onSuccess: (response: any) => void;
     onClose: () => void;
     onConfirmationPending: () => void;

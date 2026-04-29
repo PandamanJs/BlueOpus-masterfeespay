@@ -98,45 +98,40 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData, onEd
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-[16px] p-5 border-[1px] border-[#e5e7eb] shadow-sm relative mb-4"
+      className="bg-white rounded-[20px] p-4 border border-gray-100 shadow-sm relative mb-3 group hover:border-[#003630]/20 transition-all"
     >
-      {/* Remove Button (X) */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="absolute top-4 right-4 text-red-500 hover:text-red-700 transition-colors"
-      >
-        <X size={20} />
-      </button>
-
-      {/* Header & Subheading */}
-      <div className="text-left mb-4">
-        <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#000000] tracking-[-0.5px]">
-          {student.name}
-        </h3>
-        <p className="text-[12px] text-gray-500 font-medium">
-          Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
-        </p>
-        {(student.parentName || student.otherParentName) && (
-          <p className="text-[12px] text-[#003630] font-bold uppercase tracking-wider mt-1">
-            Guardian: {student.parentName || student.otherParentName}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630]">
+              {student.name}
+            </h3>
+          </div>
+          <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+            Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
           </p>
-        )}
+          {(student.parentName || student.otherParentName) && (
+            <p className="text-[10px] text-[#003630]/60 font-bold uppercase tracking-wider mt-1 flex items-center gap-1">
+              <User size={10} /> {student.parentName || student.otherParentName}
+            </p>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="h-9 px-4 rounded-xl bg-gray-50 text-[13px] font-bold text-[#003630] hover:bg-gray-100 transition-colors active:scale-95"
+          >
+            Edit
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="size-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-colors active:scale-95"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
-
-      {/* Instruction Box */}
-      <div className="bg-[#f9fafb] rounded-[8px] p-3 border border-[#e5e7eb] mb-4">
-        <p className="text-[11px] text-gray-600 leading-relaxed text-left">
-          Make sure to confirm that the pupil's name and grade is correct. If any changes need to be made, please press the edit button below.
-        </p>
-      </div>
-
-      {/* Edit Button */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onEdit(); }}
-        className="w-full h-[40px] rounded-[8px] bg-white border border-[#e5e7eb] flex items-center justify-center font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[14px] text-[#000000] hover:bg-gray-50 transition-colors"
-      >
-        Edit
-      </button>
     </motion.div>
   );
 }
@@ -818,60 +813,82 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                           <Loader2 size={18} className="animate-spin" />
                           <span className="text-[12px] font-bold uppercase tracking-widest">Searching student records...</span>
                         </div>
-                      ) : searchResults.length > 0 ? searchResults.map((student) => (
-                        <button
-                          key={student.id}
-                          onClick={() => handleSelectSearchResult(student)}
-                          className="w-full p-4 text-left rounded-[18px] hover:bg-gray-50 flex items-center justify-between group transition-all"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate mb-0.5">{student.name}</p>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full uppercase tracking-widest font-black">
-                                  Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
-                                </span>
-                                {student.studentId && student.studentId !== 'Pending' && (
-                                  <>
-                                    <div className="size-1 rounded-full bg-gray-200" />
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                                      ID: {student.studentId}
-                                    </span>
-                                  </>
+                      ) : searchResults.length > 0 ? searchResults.map((student) => {
+                        const isAlreadyAdded = students.some(s => s.id === student.id);
+                        return (
+                          <button
+                            key={student.id}
+                            disabled={isAlreadyAdded}
+                            onClick={() => handleSelectSearchResult(student)}
+                            className={`w-full p-4 text-left rounded-[18px] flex items-center justify-between group transition-all ${isAlreadyAdded ? 'opacity-60 cursor-not-allowed bg-gray-50/50' : 'hover:bg-gray-50'}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate">{student.name}</p>
+                                {isAlreadyAdded && (
+                                  <span className="flex items-center gap-1 text-[8px] bg-[#95e36c]/20 text-[#003630] px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                    <Check size={8} /> Already Added
+                                  </span>
                                 )}
                               </div>
-                              {(student.parentName || student.otherParentName) && (
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <User size={10} className="text-[#003630]/30" />
-                                  <span className="text-[10px] text-[#003630]/60 font-bold uppercase tracking-[1px]">
-                                    {student.isGuardianLinkLocked && student.guardianNames && student.guardianNames.length > 0
-                                      ? student.guardianNames.join(' and ')
-                                      : student.parentName || student.otherParentName}
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full uppercase tracking-widest font-black">
+                                    Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
                                   </span>
+                                  {student.studentId && student.studentId !== 'Pending' && (
+                                    <>
+                                      <div className="size-1 rounded-full bg-gray-200" />
+                                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                        ID: {student.studentId}
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
-                              )}
-                              {student.isGuardianLinkLocked && (
-                                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-2.5 py-1">
-                                  <AlertTriangle size={10} className="text-amber-700" />
-                                  <span className="text-[9px] font-black uppercase tracking-wider text-amber-700">
-                                    Two guardians are already linked to this student.
-                                  </span>
-                                </div>
-                              )}
+                                {(student.parentName || student.otherParentName) && (
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <User size={10} className="text-[#003630]/30" />
+                                    <span className="text-[10px] text-[#003630]/60 font-bold uppercase tracking-[1px]">
+                                      {student.isGuardianLinkLocked && student.guardianNames && student.guardianNames.length > 0
+                                        ? student.guardianNames.join(' and ')
+                                        : student.parentName || student.otherParentName}
+                                    </span>
+                                  </div>
+                                )}
+                                {student.isGuardianLinkLocked && (
+                                  <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-2.5 py-1">
+                                    <AlertTriangle size={10} className="text-amber-700" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-700">
+                                      Two guardians are already linked to this student.
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
+                            <div className={`size-10 rounded-full flex items-center justify-center transition-all ml-3 shrink-0 ${isAlreadyAdded ? 'bg-gray-100 text-gray-300' : 'bg-gray-50 group-hover:bg-[#003630] group-hover:text-white'}`}>
+                              {isAlreadyAdded ? <Check size={18} /> : student.isGuardianLinkLocked ? <AlertTriangle size={18} /> : <Plus size={18} />}
+                            </div>
+                          </button>
+                        );
+                      }) : (
+                        <div className="px-6 py-8 text-center flex flex-col items-center">
+                          <div className="size-12 rounded-full bg-gray-50 flex items-center justify-center mb-3">
+                            <Search size={20} className="text-gray-300" />
                           </div>
-                          <div className="size-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#003630] group-hover:text-white transition-all ml-3 shrink-0">
-                            {student.isGuardianLinkLocked ? <AlertTriangle size={18} /> : <Plus size={18} />}
-                          </div>
-                        </button>
-                      )) : (
-                        <div className="px-4 py-5 text-center">
-                          <p className="text-[12px] font-bold text-[#003630]">No student matches found</p>
-                          <p className="text-[11px] text-gray-400 mt-1">
-                            Try another spelling or add the pupil manually so the school can review it.
+                          <p className="text-[14px] font-bold text-[#003630] tracking-tight">No student matches found</p>
+                          <p className="text-[12px] text-gray-400 mt-1 max-w-[220px] mx-auto leading-relaxed">
+                            Try another spelling or add your child manually if they aren't in the system yet.
                           </p>
-                          <p className="text-[10px] text-amber-700/80 mt-3 font-bold uppercase tracking-wider">
-                            Some students with two guardians are hidden from direct linking
+                          
+                          <button
+                            onClick={() => openManualEntry(searchQuery)}
+                            className="mt-6 px-5 h-10 rounded-full bg-[#003630] text-white text-[12px] font-bold uppercase tracking-wider flex items-center gap-2 active:scale-[0.95] transition-all shadow-sm"
+                          >
+                            <Plus size={14} /> Add Manually
+                          </button>
+                          
+                          <p className="text-[9px] text-gray-300 mt-4 font-black uppercase tracking-widest border-t border-gray-50 pt-4 w-full">
+                            School Admin Support: +260 XXX XXX XXX
                           </p>
                         </div>
                       )}

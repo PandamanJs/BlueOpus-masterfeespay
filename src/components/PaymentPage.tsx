@@ -14,7 +14,7 @@ import { useOfflineManager } from "../hooks/useOfflineManager";
 import { createTransaction, syncTransactionToQuickBooks } from "../lib/supabase/api/transactions";
 import { getSchools, getDiscountDefinitions } from "../lib/supabase/api/schools";
 import { getParentByPhone } from "../lib/supabase/api/parents";
-import { useAppStore } from "../stores/useAppStore";
+import { useAppStore, useUserInfo } from "../stores/useAppStore";
 import type { DiscountDefinition } from "../types";
 import { toast } from "sonner";
 import RollingNumber from "./ui/RollingNumber";
@@ -124,6 +124,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   const [availableDiscounts, setAvailableDiscounts] = useState<DiscountDefinition[]>([]);
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<string[]>([]);
   const [isFetchingDiscounts, setIsFetchingDiscounts] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
 
   // Get data from store
   const checkoutServices = useAppStore((state) => state.checkoutServices);
@@ -131,9 +132,10 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   // Store instance for setting reference
   const store = useAppStore();
 
-  const userPhone = useAppStore((state) => state.userPhone);
-  const userName = useAppStore((state) => state.userName);
-  const selectedSchoolId = useAppStore((state) => state.selectedSchoolId);
+  const userName = useAppStore((s) => s.userName);
+  const userPhone = useAppStore((s) => s.userPhone);
+  const selectedSchoolId = useAppStore((s) => s.selectedSchoolId);
+  const selectedSchoolLencoAccountId = useAppStore((s) => s.selectedSchoolLencoAccountId);
   const selectedSchoolLogo = useAppStore((state) => state.selectedSchoolLogo);
   const selectedSchoolName = useAppStore((state) => state.selectedSchool);
   const vatEnabled = useAppStore((state) => state.vatEnabled);
@@ -143,7 +145,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
   const excludedServiceIds = useAppStore((state) => state.excludedServiceIds);
 
   const excludedSet = useMemo(() => new Set(excludedServiceIds), [excludedServiceIds]);
-  const activeCheckoutServices = useMemo(() => 
+  const activeCheckoutServices = useMemo(() =>
     checkoutServices.filter(s => !excludedSet.has(s.id)),
     [checkoutServices, excludedSet]
   );
@@ -402,20 +404,36 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
       const { first, last } = getNames(userName);
 
+      const lencoReference = `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
       posthog.capture({
         event: 'payment_modal_opened',
         properties: {
           amount: gatewayAmount,
-          school_name: selectedSchoolName
+          school_name: selectedSchoolName,
+          reference: lencoReference
         }
       });
 
       // 5. Initiate payment with SCHOOL-SPECIFIC Lenco key
       initiatePayment({
-        key: school.lenco_public_key, // ✅ Each school gets their own payments
-        reference: `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        amount: gatewayAmount, // Send base + platform fee; Lenco adds 1% on top automatically
+        key: school.lenco_public_key,
+        reference: lencoReference,
+        amount: gatewayAmount,
         currency: "ZMW",
+        // Split Inflow configuration
+        ...(selectedSchoolLencoAccountId ? {
+          split: [
+            {
+              account: "c567f569-7dd2-4217-af7b-45ed646a0934", // Masterfeespay Main Account
+              amount: serviceFee
+            },
+            {
+              account: selectedSchoolLencoAccountId, // School Sub-account
+              amount: totalAmount
+            }
+          ]
+        } : {}),
         email: "customer@example.com",
         channels: ["card", "mobile-money"],
         customer: {
@@ -470,18 +488,16 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
             }
 
             const groups = Array.from(invoiceGroups.values());
-            const results: Array<{ success: boolean; data?: any }> = [];
 
-            // CRITICAL: totalAmount = the actual cash charged by Lenco (e.g. K4).
-            // Each group's service.amount is the full INVOICE BALANCE (e.g. K7000).
+            // CRITICAL: totalAmount = the actual cash charged by Lenco.
+            // Each group's service.amount is the full INVOICE BALANCE.
             // We must record the ACTUAL money paid per invoice, not the full balance.
             // We distribute totalAmount proportionally across invoices by their balance weight.
             const allServicesTotal = activeCheckoutServices.reduce((sum, s) => sum + (inputAmounts[s.id] || s.amount), 0);
 
-            for (let i = 0; i < groups.length; i++) {
-              const group = groups[i]!;
-
-              // Full invoice balance for this group (for reference only, NOT what we record as paid)
+            // PROCESS ALL GROUPS IN PARALLEL FOR MAXIMUM RELIABILITY ON MOBILE
+            const groupPromises = groups.map(async (group, i) => {
+              // Full invoice balance for this group
               const invoiceBalance = group.services.reduce((sum, s) => sum + (inputAmounts[s.id] || s.amount), 0);
 
               // Actual money paid towards this invoice = proportion of the real Lenco charge
@@ -489,7 +505,6 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               const groupAmount = Math.round(totalAmount * proportion * 100) / 100;
 
               // Proportional share of the unified service fee (Platform + Processing)
-              // Correctly weight the total service fee across items
               const groupServiceFee = Math.round(serviceFee * proportion * 100) / 100;
               const groupTotal = groupAmount + groupServiceFee;
 
@@ -499,6 +514,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                 : response.reference;
 
               const firstSvc = group.services[0]!;
+
               const result = await createTransaction({
                 parent_id: parent.id,
                 student_id: group.studentId,
@@ -506,7 +522,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                 amount: groupAmount,
                 service_fee: groupServiceFee,
                 total_amount: groupTotal,
-                status: 'successful',
+                status: 'success',
                 payment_method: response.paymentMethod || 'mobile_money',
                 reference: groupRef,
                 meta_data: {
@@ -524,33 +540,38 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                   parent_phone: userPhone,
                   total_amount: groupTotal,
                   invoice_no: group.invoiceNo,
-                  invoice_balance: invoiceBalance,  // full outstanding on the invoice
+                  invoice_balance: invoiceBalance,
                   service_description: group.services.map(s => s.description).join(', '),
                   multi_invoice_payment: groups.length > 1,
                   original_reference: response.reference,
                 },
-                // Pass invoice_id so it lands in transactions.invoice_id
                 ...(group.invoice_id ? { invoice_id: group.invoice_id } : {}),
                 initiated_at: new Date().toISOString(),
-                completed_at: undefined,
               });
 
-              results.push(result);
-              console.log(`[PaymentPage] Transaction — student: ${group.studentId}, invoice: ${group.invoiceNo}, PAID: K${groupAmount} (of K${invoiceBalance} balance)`, result);
-
-              // QuickBooks sync per invoice transaction
+              // QuickBooks sync per invoice transaction (Wait for it to at least be triggered)
               if (result.success && result.data?.id) {
-                syncTransactionToQuickBooks(result.data.id).then(syncRes => {
-                  if (!syncRes.success) {
-                    console.error(`[PaymentPage] QuickBooks sync failed for invoice ${group.invoiceNo}:`, syncRes.error);
-                  }
-                });
+                try {
+                  await syncTransactionToQuickBooks(result.data.id);
+                } catch (syncErr) {
+                  console.error(`[PaymentPage] QB Sync failure for ${group.invoiceNo}:`, syncErr);
+                }
               }
-            }
+
+              return result;
+            });
+
+            const results = await Promise.all(groupPromises);
 
             const allSuccess = results.every(r => r.success);
+            const anyQueued = results.some(r => (r as any).queued);
+
             if (allSuccess) {
-              console.log(`[PaymentPage] All ${results.length} invoice transaction(s) captured successfully`);
+              if (anyQueued) {
+                toast.info("Payment received! Records are being synced in the background.");
+              } else {
+                console.log(`[PaymentPage] All ${results.length} invoice transaction(s) captured successfully`);
+              }
             } else {
               console.error('[PaymentPage] Some transactions failed:', results);
               toast.error("Payment received but some records failed to save. Please contact support.");
@@ -565,6 +586,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
             onPay();
           } finally {
             setIsProcessing(false);
+            setShowConfirmationModal(false);
           }
         },
         onClose: function () {
@@ -667,7 +689,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                       <div key={name} className="flex flex-col gap-2 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
                         <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1">{name}</div>
                         {studentServices.map(service => (
-                          <div key={service.id} className="flex justify-between items-center text-[12px]">
+                          <div key={service.id} className="flex justify-between items-center text-[8px]">
                             <span className="text-gray-600 font-medium">{service.description}</span>
                             <span className="text-black font-semibold">K{(inputAmounts[service.id] || service.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
@@ -696,9 +718,9 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                     </motion.div>
                   )}
 
-                  <div className="flex justify-between items-center text-[#585858] text-[12px]">
-                    <div className="flex items-center gap-1.5">
-                      <span>Transaction Fee</span>
+                  <div className="flex justify-between items-center text-[#585858] text-[8px]">
+                    <div className="flex items-center gap-1">
+                      <span>Mobile Money fee</span>
                     </div>
                     <span>K{serviceFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
@@ -709,7 +731,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                     </div>
                   )}
 
-                  <div className="w-full h-0 border-t border-[#E0E0E0] my-1" />
+                  <div className="w-full h-0 border-t border-[#E0E0E0] my-2" />
 
                   <div className="flex justify-between items-center text-black text-[12px] font-bold">
                     <span>Total</span>
@@ -719,7 +741,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
               </div>
 
               {/* Discounts Section */}
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 py-3">
                 <div className="flex items-center gap-4">
                   <DiscountIcon />
                   <span className="text-black text-[12px] font-bold">Discounts</span>
@@ -813,12 +835,12 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                                   )}
                                   <div className="flex flex-wrap gap-2 mt-1">
                                     {!isEligible && !isOnlyDebt && (
-                                      <span 
+                                      <span
                                         className="font-bold uppercase tracking-wider rounded border"
-                                        style={{ 
-                                          fontSize: '8px', 
-                                          color: '#CF1322', 
-                                          backgroundColor: '#FFF1F0', 
+                                        style={{
+                                          fontSize: '8px',
+                                          color: '#CF1322',
+                                          backgroundColor: '#FFF1F0',
                                           borderColor: 'rgba(255, 163, 158, 0.5)',
                                           padding: '2px 6px',
                                           lineHeight: '1'
@@ -828,12 +850,12 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                                       </span>
                                     )}
                                     {isOnlyDebt && (
-                                      <span 
+                                      <span
                                         className="font-bold uppercase tracking-wider rounded border"
-                                        style={{ 
-                                          fontSize: '8px', 
-                                          color: '#8C8C8C', 
-                                          backgroundColor: '#F5F5F5', 
+                                        style={{
+                                          fontSize: '8px',
+                                          color: '#8C8C8C',
+                                          backgroundColor: '#F5F5F5',
                                           borderColor: '#D9D9D9',
                                           padding: '2px 6px',
                                           lineHeight: '1'
@@ -884,29 +906,149 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
           </div>
 
           <button
-            onClick={handlePay}
+            onClick={() => setShowConfirmationModal(true)}
             disabled={isProcessing || !isOnline}
             style={{ backgroundColor: '#003630' }}
             className="w-full h-14 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-[0.97] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed group"
           >
-            {isProcessing ? (
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
-              />
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="transition-transform group-hover:translate-x-0.5">
-                <path d="M13.3334 3.33301H2.66671C1.93033 3.33301 1.33337 3.92996 1.33337 4.66634V11.333C1.33337 12.0694 1.93033 12.6663 2.66671 12.6663H13.3334C14.0698 12.6663 14.6667 12.0694 14.6667 11.333V4.66634C14.6667 3.92996 14.0698 3.33301 13.3334 3.33301Z" stroke="white" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M1.33337 6.66699H14.6667" stroke="white" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
             <span className="text-white text-[12px] font-bold">
-              {isProcessing ? 'Opening Payment...' : isOnline ? 'Pay' : 'Go Online to Pay'}
+              {isOnline ? 'Proceed' : 'Go Online to Pay'}
             </span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="transition-transform group-hover:translate-x-1">
+              <path d="M6 12L10 8L6 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
         </div>
 
+        {/* ── 5. Payment Confirmation Modal ── */}
+        <AnimatePresence>
+          {showConfirmationModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-4">
+              {/* Premium Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => !isProcessing && setShowConfirmationModal(false)}
+                className="absolute inset-0 bg-[#000807]/60 backdrop-blur-[8px]"
+              />
+
+              {/* Modal Card */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94, y: 30 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.94, y: 30 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="relative w-full max-w-[400px] bg-white rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex flex-col border border-[#95E36C]"
+              >
+                {/* Top Brand Stripe */}
+                <div className="h-1.5 w-full bg-gradient-to-r from-[#95E36C] via-[#003630] to-[#95E36C]" />
+
+                <div className="p-8 pt-10 flex flex-col gap-8">
+                  {/* Icon & Title */}
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-[#95E36C]/20 blur-xl rounded-full scale-150" />
+                      <div className="relative w-16 h-16 bg-white rounded-xl flex items-center justify-center">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#003630" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2L2 12L12 22L22 12L12 2Z" />
+                          <path d="M9 13L12 10L15 13" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <h3 className="text-[#003630] text-[22px] font-bold tracking-tight">Payment Security</h3>
+                      <div className="h-0.5 w-12 bg-[#95E36C] rounded-full" />
+                    </div>
+                  </div>
+
+                  {/* Main Message */}
+                  <div className="flex flex-col gap-4">
+                    <p className="text-[#4A5568] text-[15px] text-center leading-relaxed font-medium">
+                      To ensure your records are updated correctly, please <span style={{ color: '#EF4444' }} className="font-semibold underline decoration-[#EF4444]/30 decoration-4 underline-offset-2">do not interrupt the process</span> once it starts.
+                    </p>
+
+                    <div className="bg-[#F8FAFC] p-5 rounded-xl  relative group overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-[#95E36C]/40" />
+                      <div className="flex items-start gap-4">
+                        <div className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center shrink-0 border border-[#EDF2F7]">
+                          <span className="text-[#003630] font-bold text-[13px]">!</span>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          <span className="text-[14px] text-[#2D3748] font-semibold">Follow these steps</span>
+                          <ul className="flex flex-col gap-2">
+                            <li className="flex items-start gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-[#95E36C] mt-1.5 shrink-0" />
+                              <p className="text-[13px] text-[#718096] leading-snug">
+                                Wait for the status to change from <span style={{ color: '#EF4444' }} className="font-bold">Awaiting</span> to <span style={{ color: '#EF4444' }} className="font-bold">Done</span>.
+                              </p>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-[#95E36C] mt-1.5 shrink-0" />
+                              <p className="text-[13px] text-[#718096] leading-snug">
+                                After entering your <span style={{ color: '#EF4444' }} className="font-bold">PIN</span>, do not close or exit the tab until the payment reflects on the next screen as done or your receipt auto-downloads.
+                              </p>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-4">
+                    <button
+                      onClick={handlePay}
+                      disabled={isProcessing}
+                      className="w-full h-12 rounded-[12px] flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-[0_10px_20px_rgba(0,54,48,0.2)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-[16px] relative overflow-hidden group"
+                      style={{
+                        background: 'linear-gradient(180deg, #003630 0%, #002820 100%)'
+                      }}
+                    >
+                      {/* Subtle hover shine */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+
+                      {isProcessing ? (
+                        <>
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            className="w-5 h-5 border-[3px] border-white/20 border-t-white rounded-full"
+                          />
+                          <span className="tracking-tight">Opening Secure Portal...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard size={20} className="text-[#95E36C]" />
+                          <span className="tracking-tight">Proceed to Pay Now</span>
+                        </>
+                      )}
+                    </button>
+
+                    {!isProcessing && (
+                      <button
+                        onClick={() => setShowConfirmationModal(false)}
+                        className="w-full h-12 rounded-xl text-gray-400 font-semibold text-[14px] hover:text-[#003630] hover:bg-gray-50 transition-all duration-200"
+                      >
+                        Cancel and review items
+                      </button>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Trust Footer - Moved to bottom edge */}
+                <div className="bg-[#F9FAFB] py-4 flex items-center justify-center gap-2  opacity-80">
+                  <div className="flex -space-x-1">
+                    <div className="w-3 h-3 bg-gray-200 rounded-full border border-white" />
+                    <div className="w-3 h-3 bg-gray-300 rounded-full border border-white" />
+                  </div>
+                  <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-[0.2em]"></span>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

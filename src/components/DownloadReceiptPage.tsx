@@ -167,39 +167,45 @@ export default function DownloadReceiptPage({
              <div className="size-14 rounded-full bg-[#95e36c]/20 flex items-center justify-center mb-2">
                 <CheckCircle2 className="text-[#003630]" size={32} />
              </div>
-             <h1 className="text-[24px] font-bold text-[#003630] font-['Space_Grotesk']">Payment Successful</h1>
-             <p className="text-[14px] text-gray-500 font-medium font-['Space_Grotesk']">Ref: {refNumber}</p>
+             <h1 className="text-[24px] font-bold text-[#003630] font-['Space_Grotesk'] text-center">Payment Successful</h1>
           </div>
 
-          {/* Receipt Preview - Scaled to fit mobile width */}
-          <div className="w-full overflow-hidden rounded-[24px] border border-gray-100 shadow-2xl bg-white flex justify-center py-2 relative">
-             <div className="scale-[0.55] origin-top -mb-[420px]">
-                <ModernReceipt 
-                   schoolName={schoolName}
-                   schoolLogo={schoolLogo}
-                   receiptNo={refNumber}
-                   date={dateTime}
-                   paymentRef={refNumber}
-                   paymentMethod="Mobile Money"
-                   billedTo={parentName || 'Parent'}
-                   grade={services?.[0]?.grade || (services?.[0] as any)?.class || 'N/A'}
-                   studentId={services?.[0]?.studentId || services?.[0]?.id || 'N/A'}
-                   items={previewItems}
-                   totalFeesCharged={totalCharged}
-                   amountPaid={totalAmount}
-                   balanceOwing={totalBalance}
-                   paymentHistory={consolidatedHistory}
-                   nextPaymentDate="30/05/2026"
-                   statusBadge={totalAmount >= totalCharged ? 'Paid' : 'Partly Paid'}
-                />
-             </div>
-          </div>          {/* Buttons Area */}
-          <motion.div
-            className="flex flex-col gap-3 mt-4 relative"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4 }}
+          {/* Success Subtitle */}
+          <p className="text-center text-gray-500 font-['IBM_Plex_Sans_Devanagari'] -mt-4">
+            Your payment has been processed and your receipt is ready.
+          </p>
+
+          {/* Compact Payment Summary Card */}
+          <motion.div 
+            className="w-full bg-white rounded-[24px] border border-gray-100 shadow-xl p-6 flex flex-col gap-4"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2 }}
           >
+            <div className="flex justify-between items-center pb-3 border-b border-gray-50">
+              <span className="text-gray-400 text-sm font-['IBM_Plex_Sans_Devanagari']">Amount Paid</span>
+              <span className="text-[#003630] font-bold text-xl font-['Space_Grotesk']">
+                K {totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 pt-1">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-xs font-['IBM_Plex_Sans_Devanagari'] uppercase tracking-wider">Reference</span>
+                <span className="text-[#003630] font-medium text-sm font-['Space_Grotesk']">{refNumber}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-xs font-['IBM_Plex_Sans_Devanagari'] uppercase tracking-wider">Date</span>
+                <span className="text-[#003630] font-medium text-sm font-['Space_Grotesk']">{dateTime}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-xs font-['IBM_Plex_Sans_Devanagari'] uppercase tracking-wider">School</span>
+                <span className="text-[#003630] font-medium text-sm font-['Space_Grotesk'] truncate max-w-[200px]">{schoolName}</span>
+              </div>
+            </div>
+          </motion.div>
+
+          <div className="mt-auto flex flex-col gap-3 pb-8">
             {/* Share Receipt Button */}
             <div className="relative">
               <button
@@ -311,7 +317,8 @@ export default function DownloadReceiptPage({
                 </p>
               </div>
             </button>
-          </motion.div>
+          </div>
+
         </div>
       </div>
       <Toaster />

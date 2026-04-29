@@ -1175,24 +1175,8 @@ export default function App() {
       return;
     }
 
-    // Smart Auto-Login Check:
-    // If we already have their phone, see if they're registered at this specific school.
-    if (userPhone) {
-      try {
-        const students = await fetchStudents(userPhone);
-        const staffStatus = useAppStore.getState().isStaff;
-
-        if ((students && students.length > 0) || staffStatus) {
-          // They are already known at this school! Skip the login page.
-          navigateToPage("services");
-          return;
-        }
-      } catch (e) {
-        console.error('[handleSearchProceed] Auto-login check failed:', e);
-      }
-    }
-
-    // Otherwise, go to the school details page (Login/Register)
+    // Navigate to the school details page (Login/Register)
+    // We no longer auto-login here to ensure users can access the registration flow.
     navigateToPage("details");
   };
 
@@ -1387,7 +1371,8 @@ export default function App() {
       school ? school.name : null, 
       school ? school.logo : null, 
       school ? school.id as string : null,
-      school ? !!school.vat_enabled : false
+      school ? !!school.vat_enabled : false,
+      school ? school.lenco_account_id : null
     );
   };
 

@@ -157,6 +157,7 @@ export interface School {
   email?: string;
   access_code?: string;
   lenco_public_key?: string; // Each school's unique Lenco API key
+  lenco_account_id?: string; // School's Lenco Account ID for Split Inflow
   uses_forms?: boolean;
   grade_pricing?: Array<{ name: string; label: string; value: string; price: number }>;
   other_services?: Array<{ id: string; name: string; price: number; category: string; category_name?: string; billing_cycle?: string }>;
@@ -233,7 +234,7 @@ export interface Transaction {
   amount: number;
   service_fee: number;
   total_amount: number;
-  status: 'pending' | 'successful' | 'failed';
+  status: 'pending' | 'success' | 'failed';
   payment_method: string;
   reference: string;
   meta_data?: Record<string, any>;

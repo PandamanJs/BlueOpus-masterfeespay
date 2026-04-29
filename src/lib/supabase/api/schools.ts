@@ -14,7 +14,7 @@ export async function getSchools(): Promise<School[]> {
             console.log('[API] Fetching schools from Supabase...');
             const { data, error } = await supabase
                 .from('schools')
-                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms, vat')
+                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, lenco_account_id, is_active, access_code, uses_forms, vat')
                 .eq('is_active', true)
                 .order('school_name');
 
@@ -30,6 +30,7 @@ export async function getSchools(): Promise<School[]> {
                     phone: s.phone || null,
                     email: s.email || null,
                     lenco_public_key: s.lenco_public_key || null,
+                    lenco_account_id: s.lenco_account_id || null,
                     access_code: s.access_code || null,
                     uses_forms: s.uses_forms || false,
                     vat_enabled: s.vat || false,
@@ -65,7 +66,7 @@ export async function getSchoolByName(name: string): Promise<School | null> {
         try {
             const { data, error } = await supabase
                 .from('schools')
-                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, is_active, access_code, uses_forms, vat')
+                .select('school_id, school_name, logo_url, phone, email, lenco_public_key, lenco_account_id, is_active, access_code, uses_forms, vat')
                 .eq('school_name', name)
                 .maybeSingle();
 
@@ -197,6 +198,7 @@ export async function getSchoolByName(name: string): Promise<School | null> {
                     phone: data.phone || null,
                     email: data.email || null,
                     lenco_public_key: data.lenco_public_key || null,
+                    lenco_account_id: data.lenco_account_id || null,
                     access_code: data.access_code || null,
                     uses_forms: data.uses_forms || false,
                     grade_pricing: fetchedGradePricing,

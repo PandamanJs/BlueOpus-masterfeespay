@@ -99,6 +99,7 @@ interface AppState {
   selectedSchool: string | null;
   selectedSchoolId: string | null;
   selectedSchoolLogo: string | null;
+  selectedSchoolLencoAccountId: string | null;
   vatEnabled: boolean;
   userName: string;
   userPhone: string;
@@ -139,7 +140,7 @@ interface AppState {
   setNavigationDirection: (direction: 'forward' | 'back') => void;
 
   // User Actions
-  setSelectedSchool: (school: string | null, logo?: string | null, schoolId?: string | null, vatEnabled?: boolean) => void;
+  setSelectedSchool: (school: string | null, logo?: string | null, schoolId?: string | null, vatEnabled?: boolean, lencoAccountId?: string | null) => void;
   setUserName: (name: string) => void;
   setUserPhone: (phone: string) => void;
   setUserEmail: (email: string) => void;
@@ -211,6 +212,7 @@ export const useAppStore = create<AppState>()(
       selectedSchool: null,
       selectedSchoolId: null,
       selectedSchoolLogo: null,
+      selectedSchoolLencoAccountId: null,
       vatEnabled: false,
       userName: '',
       userPhone: '',
@@ -247,10 +249,11 @@ export const useAppStore = create<AppState>()(
       setNavigationDirection: (direction) => set({ navigationDirection: direction }),
 
       // User Actions
-      setSelectedSchool: (school, logo = null, schoolId = null, vatEnabled = false) => set({ 
+      setSelectedSchool: (school, logo = null, schoolId = null, vatEnabled = false, lencoAccountId = null) => set({ 
         selectedSchool: school, 
         selectedSchoolLogo: logo,
         selectedSchoolId: schoolId,
+        selectedSchoolLencoAccountId: lencoAccountId,
         vatEnabled: vatEnabled
       }),
 
@@ -365,6 +368,7 @@ export const useAppStore = create<AppState>()(
         selectedSchool: null,
         selectedSchoolId: null,
         selectedSchoolLogo: null,
+        selectedSchoolLencoAccountId: null,
         vatEnabled: false,
         userName: '',
         userPhone: '',
@@ -401,6 +405,7 @@ export const useAppStore = create<AppState>()(
         selectedSchool: state.selectedSchool,
         selectedSchoolId: state.selectedSchoolId,
         selectedSchoolLogo: state.selectedSchoolLogo,
+        selectedSchoolLencoAccountId: state.selectedSchoolLencoAccountId,
         vatEnabled: state.vatEnabled,
         userName: state.userName,
         userPhone: state.userPhone,
@@ -412,6 +417,8 @@ export const useAppStore = create<AppState>()(
         checkoutServices: state.checkoutServices,
         studentServices: state.studentServices,
         selectedStudentIds: state.selectedStudentIds,
+        lastCompletedPaymentTimestamp: state.lastCompletedPaymentTimestamp,
+        paymentInProgress: state.paymentInProgress,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -451,6 +458,7 @@ export const useUserInfo = () => useAppStore((state) => ({
   selectedSchool: state.selectedSchool,
   selectedSchoolId: state.selectedSchoolId,
   selectedSchoolLogo: state.selectedSchoolLogo,
+  selectedSchoolLencoAccountId: state.selectedSchoolLencoAccountId,
   vatEnabled: state.vatEnabled,
 }));
 
