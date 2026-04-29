@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { LogIn, Phone } from "lucide-react";
 import { toast } from "sonner";
-import { saveLastPhone, getLastPhone } from "../utils/preferences";
 import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
 import { getParentDataByPhone } from "../data/students";
@@ -48,14 +47,14 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
 
   const storePhone = useAppStore((state) => state.userPhone);
 
+  // Auto-fill phone number removed as per user request to disable "remembering numbers"
+  /*
   useEffect(() => {
-    // Priority: Use the phone from the active session if available,
-    // otherwise fallback to the last used phone from storage.
-    const phoneToUse = storePhone || getLastPhone();
-    if (phoneToUse) {
-      setPhoneNumber(phoneToUse);
+    if (storePhone) {
+      setPhoneNumber(storePhone);
     }
   }, [storePhone]);
+  */
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, "").slice(0, 10);
@@ -88,7 +87,6 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
         });
         return;
       }
-      saveLastPhone(phoneNumber);
       hapticFeedback('medium');
       onProceed(parentData.name, phoneNumber, parentData.id);
     } catch (error: any) {

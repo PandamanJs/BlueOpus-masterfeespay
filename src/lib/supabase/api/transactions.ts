@@ -448,7 +448,7 @@ function getActiveStudentGrade(student: any) {
     return grades.find(sg => sg.is_active) || grades[grades.length - 1] || null;
 }
 
-function buildInvoiceSummaryItem(row: any, transactions: any[], source: 'invoice' | 'payment_history') {
+function buildInvoiceSummaryItem(row: any, transactions: any[], source: 'invoice' | 'payment_history', defaultAdmissionNumber?: string | null) {
     const total = getInvoiceTotal(row);
     const matchedTransactions = transactions.filter(tx => transactionMatchesInvoice(tx, row));
     const transactionPaid = matchedTransactions.reduce((sum, tx) => sum + transactionPaidAmount(tx), 0);
@@ -479,7 +479,7 @@ function buildInvoiceSummaryItem(row: any, transactions: any[], source: 'invoice
         academic_year: row?.year || row?.academic_year || row?.invoice_items?.meta?.academic_year,
         initiated_at: row?.created_at || row?.issued_at || row?.date_issued || row?.payment_date || row?.initiated_at || null,
         student_id: row?.student_id || null,
-        admission_number: row?.admission_number || null,
+        admission_number: row?.admission_number || defaultAdmissionNumber || null,
         services,
         transactions: matchedTransactions,
         source,
@@ -533,7 +533,7 @@ async function getStudentFinancialSnapshot(studentId: string): Promise<any> {
         return (explicitBalance !== null && explicitBalance > 0) || OPEN_INVOICE_STATUSES.includes(status);
     });
 
-    const invoiceItems = invoices.map((row: any) => buildInvoiceSummaryItem(row, transactions, 'invoice'));
+    const invoiceItems = invoices.map((row: any) => buildInvoiceSummaryItem(row, transactions, 'invoice', student.admission_number));
     const seenIds = new Set(invoiceItems.map(item => normalizeReference(item.invoice_id)).filter(Boolean));
     const seenRefs = new Set(invoiceItems.map(item => normalizeReference(item.invoice_number)).filter(Boolean));
     const historyItems = historyRows
@@ -542,7 +542,7 @@ async function getStudentFinancialSnapshot(studentId: string): Promise<any> {
             const ref = normalizeReference(getInvoiceReference(row));
             return (!id || !seenIds.has(id)) && (!ref || !seenRefs.has(ref));
         })
-        .map((row: any) => buildInvoiceSummaryItem(row, transactions, 'payment_history'));
+        .map((row: any) => buildInvoiceSummaryItem(row, transactions, 'payment_history', student.admission_number));
 
     const items = [...invoiceItems, ...historyItems].sort((a, b) =>
         String(a.initiated_at || '').localeCompare(String(b.initiated_at || ''))

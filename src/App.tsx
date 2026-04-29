@@ -1128,6 +1128,7 @@ export default function App() {
           invoice_id: inv.id || undefined,  // actual UUID for DB linkage
           studentName: student.name,
           studentId: student.id,
+          studentAdmissionNumber: student.admissionNumber || student.id,
           term: inv.term,
           academicYear: inv.academic_year,
           grade: student.grade,
@@ -1146,6 +1147,7 @@ export default function App() {
           invoiceNo: `BAL-${student.id.substring(0, 4)}-${Date.now().toString().slice(-4)}`,
           studentName: student.name,
           studentId: student.id,
+          studentAdmissionNumber: student.admissionNumber || student.id,
           term: undefined,
           academicYear: undefined,
           grade: student.grade,

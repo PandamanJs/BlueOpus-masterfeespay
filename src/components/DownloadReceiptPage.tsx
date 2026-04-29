@@ -14,6 +14,7 @@ interface CheckoutService {
   invoiceNo: string;
   studentName: string;
   studentId?: string;
+  studentAdmissionNumber?: string;
   grade?: string;
   paymentHistory?: Array<{
     date: string;
@@ -79,7 +80,7 @@ export default function DownloadReceiptPage({
         services,
         parentName,
         schoolLogo,
-        admissionNumber: (services && services[0]?.studentId) || '',
+        admissionNumber: (services && (services[0] as any)?.studentAdmissionNumber) || (services && services[0]?.studentId) || '',
         grade: (services && services[0]?.grade) || '',
         paymentHistory: consolidatedHistory
       });

@@ -720,7 +720,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
                   <div className="flex justify-between items-center text-[#585858] text-[8px]">
                     <div className="flex items-center gap-1">
-                      <span>Mobile Money fee</span>
+                      <span>Master-Fees</span>
                     </div>
                     <span>K{serviceFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
@@ -735,7 +735,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
                   <div className="flex justify-between items-center text-black text-[12px] font-bold">
                     <span>Total</span>
-                    <span>K{totalWithVat.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                    <span>K{totalWithVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               </div>
@@ -980,13 +980,13 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                             <li className="flex items-start gap-2">
                               <div className="w-1.5 h-1.5 rounded-full bg-[#95E36C] mt-1.5 shrink-0" />
                               <p className="text-[13px] text-[#718096] leading-snug">
-                                Wait for the status to change from <span style={{ color: '#EF4444' }} className="font-bold">Awaiting</span> to <span style={{ color: '#EF4444' }} className="font-bold">Done</span>.
+                                After entering your pin Wait for the status to change from <span style={{ color: '#EF4444' }} className="font-bold">Awaiting</span> to <span style={{ color: '#EF4444' }} className="font-bold">Done then press done to continue</span>.
                               </p>
                             </li>
                             <li className="flex items-start gap-2">
                               <div className="w-1.5 h-1.5 rounded-full bg-[#95E36C] mt-1.5 shrink-0" />
                               <p className="text-[13px] text-[#718096] leading-snug">
-                                After entering your <span style={{ color: '#EF4444' }} className="font-bold">PIN</span>, do not close or exit the tab until the payment reflects on the next screen as done or your receipt auto-downloads.
+                                do not close or exit the tab until the payment reflects on the next screen as done or your receipt auto-downloads.
                               </p>
                             </li>
                           </ul>
@@ -1020,7 +1020,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                       ) : (
                         <>
                           <CreditCard size={20} className="text-[#95E36C]" />
-                          <span className="tracking-tight">Proceed to Pay Now</span>
+                          <span className="tracking-tight"> Pay Now</span>
                         </>
                       )}
                     </button>

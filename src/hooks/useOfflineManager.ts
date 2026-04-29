@@ -51,18 +51,41 @@ export function useOfflineManager() {
                         console.log(`[OfflineManager] Successfully synced transaction ${tx.reference}`);
                     } else if (error) {
                         console.error(`[OfflineManager] Supabase error for ${tx.reference}:`, error);
-                        // Drop unrecoverable schema / constraint errors
+                        const isInvalidUuid = error.code === '22P02' || error.message?.includes('invalid input syntax for type uuid');
+                        const isSchemaCacheError = error.code === 'PGRST204' || error.message?.includes('could not find the');
+                        
                         const isUnrecoverable = [
-                            error.code?.startsWith('22'),
+                            error.code?.startsWith('22') && !isInvalidUuid,
                             error.code?.startsWith('23'),
-                            error.code?.startsWith('PGRST'),
-                            error.message?.includes('invalid'),
-                            error.message?.includes('could not find the'),
-                            error.details?.includes('invalid'),
+                            // We no longer drop PGRST204 immediately as it might be a cache issue
+                            error.code?.startsWith('PGRST') && !isSchemaCacheError, 
                         ].some(Boolean);
 
-                        if (isUnrecoverable) {
-                            console.warn(`[OfflineManager] Dropping invalid transaction ${tx.reference}.`);
+                        if (isInvalidUuid && tx.data.student_id) {
+                            console.log(`[OfflineManager] Attempting to recover transaction ${tx.reference} with invalid UUID...`);
+                            try {
+                                // Try to find student by admission number (since it was mistakenly used as ID)
+                                const { data: student, error: studentError } = await supabase
+                                    .from('students')
+                                    .select('student_id')
+                                    .eq('admission_number', tx.data.student_id)
+                                    .maybeSingle();
+
+                                if (student && !studentError) {
+                                    console.log(`[OfflineManager] Recovered UUID for student ${tx.data.student_id}: ${student.student_id}`);
+                                    tx.data.student_id = student.student_id;
+                                    // Update the queue so we don't do this lookup again
+                                    await offlineDB.put('transaction_queue', tx);
+                                    continue; 
+                                }
+                            } catch (recoveryErr) {
+                                console.error('[OfflineManager] Recovery lookup failed:', recoveryErr);
+                            }
+                        }
+
+                        // Drop if truly unrecoverable OR if it's a persistent invalid state after multiple retries
+                        if (isUnrecoverable || ((isInvalidUuid || isSchemaCacheError) && tx.retryCount > 10)) {
+                            console.warn(`[OfflineManager] Dropping invalid transaction ${tx.reference}. Reason: ${error.message || error.code}`);
                             await offlineDB.delete('transaction_queue', tx.reference);
                         } else {
                             // Increment retry counter so stuck items are visible

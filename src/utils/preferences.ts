@@ -24,41 +24,11 @@
  */
 
 const STORAGE_KEYS = {
-  LAST_PHONE: 'masterfees_last_phone',
   STUDENT_FREQUENCY: 'masterfees_student_frequency',     // How many times each student was selected
   SERVICE_FREQUENCY: 'masterfees_service_frequency',     // How many times each service was selected
   LAST_PAYMENT_METHOD: 'masterfees_last_payment_method',
 } as const;
 
-/**
- * Save Last Phone Number
- * 
- * When user enters their phone, we save it for next time.
- * Next visit, we'll pre-fill it for them.
- */
-export const saveLastPhone = (phoneNumber: string): void => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.LAST_PHONE, phoneNumber);
-  } catch (error) {
-    // Fail gracefully - this is an enhancement, not critical
-    console.error('Error saving phone number:', error);
-  }
-};
-
-/**
- * Get Last Phone Number
- * 
- * Retrieve the phone number from last visit.
- * Returns null if this is their first time.
- */
-export const getLastPhone = (): string | null => {
-  try {
-    return localStorage.getItem(STORAGE_KEYS.LAST_PHONE);
-  } catch (error) {
-    console.error('Error retrieving phone number:', error);
-    return null;
-  }
-};
 
 /**
  * Track Student Selection
@@ -215,7 +185,6 @@ export const getPreferenceStats = () => {
     const serviceFreq = localStorage.getItem(STORAGE_KEYS.SERVICE_FREQUENCY);
     
     return {
-      hasPhone: !!localStorage.getItem(STORAGE_KEYS.LAST_PHONE),
       studentCount: studentFreq ? Object.keys(JSON.parse(studentFreq)).length : 0,
       serviceCount: serviceFreq ? Object.keys(JSON.parse(serviceFreq)).length : 0,
       hasPaymentMethod: !!localStorage.getItem(STORAGE_KEYS.LAST_PAYMENT_METHOD),
@@ -223,7 +192,6 @@ export const getPreferenceStats = () => {
   } catch (error) {
     console.error('Error getting preference stats:', error);
     return {
-      hasPhone: false,
       studentCount: 0,
       serviceCount: 0,
       hasPaymentMethod: false,

@@ -903,7 +903,8 @@ export default function AddServicesPage({
                     isDebt: s.isDebt,
                     categoryId: s.categoryId,
                     grade: s.grade || student?.grade,
-                    studentId: student?.admissionNumber || studentId
+                    studentId: studentId, // This is the UUID from the studentServices map key
+                    studentAdmissionNumber: student?.admissionNumber || studentId
                 });
             });
         });

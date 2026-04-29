@@ -62,7 +62,8 @@ export interface CheckoutService {
   invoice_id?: string;  // Actual invoice UUID for DB linkage (transactions.invoice_id)
   pricing_id?: string;  // Original fee item ID (for new subscription invoice creation)
   studentName: string;  // Which student this service is for
-  studentId?: string;   // Admission Number or UUID
+  studentId?: string;   // Database UUID
+  studentAdmissionNumber?: string; // Human-readable Admission Number
   term?: number;        // Optional: The term this service is for
   academicYear?: number; // Optional: The academic year this service is for
   grade?: string;       // Optional: The grade of the student
@@ -124,6 +125,7 @@ interface AppState {
   // Receipt State
   receiptStudentName: string;
   receiptStudentId: string;
+  receiptStudentAdmissionNumber: string;
   receiptStudentGrade: string;
   receiptParentName: string;
   receiptPaymentData: Record<string, PaymentData[]>;
@@ -169,7 +171,7 @@ interface AppState {
   setPaymentReference: (ref: string | null) => void;
 
   // Receipt Actions
-  setReceiptStudent: (name: string, id: string, grade: string, parentName: string) => void;
+  setReceiptStudent: (name: string, id: string, admissionNumber: string, grade: string, parentName: string) => void;
   setReceiptPaymentData: (data: Record<string, PaymentData[]>) => void;
 
 
@@ -229,6 +231,7 @@ export const useAppStore = create<AppState>()(
       paymentReference: null,
       receiptStudentName: '',
       receiptStudentId: '',
+      receiptStudentAdmissionNumber: '',
       receiptStudentGrade: '',
       receiptParentName: '',
       receiptPaymentData: {},
@@ -323,9 +326,10 @@ export const useAppStore = create<AppState>()(
       setPaymentReference: (ref) => set({ paymentReference: ref }),
 
       // Receipt Actions
-      setReceiptStudent: (name, id, grade, parentName) => set({
+      setReceiptStudent: (name, id, admissionNumber, grade, parentName) => set({
         receiptStudentName: name,
         receiptStudentId: id,
+        receiptStudentAdmissionNumber: admissionNumber,
         receiptStudentGrade: grade,
         receiptParentName: parentName
       }),
@@ -384,6 +388,7 @@ export const useAppStore = create<AppState>()(
         paymentAmount: 0,
         receiptStudentName: '',
         receiptStudentId: '',
+        receiptStudentAdmissionNumber: '',
         receiptStudentGrade: '',
         receiptParentName: '',
         receiptPaymentData: {},
