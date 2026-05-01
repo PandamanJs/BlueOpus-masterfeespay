@@ -95,19 +95,19 @@ export default function ServicesPage({ userName, userPhone, schoolName, onBack, 
             </div>
 
             {isUnderReview ? (
-              <div 
+              <div
                 className="h-6 px-3 rounded-full flex items-center gap-2 border shadow-sm"
                 style={{ backgroundColor: '#FFF1F1', borderColor: '#FBDEDE' }}
               >
-                <AlertTriangle size={12} strokeWidth={3} style={{ color: '#9B4444' }} />
-                <span style={{ color: '#9B4444' }} className="text-[10px] font-black font-['Space_Grotesk'] uppercase tracking-wider">Under Review</span>
+                <AlertTriangle size={8} strokeWidth={2} style={{ color: '#9B4444' }} />
+                <span style={{ color: '#9B4444' }} className="text-[8px] font-black font-['Space_Grotesk'] uppercase tracking-wider">Under Review</span>
               </div>
             ) : (
               <div className="h-6 px-3 bg-[#95e36c]/10 rounded-full flex items-center gap-2 border border-[#95e36c]/30">
                 <div className="w-3.5 h-3.5 rounded-full bg-[#95e36c] flex items-center justify-center">
-                  <Check size={10} strokeWidth={4} className="text-white" />
+                  <Check size={8} strokeWidth={2} className="text-white" />
                 </div>
-                <span className="text-[#004d45] text-[10px] font-bold font-['Space_Grotesk'] uppercase tracking-wider">Account Verified</span>
+                <span className="text-[#004d45] text-[8px] font-bold font-['Space_Grotesk'] uppercase tracking-wider">Account Verified</span>
               </div>
             )}
           </div>

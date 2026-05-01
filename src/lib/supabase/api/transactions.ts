@@ -22,6 +22,130 @@ export type TransactionInput = {
     completed_at?: string;
 };
 
+/**
+ * Creates or identifies a formal invoice and its corresponding line items.
+ * Intelligently prevents duplicates and supports incremental payments.
+ */
+export async function createInvoiceForServices(params: {
+    studentId: string;
+    schoolId: string;
+    services: any[];
+    term: number;
+    year: number;
+    totalAmount: number;
+}) {
+    // 1. DUPLICATE & FRAGMENTATION CHECK
+    // Fetch all existing items for this student for the target term
+    const { data: existingItems, error: itemsFetchError } = await supabase
+        .from('invoice_items')
+        .select('invoice_id, metadata')
+        .eq('student_id', params.studentId)
+        .eq('term', params.term)
+        .eq('year', params.year);
+
+    if (itemsFetchError) {
+        handleSupabaseError(itemsFetchError, 'createInvoiceForServices - fetch check');
+    }
+
+    // Map existing pricing IDs
+    const existingPricingIds = new Set(
+        (existingItems || [])
+            .map(item => (item.metadata as any)?.pricing_id)
+            .filter(Boolean)
+    );
+
+    // Filter out services that are already officially invoiced
+    const newServices = params.services.filter(s => !existingPricingIds.has(s.pricing_id));
+
+    // CASE A: All services already have invoices. Just return the existing invoice_id.
+    if (newServices.length === 0 && existingItems && existingItems.length > 0) {
+        // Link to the first found invoice ID for this term
+        return existingItems[0].invoice_id;
+    }
+
+    // CASE B: We have an existing invoice header for this term, but need to add new line items.
+    if (existingItems && existingItems.length > 0) {
+        const targetInvoiceId = existingItems[0].invoice_id;
+        
+        const itemsToInsert = newServices.map(s => ({
+            invoice_id: targetInvoiceId,
+            student_id: params.studentId, // Ensure it's linked to student
+            school_id: params.schoolId,
+            category: s.categoryId || 'other',
+            description: s.description,
+            amount: s.amount,
+            paid_amount: 0,
+            term: params.term,
+            year: params.year,
+            metadata: {
+                pricing_id: s.pricing_id,
+                auto_generated: true,
+                source: 'pwa_advance_payment'
+            }
+        }));
+
+        const { error: insertError } = await supabase
+            .from('invoice_items')
+            .insert(itemsToInsert);
+
+        if (insertError) {
+            handleSupabaseError(insertError, 'createInvoiceForServices - append items');
+        }
+
+        return targetInvoiceId;
+    }
+
+    // CASE C: No invoice exists at all for this term. Create the header and the items.
+    const { data: invoice, error: invError } = await supabase
+        .from('invoices')
+        .insert({
+            student_id: params.studentId,
+            school_id: params.schoolId,
+            term: params.term,
+            year: params.year,
+            status: 'paid',
+            invoice_number: `INV-AUTO-${Date.now()}`,
+            date_issued: new Date().toISOString().split('T')[0],
+            due_date: new Date().toISOString().split('T')[0],
+            total_amount_cached: params.totalAmount,
+        })
+        .select('invoice_id')
+        .single();
+
+    if (invError) {
+        handleSupabaseError(invError, 'createInvoiceForServices - new invoice');
+        throw invError;
+    }
+
+    const items = params.services.map(s => ({
+        invoice_id: invoice.invoice_id,
+        student_id: params.studentId,
+        school_id: params.schoolId,
+        category: s.categoryId || 'other',
+        description: s.description,
+        amount: s.amount,
+        paid_amount: 0,
+        term: params.term,
+        year: params.year,
+        metadata: {
+            pricing_id: s.pricing_id,
+            auto_generated: true,
+            source: 'pwa_advance_payment'
+        }
+    }));
+
+    const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .insert(items);
+
+    if (itemsError) {
+        handleSupabaseError(itemsError, 'createInvoiceForServices - new items');
+        throw itemsError;
+    }
+
+    return invoice.invoice_id;
+}
+
 
 /**
  * Get transactions for a parent by telephone number.
@@ -556,12 +680,12 @@ async function getStudentFinancialSnapshot(studentId: string): Promise<any> {
         });
     });
 
-    let surplus = transactions
-        .filter((tx: any) => {
-            const txId = String(tx.transaction_id || tx.id || tx.reference || '');
-            return txId && !matchedTxIds.has(txId);
-        })
-        .reduce((sum: number, tx: any) => sum + transactionPaidAmount(tx), 0);
+    const unmatchedTransactions = transactions.filter((tx: any) => {
+        const txId = String(tx.transaction_id || tx.id || tx.reference || '');
+        return txId && !matchedTxIds.has(txId);
+    });
+
+    let surplus = unmatchedTransactions.reduce((sum: number, tx: any) => sum + transactionPaidAmount(tx), 0);
 
     for (const item of items) {
         if (item.balance > 0 && surplus > 0) {
@@ -594,8 +718,8 @@ async function getStudentFinancialSnapshot(studentId: string): Promise<any> {
                 invoiced: 0,
                 balance: -surplus,
                 status: 'cleared',
-                initiated_at: new Date().toISOString(),
-                transactions: [],
+                initiated_at: unmatchedTransactions[0]?.initiated_at || new Date().toISOString(),
+                transactions: unmatchedTransactions,
             });
         }
     }

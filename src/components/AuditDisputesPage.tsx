@@ -128,55 +128,80 @@ function NewDisputeForm({
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Select Student */}
-        <div className="flex flex-col gap-2">
-          <label className="text-zinc-500 text-xs font-normal font-['Inter'] uppercase tracking-wider">Select Student</label>
-          <div className="grid grid-cols-1 gap-3">
+        <div className="flex flex-col gap-4">
+          <label className="text-zinc-500 text-[11px] font-bold font-['Inter'] uppercase tracking-[0.1em]">Select Student</label>
+          <div className="space-y-3">
             {students.map(student => (
               <button
                 key={student.id}
                 type="button"
                 onClick={() => { hapticFeedback('light'); setSelectedStudentId(student.id); }}
-                className={`w-full px-4 py-4 rounded-xl border flex items-center justify-between transition-all text-left ${
+                className={`w-full p-3 rounded-xl border flex items-center gap-3 transition-all ${
                   selectedStudentId === student.id 
-                    ? 'bg-[#95e36c]/10 border-[#95e36c]/40' 
-                    : 'bg-white border-neutral-100'
+                    ? 'bg-[#95e36c]/5 border-[#95e36c] shadow-sm' 
+                    : 'bg-white border-neutral-100 hover:border-neutral-200'
                 }`}
               >
-                <div>
-                  <p className="text-black text-xs font-bold font-['Inter']">{student.name}</p>
-                  <p className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider mt-0.5">{student.grade}</p>
+                <div className={`size-9 rounded-lg flex items-center justify-center transition-colors ${
+                  selectedStudentId === student.id ? 'bg-[#95e36c] text-[#003630]' : 'bg-gray-50 text-neutral-400'
+                }`}>
+                  <Users size={18} />
                 </div>
-                {selectedStudentId === student.id && (
-                  <div className="size-5 rounded-md bg-white border border-neutral-200 shadow-inner flex items-center justify-center">
-                    <Check size={12} className="text-[#003630]" />
-                  </div>
-                )}
+                <div className="flex-1 text-left">
+                  <p className={`text-[13px] font-bold font-['Inter'] transition-colors ${selectedStudentId === student.id ? 'text-black' : 'text-neutral-500'}`}>
+                    {student.name}
+                  </p>
+                  <p className="text-[10px] text-neutral-400 font-medium uppercase tracking-wider mt-0.5">
+                    {student.grade}
+                  </p>
+                </div>
+                <div className={`size-5 rounded-full border flex items-center justify-center transition-all ${
+                  selectedStudentId === student.id ? 'border-[#95e36c] bg-[#003630]' : 'border-neutral-200'
+                }`}>
+                  {selectedStudentId === student.id && <Check size={12} className="text-white" strokeWidth={3} />}
+                </div>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Issue Category */}
-        <div className="flex flex-col gap-2">
-          <label className="text-zinc-500 text-xs font-normal font-['Inter'] uppercase tracking-wider">Issue Category</label>
-          <div className="flex flex-wrap gap-2">
+        {/* What's the problem? */}
+        <div className="flex flex-col gap-4">
+          <label className="text-zinc-500 text-[11px] font-bold font-['Inter'] uppercase tracking-[0.1em]">What's the problem?</label>
+          <div className="space-y-3">
             {[
-              { id: 'balance', label: 'Balance Issue', icon: FileWarning },
-              { id: 'payment', label: 'Missing Payment', icon: Check },
-              { id: 'identity', label: 'Wrong Student', icon: Users },
+              { id: 'balance', label: 'My balance is wrong', desc: 'The amount shown does not match my records', icon: FileWarning },
+              { id: 'payment', label: 'Payment not showing', desc: 'I made a payment but it\'s not reflected here', icon: CheckCircle2 },
+              { id: 'identity', label: 'Not my child', desc: 'This student record should not be linked to me', icon: Users },
             ].map(type => (
               <button
                 key={type.id}
                 type="button"
                 onClick={() => { hapticFeedback('light'); setDisputeType(type.id as any); }}
-                className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border transition-all ${
+                className={`w-full p-3 rounded-xl border flex items-center gap-3 transition-all ${
                   disputeType === type.id 
-                    ? 'bg-[#003630] border-[#003630] text-white shadow-lg shadow-[#003630]/20' 
-                    : 'bg-white border-neutral-100 text-neutral-500'
+                    ? 'bg-[#95e36c]/5 border-[#95e36c] shadow-sm' 
+                    : 'bg-white border-neutral-100 hover:border-neutral-200'
                 }`}
               >
-                <type.icon size={16} />
-                <span className="text-[12px] font-bold font-['Inter']">{type.label}</span>
+                <div className={`size-9 rounded-lg flex items-center justify-center transition-colors ${
+                  disputeType === type.id ? 'bg-[#95e36c] text-[#003630]' : 'bg-gray-50 text-neutral-400'
+                }`}>
+                  <type.icon size={18} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className={`text-[13px] font-bold font-['Inter'] transition-colors ${disputeType === type.id ? 'text-black' : 'text-neutral-500'}`}>
+                    {type.label}
+                  </p>
+                  <p className="text-[10px] text-neutral-400 font-medium leading-tight mt-0.5">
+                    {type.desc}
+                  </p>
+                </div>
+                <div className={`size-5 rounded-full border flex items-center justify-center transition-all ${
+                  disputeType === type.id ? 'border-[#95e36c] bg-[#003630]' : 'border-neutral-200'
+                }`}>
+                  {disputeType === type.id && <Check size={12} className="text-white" strokeWidth={3} />}
+                </div>
               </button>
             ))}
           </div>
@@ -198,17 +223,20 @@ function NewDisputeForm({
             </div>
             
             <div className="flex flex-col gap-2">
-              <label className="text-zinc-500 text-xs font-normal font-['Inter']">What is the correct balance?</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-black font-bold text-sm">ZMW</span>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={claimedBalance}
-                  onChange={(e) => setClaimedBalance(e.target.value)}
-                  className="w-full px-16 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-sm font-bold font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all text-right"
-                />
+              <label className="text-zinc-500 text-xs font-normal font-['Inter']">What should the correct balance be?</label>
+              <div className="flex items-center h-12 bg-white rounded-xl border border-neutral-100 overflow-hidden focus-within:border-[#003630] focus-within:ring-4 focus-within:ring-[#003630]/5 transition-all">
+              <div className="px-4 flex items-center gap-2 bg-neutral-50 border-r border-neutral-100 h-full">
+                <span className="text-neutral-400 font-bold text-[10px] uppercase tracking-wider">ZMW</span>
               </div>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={claimedBalance}
+                onChange={(e) => setClaimedBalance(e.target.value.replace(/[^0-9.]/g, ''))}
+                className="flex-1 h-full px-4 bg-transparent text-black text-sm font-bold font-['Inter'] placeholder:text-neutral-300 focus:outline-none"
+              />
+            </div>
             </div>
           </div>
         )}
@@ -218,14 +246,17 @@ function NewDisputeForm({
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <label className="text-zinc-500 text-xs font-normal font-['Inter']">Amount Paid</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-black font-bold text-sm">ZMW</span>
+                <div className="flex items-center h-12 bg-white rounded-xl border border-neutral-100 overflow-hidden focus-within:border-[#003630] focus-within:ring-4 focus-within:ring-[#003630]/5 transition-all">
+                  <div className="px-3 flex items-center bg-neutral-50 border-r border-neutral-100 h-full">
+                    <span className="text-neutral-400 font-bold text-[9px] uppercase tracking-wider">ZMW</span>
+                  </div>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="0.00"
                     value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="w-full px-16 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-sm font-bold font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all text-right"
+                    onChange={(e) => setPaymentAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                    className="flex-1 h-full px-3 bg-transparent text-black text-sm font-bold font-['Inter'] placeholder:text-neutral-300 focus:outline-none"
                   />
                 </div>
               </div>
@@ -235,19 +266,19 @@ function NewDisputeForm({
                   type="date"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="w-full px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-xs font-medium font-['Inter'] focus:outline-[#003630] transition-all"
+                  className="w-full h-12 px-4 bg-white rounded-xl border border-neutral-100 text-black text-[13px] font-bold font-['Inter'] focus:outline-none focus:border-[#003630] focus:ring-4 focus:ring-[#003630]/5 transition-all"
                 />
               </div>
             </div>
             
             <div className="flex flex-col gap-2">
-              <label className="text-zinc-500 text-xs font-normal font-['Inter']">Reference Number (PoP)</label>
+              <label className="text-zinc-500 text-xs font-normal font-['Inter']">Receipt or Reference Number</label>
               <input
                 type="text"
                 placeholder="Enter transaction ID or Reference"
                 value={paymentReference}
                 onChange={(e) => setPaymentReference(e.target.value)}
-                className="w-full px-4 py-4 bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-200 text-black text-xs font-medium font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all"
+                className="w-full h-12 px-4 bg-white rounded-xl border border-neutral-100 text-black text-sm font-bold font-['Inter'] placeholder:text-neutral-300 focus:outline-none focus:border-[#003630] focus:ring-4 focus:ring-[#003630]/5 transition-all"
               />
             </div>
           </div>
@@ -255,12 +286,12 @@ function NewDisputeForm({
 
         {/* Explanation */}
         <div className="flex flex-col gap-2">
-          <label className="text-zinc-500 text-xs font-normal font-['Inter']">Explanation / Note</label>
+          <label className="text-zinc-500 text-xs font-normal font-['Inter']">Tell us more (Optional)</label>
           <textarea
-            placeholder="Please provide a brief explanation of the discrepancy..."
+            placeholder="Tell us why this needs to be checked..."
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full h-32 px-4 py-4 bg-white rounded-xl shadow-[inset_0px_4px_4px_0px_rgba(0,0,0,0.05)] outline outline-1 outline-offset-[-1px] outline-neutral-200 text-black text-xs font-medium font-['Inter'] placeholder:text-zinc-400 focus:outline-[#003630] transition-all resize-none"
+            className="w-full h-28 p-4 bg-white rounded-xl border border-neutral-100 text-black text-sm font-medium font-['Inter'] placeholder:text-neutral-300 focus:outline-none focus:border-[#003630] focus:ring-4 focus:ring-[#003630]/5 transition-all resize-none shadow-inner shadow-gray-50"
           />
         </div>
 
@@ -268,9 +299,9 @@ function NewDisputeForm({
           type="submit"
           disabled={isSubmitting}
           style={{ backgroundColor: isSubmitting ? '#E6E6E6' : '#003630' }}
-          className="w-full h-14 text-white rounded-xl flex items-center justify-center text-sm font-semibold font-['Inter'] shadow-xl shadow-teal-950/20 active:scale-[0.98] transition-all disabled:cursor-not-allowed mt-4"
+          className="w-full h-12 text-white rounded-xl flex items-center justify-center text-[14px] font-bold font-['Inter'] shadow-lg shadow-[#003630]/10 active:scale-[0.98] transition-all disabled:cursor-not-allowed mt-2"
         >
-          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'Submit Dispute'}
+          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'Send to School'}
         </button>
       </form>
     </motion.div>
@@ -342,7 +373,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 function DuplicateCard({ item }: { item: DuplicateReviewRequest }) {
   const isGuardianConflict = isGuardianConflictRequest(item);
   return (
-    <div className="w-full p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-4 transition-all">
+    <div className="w-full p-3 bg-white rounded-xl border border-neutral-100 shadow-sm flex flex-col gap-3 transition-all">
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <span className="text-black text-[13px] font-bold font-['Inter'] line-clamp-1">
@@ -350,7 +381,7 @@ function DuplicateCard({ item }: { item: DuplicateReviewRequest }) {
           </span>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-bold uppercase tracking-wider ${isGuardianConflict ? 'text-amber-600' : 'text-neutral-400'}`}>
-              {isGuardianConflict ? 'Guardian Conflict' : 'Duplicate Record'}
+              {isGuardianConflict ? 'Needs Verification' : 'Duplicate Found'}
             </span>
             <div className="w-1 h-1 rounded-full bg-neutral-200" />
             <span className="text-neutral-400 text-[11px]">{formatDate(item.createdAt)}</span>
@@ -377,14 +408,14 @@ function DuplicateCard({ item }: { item: DuplicateReviewRequest }) {
 
 function BalanceCard({ item }: { item: BalanceReviewRequest }) {
   return (
-    <div className="w-full p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-4 transition-all">
+    <div className="w-full p-3 bg-white rounded-xl border border-neutral-100 shadow-sm flex flex-col gap-3 transition-all">
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <span className="text-black text-[13px] font-bold font-['Inter'] line-clamp-1">
             {item.student.name}
           </span>
           <div className="flex items-center gap-2">
-            <span className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider">Balance Dispute</span>
+            <span className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider">Balance Check</span>
             <div className="w-1 h-1 rounded-full bg-neutral-200" />
             <span className="text-neutral-400 text-[11px]">{formatDate(item.createdAt)}</span>
           </div>
@@ -484,14 +515,14 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
         <section className="px-6 py-8 bg-[#f9fafb]">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-black shadow-sm">
-              <FileWarning size={22} strokeWidth={2.5} />
+              <ClipboardCheck size={22} strokeWidth={2.5} />
             </div>
-            <h2 className="text-smart-h2 font-bold font-['Inter'] text-black">{isStaff ? 'Review Center' : 'Audit & Disputes'}</h2>
+            <h2 className="text-smart-h2 font-bold font-['Inter'] text-black">{isStaff ? 'Review Center' : 'Support & Help'}</h2>
           </div>
           <p className="text-black text-smart-body leading-relaxed font-normal font-['Inter'] opacity-80 max-w-[400px]">
             {isStaff 
               ? 'Review and manage all pending student record disputes and balance discrepancies submitted by parents.'
-              : 'If you have noticed any discrepancies in your student\'s recorded balance or identity details, you can file a dispute here.'}
+              : 'Something doesn\'t look right? Let us know and the school will look into it.'}
           </p>
         </section>
 
@@ -504,7 +535,7 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
           >
             {activeTab === 'balances' && <div className="w-1.5 h-1.5 bg-[#4FE501] rounded-full" />}
             <span className={`text-[12px] font-bold font-['Space_Grotesk'] ${activeTab === 'balances' ? 'text-black' : ''}`}>
-              {isStaff ? 'Pending Reviews' : 'My Pending'}
+              {isStaff ? 'Pending Reviews' : 'Waiting for School'}
             </span>
           </button>
           <button
@@ -513,7 +544,7 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
           >
             {activeTab === 'history' && <div className="w-1.5 h-1.5 bg-[#4FE501] rounded-full" />}
             <span className={`text-[12px] font-bold font-['Space_Grotesk'] ${activeTab === 'history' ? 'text-black' : ''}`}>
-              History
+              Resolved
             </span>
           </button>
         </div>
@@ -537,7 +568,7 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
                   </div>
                   <h3 className="text-smart-h3 font-black text-[#003630] mb-1">All Clear</h3>
                   <p className="text-smart-small text-gray-400 font-bold leading-relaxed">
-                    You don't have any pending balance reviews at the moment.
+                    You don't have any pending requests at the moment.
                   </p>
                 </div>
               )}
@@ -604,7 +635,7 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
               className="w-full h-14 text-white rounded-xl flex items-center justify-center gap-3 text-sm font-semibold font-['Inter'] shadow-xl shadow-teal-950/30 active:scale-[0.98] transition-all"
             >
               <AlertCircle size={18} />
-              File a New Dispute
+              Report an Issue
             </button>
           </div>
         </div>
@@ -637,7 +668,7 @@ export default function AuditDisputesPage({ navigateToPage }: { navigateToPage: 
                   <div className="size-10 rounded-xl bg-[#003630]/5 flex items-center justify-center text-[#003630]">
                     <AlertCircle size={20} />
                   </div>
-                  <h3 className="text-[18px] font-bold text-[#003630]">New Dispute</h3>
+                  <h3 className="text-[18px] font-bold text-[#003630]">Report an Issue</h3>
                 </div>
               </div>
 

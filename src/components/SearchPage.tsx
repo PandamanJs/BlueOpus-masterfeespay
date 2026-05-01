@@ -29,7 +29,7 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
     loadSchools();
   }, []);
 
-  // Filter and rank schools based on search query
+  // Filter and rank schools based on fuzzy matching logic
   const filteredSchools = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return schools;
@@ -38,7 +38,8 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
       str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 
     const isFuzzyMatch = (s1: string, s2: string) => {
-      if (Math.abs(s1.length - s2.length) > 1) return false;
+      if (s1.length < 3) return s2.includes(s1);
+      if (Math.abs(s1.length - s2.length) > 2) return false;
       let edits = 0;
       let i = 0, j = 0;
       while (i < s1.length && j < s2.length) {
@@ -48,10 +49,10 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
           else if (s2.length > s1.length) j++;
           else { i++; j++; }
         } else { i++; j++; }
-        if (edits > 1) return false;
+        if (edits > 2) return false;
       }
       edits += (s1.length - i) + (s2.length - j);
-      return edits <= 1;
+      return edits <= 2;
     };
 
     const qNormalized = normalize(query);
@@ -63,27 +64,20 @@ export default function SearchPage({ onProceed, selectedSchool, onSchoolSelect }
         const nTokens = nNormalized.split(' ');
         let score = 0;
 
-        // Exact match (highest priority)
         if (nNormalized === qNormalized) score += 1000;
-        
-        // Phrase match
         else if (nNormalized.includes(qNormalized)) score += 500;
-        
-        // Token matches
+        if (nNormalized.startsWith(qNormalized)) score += 150;
+
         qTokens.forEach(qt => {
-          if (nTokens.includes(qt)) {
+          if (nTokens.some(nt => nt.startsWith(qt))) {
             score += 200;
-          } else {
-            // Fuzzy token match for words with length > 3
-            if (qt.length > 3) {
-              const hasFuzzy = nTokens.some(nt => isFuzzyMatch(qt, nt));
-              if (hasFuzzy) score += 100;
-            }
+          } else if (nTokens.some(nt => nt.includes(qt))) {
+            score += 100;
+          } else if (qt.length > 3) {
+            const hasFuzzy = nTokens.some(nt => isFuzzyMatch(qt, nt));
+            if (hasFuzzy) score += 50;
           }
         });
-
-        // Starts with bonus
-        if (nNormalized.startsWith(qNormalized)) score += 150;
 
         return { school, score };
       })

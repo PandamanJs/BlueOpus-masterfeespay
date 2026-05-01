@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Search, X, Loader2, Pencil, ChevronDown, User, Sparkles, UserRoundPlus, ChevronRight, Info, AlertTriangle, Check } from 'lucide-react';
 import { type ParentData } from './ParentInformationPage';
 import { type StudentData, getGradesBySchool, getClassesByGrade, type SchoolGrade } from '../../lib/supabase/api/registration';
@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 interface StudentsPageProps {
   parentData: ParentData;
   onComplete: (students: StudentData[]) => void;
-  onBack: () => void;
+  onBack: (students: StudentData[]) => void;
   initialStudents?: StudentData[];
 }
 
@@ -38,101 +38,86 @@ const isClearDuplicateStudent = (
 
 
 
-// REDESIGNED EMPTY STATE
-function EmptyStudentState({ onAddManual }: { onAddManual: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="w-full space-y-4"
-    >
-      <div className="bg-white rounded-[24px] p-6 border-[1.5px] border-[#e5e7eb] shadow-sm relative overflow-hidden group">
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#003630 1px, transparent 1px)', backgroundSize: '16px 1px' }} />
 
-        <div className="flex items-start gap-5 relative z-10">
-          <div className="size-14 rounded-[18px] bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0">
-            <UserRoundPlus size={28} className="text-gray-300" />
-          </div>
-          <div className="flex flex-col gap-1.5 pt-1">
-            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[18px] text-[#003630] tracking-[-0.3px]">No records linked</h3>
-            <p className="text-[13px] text-gray-400 leading-relaxed max-w-[170px]">
-              Search by name above or add details manually.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-8 relative z-10">
-          <button
-            onClick={() => { haptics.light(); onAddManual(); }}
-            className="w-full h-14 rounded-[18px] bg-[#003630] border border-[#003630] shadow-[0_8px_20px_rgba(0,54,48,0.2)] active:scale-[0.98] transition-all flex items-center justify-center gap-3 group/btn"
-          >
-            <div className="size-7 rounded-full bg-[#95e36c]/20 flex items-center justify-center group-hover/btn:bg-[#95e36c] transition-colors">
-              <Plus size={16} className="text-[#95e36c] group-hover/btn:text-[#003630]" strokeWidth={3} />
-            </div>
-            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-white font-bold">Add New Student Record</span>
-          </button>
-
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <Sparkles size={12} className="text-[#95e36c]" />
-            <span className="text-[10px] font-black uppercase tracking-[1.5px] text-gray-300">Fast & Secure Registration</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 px-2">
-        <div className="h-[1px] flex-1 bg-gray-100" />
-        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Help Center</span>
-        <div className="h-[1px] flex-1 bg-gray-100" />
-      </div>
-
-      <p className="text-[12px] text-center text-gray-400 font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
-        Can't find your child? Contact the school administration for support.
-      </p>
-    </motion.div>
-  );
-}
 
 // StudentCard
-function StudentCard({ student, onEdit, onRemove }: { student: StudentData, onEdit: () => void, onRemove: () => void }) {
+function StudentCard({ student, onEdit, onRemove }: { student: StudentData; onEdit: () => void; onRemove: () => void }) {
+  const gradeLabel = student.grade.toLowerCase().includes('grade') ? student.grade : `Grade ${student.grade}`;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-[20px] p-4 border border-gray-100 shadow-sm relative mb-3 group hover:border-[#003630]/20 transition-all"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-[#003630]">
-              {student.name}
-            </h3>
+    <div className="w-full h-[54px] pl-5 pr-4 bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] rounded-lg flex items-center justify-between mb-2.5">
+      <div className="flex flex-col justify-center min-w-0">
+        <div className="text-black text-[12px] font-semibold font-['Inter',sans-serif] leading-none truncate">
+          {student.name}
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <div className="text-[#808080] text-[8px] font-medium font-['Inter',sans-serif]">
+            {gradeLabel}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
           </div>
-          <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-            Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
-          </p>
-          {(student.parentName || student.otherParentName) && (
-            <p className="text-[10px] text-[#003630]/60 font-bold uppercase tracking-wider mt-1 flex items-center gap-1">
-              <User size={10} /> {student.parentName || student.otherParentName}
-            </p>
+          {student.studentId && student.studentId !== 'New Registration' && (
+            <div className="text-[#808080] text-[8px] font-light font-['Inter',sans-serif]">
+              {student.studentId}
+            </div>
           )}
         </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="h-9 px-4 rounded-xl bg-gray-50 text-[13px] font-bold text-[#003630] hover:bg-gray-100 transition-colors active:scale-95"
-          >
-            Edit
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="size-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-colors active:scale-95"
-          >
-            <X size={18} />
-          </button>
+        <div className="text-[#808080] text-[8px] font-light font-['Inter',sans-serif] uppercase mt-1">
+          {student.schoolName || 'STUDENT RECORD'}
         </div>
       </div>
-    </motion.div>
+
+      <div className="flex items-center gap-8 shrink-0">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          style={{
+            height: '26px',
+            paddingLeft: '24px',
+            paddingRight: '24px',
+            backgroundColor: '#F0F2F5',
+            borderRadius: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'black',
+            fontSize: '10px',
+            fontFamily: 'Inter',
+            fontWeight: '400',
+            border: 'none',
+            outline: 'none',
+            cursor: 'pointer'
+          }}
+          className="active:scale-95 transition-transform"
+        >
+          Edit
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="active:scale-90 transition-transform"
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6.6665 7.33334V11.3333" stroke="#AEAEAE" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9.3335 7.33334V11.3333" stroke="#AEAEAE" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12.6668 4V13.3333C12.6668 13.687 12.5264 14.0261 12.2763 14.2761C12.0263 14.5262 11.6871 14.6667 11.3335 14.6667H4.66683C4.31321 14.6667 3.97407 14.5262 3.72402 14.2761C3.47397 14.0261 3.3335 13.687 3.3335 13.3333V4" stroke="#AEAEAE" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M2 4H14" stroke="#AEAEAE" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5.3335 4.00001V2.66668C5.3335 2.31305 5.47397 1.97392 5.72402 1.72387C5.97407 1.47382 6.31321 1.33334 6.66683 1.33334H9.3335C9.68712 1.33334 10.0263 1.47382 10.2763 1.72387C10.5264 1.97392 10.6668 2.31305 10.6668 2.66668V4.00001" stroke="#AEAEAE" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -140,6 +125,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const [searchQuery, setSearchQuery] = useState('');
   const [students, setStudents] = useState<StudentData[]>(initialStudents || []);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [availableGrades, setAvailableGrades] = useState<SchoolGrade[]>([]);
@@ -263,26 +249,49 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   useEffect(() => {
     let isCancelled = false;
     const timer = setTimeout(async () => {
-      if (searchQuery.trim().length >= 2) {
+      const trimmedQuery = searchQuery.trim();
+      if (trimmedQuery.length >= 2) {
         try {
           setIsSearchingStudents(true);
           const { searchStudentsByName } = await import('../../lib/supabase/api/registration');
-          const results = await searchStudentsByName(searchQuery, parentData.schoolId, parentData.parentId, {
+
+          // Fetch raw results from database (usually substring or ILIKE)
+          const results = await searchStudentsByName(trimmedQuery, parentData.schoolId, parentData.parentId, {
             includeGuardianLocked: true
           });
+
           if (!isCancelled) {
-            setSearchResults(results);
+            // Apply advanced frontend fuzzy matching & sorting
+            const scoredResults = results.map(student => {
+              const q = trimmedQuery.toLowerCase();
+              const n = student.name.toLowerCase();
+
+              let score = 0;
+              if (n === q) score = 1.0; // Perfect match
+              else if (n.startsWith(q)) score = 0.9; // Prefix match
+              else if (n.includes(q)) score = 0.8; // Substring match
+              else {
+                // Typo-tolerant fuzzy score
+                const sim = calculateSimilarity(q, n);
+                score = sim * 0.7; // Lower priority for fuzzy
+              }
+
+              return { ...student, _searchScore: score };
+            });
+
+            // Filter out very low quality matches and sort by score
+            const finalResults = scoredResults
+              .filter(s => (s._searchScore || 0) > 0.4)
+              .sort((a, b) => (b._searchScore || 0) - (a._searchScore || 0));
+
+            setSearchResults(finalResults);
           }
 
         } catch (error) {
           console.error("Search error:", error);
-          if (!isCancelled) {
-            setSearchResults([]);
-          }
+          if (!isCancelled) setSearchResults([]);
         } finally {
-          if (!isCancelled) {
-            setIsSearchingStudents(false);
-          }
+          if (!isCancelled) setIsSearchingStudents(false);
         }
       } else {
         if (!isCancelled) {
@@ -290,7 +299,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
           setIsSearchingStudents(false);
         }
       }
-    }, 500);
+    }, 400); // Faster debounce for better "bullet proof" feel
 
     return () => {
       isCancelled = true;
@@ -587,6 +596,18 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
     setShowAddForm(false);
   };
 
+  const handleOpenSearchOverlay = () => {
+    haptics.light();
+    setShowSearchOverlay(true);
+  };
+
+  const handleCloseSearchOverlay = () => {
+    haptics.light();
+    setShowSearchOverlay(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
   const selectGradeClassOption = (option: GradeClassOption) => {
     haptics.light();
     setNewStudent(prev => ({
@@ -635,7 +656,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   const isButtonDisabled = students.length === 0 || showAddForm;
 
   return (
-    <div className="bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
+    <div className={`bg-gradient-to-br from-[#f9fafb] via-white to-[#f5f7f9] min-h-screen flex flex-col font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] ${showSearchOverlay ? 'overflow-hidden' : ''}`}>
       <LogoHeader>
         <OnboardingProgressBar currentStep={2} totalSteps={3} className="py-0" />
       </LogoHeader>
@@ -731,17 +752,25 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       </AnimatePresence>
 
       <div className={`flex-1 px-6 pt-8 pb-32 max-w-lg mx-auto w-full transition-opacity duration-300 ${showSmartMatchModal ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        {/* Header - Matching Services Page style */}
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
           className="mb-8"
         >
-          <h1 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-smart-h1 text-[#003630] tracking-[-0.8px] mb-2 leading-tight">
-            Add Pupils to your Account
-          </h1>
-          <div className="text-smart-body text-gray-500 tracking-[-0.2px] leading-relaxed">
-            <p>Add your child(ren) to your account.</p>
-            <p className="mt-1 text-gray-400">
+          <div className="bg-[#f9fafb] rounded-[22px] p-[16px] shadow-inner flex flex-col gap-2 border border-gray-100/50">
+            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] font-bold leading-tight not-italic text-[20px] text-[#003630] tracking-[-0.18px] flex items-center gap-3">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Add Pupils to your account
+            </p>
+            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] leading-relaxed not-italic text-[#6b7280] text-[10px] tracking-[-0.12px]">
+              Add your child(ren) to your account.
               If you cannot find your child, please add them manually by entering their details.
             </p>
           </div>
@@ -750,349 +779,291 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
 
 
         {/* Actions Section */}
-        {!showAddForm ? (
-          <div className="space-y-4">
-            {/* Search and Add Section */}
-            <div className="space-y-3">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="relative"
-              >
-                <div
-                  className={`
-                    relative bg-white rounded-[16px] overflow-hidden
-                    transition-all duration-300
-                    ${focusedField === 'search'
-                      ? 'ring-4 ring-[#95e36c]/20 border-[1.5px] border-[#95e36c] shadow-lg'
-                      : 'border-[1.5px] border-[#e5e7eb] shadow-sm'
-                    }
-                  `}
-                >
-                  <div className="flex items-center px-4 h-[56px]">
-                    <Search
-                      className={`
-                        flex-shrink-0 transition-colors duration-300
-                        ${focusedField === 'search' ? 'text-[#95e36c]' : 'text-[#003630]/40'}
-                      `}
-                      size={20}
-                    />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onFocus={() => { setFocusedField('search'); haptics.light(); }}
-                      onBlur={() => setFocusedField(null)}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search for your Child"
-                      className="flex-1 px-3 bg-transparent outline-none border-none focus:outline-none focus:ring-0 text-[#003630] placeholder:text-[#003630]/40"
-                      style={{ fontSize: '16px', outline: 'none', border: 'none', boxShadow: 'none' }}
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        className="p-1 rounded-full hover:bg-gray-100"
-                      >
-                        <X size={16} className="text-gray-400" />
-                      </button>
-                    )}
+        {!showAddForm && (
+          <div className="space-y-6">
+            <div
+              style={{ height: '450px' }}
+              className="w-full shrink-0 relative bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-100 overflow-hidden flex flex-col"
+            >
+              <div className="flex-1 w-full overflow-y-auto px-6 pt-6 pb-32 no-scrollbar">
+                {students.length > 0 ? (
+                  <div className="space-y-1">
+                    {students.map((student) => (
+                      <StudentCard
+                        key={student.id}
+                        student={student}
+                        onEdit={() => startEditing(student)}
+                        onRemove={() => removeStudent(student.id)}
+                      />
+                    ))}
                   </div>
-                </div>
-              </motion.div>
-
-              <AnimatePresence>
-                {(isSearchingStudents || searchResults.length > 0 || (searchQuery.trim().length >= 2 && !isSearchingStudents)) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="relative z-20 bg-white rounded-[24px] shadow-2xl border border-gray-100 overflow-hidden mb-4 mt-2"
-                  >
-                    <div className="p-2 space-y-1">
-                      {isSearchingStudents ? (
-                        <div className="flex items-center justify-center gap-3 px-4 py-6 text-[#003630]/60">
-                          <Loader2 size={18} className="animate-spin" />
-                          <span className="text-[12px] font-bold uppercase tracking-widest">Searching student records...</span>
-                        </div>
-                      ) : searchResults.length > 0 ? searchResults.map((student) => {
-                        const isAlreadyAdded = students.some(s => s.id === student.id);
-                        return (
-                          <button
-                            key={student.id}
-                            disabled={isAlreadyAdded}
-                            onClick={() => handleSelectSearchResult(student)}
-                            className={`w-full p-4 text-left rounded-[18px] flex items-center justify-between group transition-all ${isAlreadyAdded ? 'opacity-60 cursor-not-allowed bg-gray-50/50' : 'hover:bg-gray-50'}`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate">{student.name}</p>
-                                {isAlreadyAdded && (
-                                  <span className="flex items-center gap-1 text-[8px] bg-[#95e36c]/20 text-[#003630] px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
-                                    <Check size={8} /> Already Added
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full uppercase tracking-widest font-black">
-                                    Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
-                                  </span>
-                                  {student.studentId && student.studentId !== 'Pending' && (
-                                    <>
-                                      <div className="size-1 rounded-full bg-gray-200" />
-                                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                                        ID: {student.studentId}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                                {(student.parentName || student.otherParentName) && (
-                                  <div className="flex items-center gap-1.5 mt-0.5">
-                                    <User size={10} className="text-[#003630]/30" />
-                                    <span className="text-[10px] text-[#003630]/60 font-bold uppercase tracking-[1px]">
-                                      {student.isGuardianLinkLocked && student.guardianNames && student.guardianNames.length > 0
-                                        ? student.guardianNames.join(' and ')
-                                        : student.parentName || student.otherParentName}
-                                    </span>
-                                  </div>
-                                )}
-                                {student.isGuardianLinkLocked && (
-                                  <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-2.5 py-1">
-                                    <AlertTriangle size={10} className="text-amber-700" />
-                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-700">
-                                      Two guardians are already linked to this student.
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className={`size-10 rounded-full flex items-center justify-center transition-all ml-3 shrink-0 ${isAlreadyAdded ? 'bg-gray-100 text-gray-300' : 'bg-gray-50 group-hover:bg-[#003630] group-hover:text-white'}`}>
-                              {isAlreadyAdded ? <Check size={18} /> : student.isGuardianLinkLocked ? <AlertTriangle size={18} /> : <Plus size={18} />}
-                            </div>
-                          </button>
-                        );
-                      }) : (
-                        <div className="px-6 py-8 text-center flex flex-col items-center">
-                          <div className="size-12 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-                            <Search size={20} className="text-gray-300" />
-                          </div>
-                          <p className="text-[14px] font-bold text-[#003630] tracking-tight">No student matches found</p>
-                          <p className="text-[12px] text-gray-400 mt-1 max-w-[220px] mx-auto leading-relaxed">
-                            Try another spelling or add your child manually if they aren't in the system yet.
-                          </p>
-                          
-                          <button
-                            onClick={() => openManualEntry(searchQuery)}
-                            className="mt-6 px-5 h-10 rounded-full bg-[#003630] text-white text-[12px] font-bold uppercase tracking-wider flex items-center gap-2 active:scale-[0.95] transition-all shadow-sm"
-                          >
-                            <Plus size={14} /> Add Manually
-                          </button>
-                          
-                          <p className="text-[9px] text-gray-300 mt-4 font-black uppercase tracking-widest border-t border-gray-50 pt-4 w-full">
-                            School Admin Support: +260 XXX XXX XXX
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center px-3 gap-8">
+                    <p className="text-neutral-600 text-[13px] font-normal font-['Space_Grotesk'] leading-relaxed max-w-[240px]">
+                      Press the button below to start adding your children.
+                    </p>
+                    <button
+                      onClick={handleOpenSearchOverlay}
+                      className="px-10 h-[52px] rounded-[26px] border border-zinc-200 bg-white flex items-center justify-center gap-4 active:scale-[0.98] transition-all shadow-sm hover:border-zinc-300 group"
+                    >
+                      <div className="size-4 rounded-full border border-zinc-900 flex items-center justify-center transition-transform group-hover:scale-110">
+                        <Plus size={10} className="text-zinc-900" strokeWidth={2.5} />
+                      </div>
+                      <span className="text-black text-[13px] font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
+                        Add Student
+                      </span>
+                    </button>
+                  </div>
                 )}
-              </AnimatePresence>
+              </div>
 
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={{ scale: 1.01, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => openManualEntry(searchQuery)}
-                className="w-full h-[60px] rounded-[16px] bg-[#f9fafb] border-[1.5px] border-dashed border-[#d1d5db] flex items-center justify-center gap-2 hover:border-[#003630] transition-colors group mt-4 shadow-sm"
-              >
-                <Plus size={18} className="text-gray-400 group-hover:text-[#003630] transition-colors" />
-                <span className="font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[16px] text-gray-400 group-hover:text-[#003630] transition-colors">
-                  Add Pupil Manually
-                </span>
-              </motion.button>
-            </div>
-
-            {/* Students List Box */}
-            <div className={`relative min-h-[400px] rounded-[24px] border-[1px] border-[#e5e7eb] p-6 flex flex-col ${students.length === 0 ? 'items-center justify-center' : 'items-start justify-start'}`}>
-              {students.length > 0 ? (
-                <div className="w-full">
-                  {students.map((student) => (
-                    <StudentCard
-                      key={student.id}
-                      student={student}
-                      onEdit={() => startEditing(student)}
-                      onRemove={() => removeStudent(student.id)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center min-h-[350px]">
-                  <p className="text-[14px] text-gray-400 font-medium text-center">
-                    The Children that you add will
-                    <br />
-                    appear here
-                  </p>
+              {/* Add Students Button - Visible only when there are students */}
+              {students.length > 0 && (
+                <div className="px-6 py-8 flex justify-center">
+                  <button
+                    onClick={handleOpenSearchOverlay}
+                    className="w-full h-[50px] rounded-[24px] border border-zinc-200 bg-white flex items-center justify-center gap-4 active:scale-[0.98] transition-all shadow-sm hover:border-zinc-300 group"
+                  >
+                    <div className="size-4 rounded-full border border-zinc-900 flex items-center justify-center transition-transform group-hover:scale-110">
+                      <Plus size={10} className="text-zinc-900" strokeWidth={2.5} />
+                    </div>
+                    <span className="text-black text-[12px] font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
+                      Add another Student
+                    </span>
+                  </button>
                 </div>
               )}
             </div>
           </div>
-        ) : (
-          /* Manual Add Form */
-          <AnimatePresence>
-            {showAddForm && (
-              <motion.div
-                key="add-student-form"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="space-y-10"
+        )}
+
+        {/* Search Overlay */}
+        <AnimatePresence>
+          {showSearchOverlay && (
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed inset-0 z-[100] flex flex-col bg-white"
+            >
+              <LogoHeader>
+                <OnboardingProgressBar currentStep={2} totalSteps={3} className="py-0" />
+              </LogoHeader>
+
+              {/* Overlay Header */}
+              <div className="w-full h-[50px] px-6 flex items-center justify-between border-b border-[#F6F7F9]">
+                <div className="flex items-center gap-3">
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <g clipPath="url(#clip0_add_student)">
+                      <path d="M8.00016 14.6667C11.6821 14.6667 14.6668 11.6819 14.6668 8.00001C14.6668 4.31811 11.6821 1.33334 8.00016 1.33334C4.31826 1.33334 1.3335 4.31811 1.3335 8.00001C1.3335 11.6819 4.31826 14.6667 8.00016 14.6667Z" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M5.3335 8H10.6668" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M8 5.33334V10.6667" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                    </g>
+                    <defs>
+                      <clipPath id="clip0_add_student">
+                        <rect width="16" height="16" fill="white" />
+                      </clipPath>
+                    </defs>
+                  </svg>
+                  <span className="text-black text-[14px] font-bold font-['Inter'] tracking-tight">Add Students</span>
+                </div>
+                <button
+                  onClick={handleCloseSearchOverlay}
+                  className="size-10 rounded-full bg-white flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.12)] active:scale-90 transition-transform overflow-hidden"
+                >
+                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="scale-75">
+                    <path d="M15 19L18 16M18 16L21 13M18 16L15 13M18 16L21 19" stroke="#505050" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              <div
+                className="flex-1 overflow-y-auto px-4 pb-12 no-scrollbar bg-white"
+                style={{ paddingTop: '20px' }}
               >
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-[12px]">
-                    <div className="size-12 rounded-[18px] bg-gradient-to-br from-[#003630]/10 to-[#003630]/5 border border-[#003630]/10 flex items-center justify-center">
-                      <UserRoundPlus size={24} className="text-[#003630]" strokeWidth={2.5} />
-                    </div>
-                    <div>
-                      <h2 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[22px] text-[#003630] tracking-[-0.6px] leading-tight">
-                        {editingId ? 'Update Detail' : 'Manual Entry'}
-                      </h2>
-                      <p className="text-[12px] text-gray-400 font-medium">Step 2: Pupil Information</p>
+                <div className="max-w-lg mx-auto">
+                  <div className="bg-white rounded-2xl shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[#E6E6E6] p-4 flex flex-col gap-8">
+                    <div className="flex flex-col gap-4">
+                      {/* Search Input Container */}
+                      <div className="w-full h-14 px-3 bg-white rounded-xl border-2 border-[#C1C9D7] flex items-center gap-4">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M9.58317 17.5C13.9554 17.5 17.4998 13.9556 17.4998 9.58332C17.4998 5.21107 13.9554 1.66666 9.58317 1.66666C5.21092 1.66666 1.6665 5.21107 1.6665 9.58332C1.6665 13.9556 5.21092 17.5 9.58317 17.5Z" stroke="#B9BEC6" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M18.3332 18.3333L16.6665 16.6667" stroke="#B9BEC6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={searchQuery}
+                          onFocus={() => { setFocusedField('search-overlay'); haptics.light(); }}
+                          onBlur={() => setFocusedField(null)}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search for your Child"
+                          className="flex-1 bg-transparent border-none text-black placeholder:text-[#B9BEC6] text-xs font-normal font-['IBM_Plex_Sans_Devanagari'] focus:outline-none focus:ring-0"
+                          style={{ outline: 'none', boxShadow: 'none' }}
+                        />
+                        {searchQuery && (
+                          <button onClick={() => setSearchQuery('')} className="p-1">
+                            <X size={14} className="text-[#B9BEC6]" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Search Results Area */}
+                      <AnimatePresence>
+                        {(isSearchingStudents || searchResults.length > 0) && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="space-y-2 py-2">
+                              {isSearchingStudents ? (
+                                <div className="flex items-center justify-center py-4">
+                                  <Loader2 size={16} className="animate-spin text-[#003630]" />
+                                </div>
+                              ) : (
+                                searchResults.map((student) => {
+                                  const isAlreadyAdded = students.some(s => s.id === student.id);
+                                  return (
+                                    <button
+                                      key={student.id}
+                                      disabled={isAlreadyAdded}
+                                      onClick={() => {
+                                        handleSelectSearchResult(student);
+                                        if (!student.isGuardianLinkLocked) handleCloseSearchOverlay();
+                                      }}
+                                      className={`w-full p-3 text-left rounded-lg border border-[#F0F2F5] flex items-center justify-between group transition-all ${isAlreadyAdded ? 'opacity-50' : 'hover:bg-gray-50'}`}
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-[14px] text-black truncate">{student.name}</p>
+                                        <p className="text-[10px] text-gray-400">Grade {student.grade.toString().replace(/^(grade\s+)/i, '')}{student.class && student.class !== 'General' ? ` • ${student.class}` : ''}</p>
+                                      </div>
+                                      <div className={`size-8 rounded-lg flex items-center justify-center ${isAlreadyAdded ? 'bg-gray-100 text-gray-300' : 'bg-[#003630] text-white'}`}>
+                                        {isAlreadyAdded ? <Check size={14} /> : <Plus size={14} />}
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Info Section & Manual Add Button - Only show if search failed to find results */}
+                      {searchQuery.length >= 2 && !isSearchingStudents && searchResults.length === 0 && (
+                        <div className="flex flex-col gap-6 pt-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                          <div className="p-3 flex flex-col items-center gap-2.5">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M9.99984 18.3333C14.6022 18.3333 18.3332 14.6024 18.3332 9.99999C18.3332 5.39762 14.6022 1.66666 9.99984 1.66666C5.39746 1.66666 1.6665 5.39762 1.6665 9.99999C1.6665 14.6024 5.39746 18.3333 9.99984 18.3333Z" stroke="#A39F9F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              <path d="M10 13.3333V9.99999M10 6.66666H10.0083" stroke="#A39F9F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            <div className="text-center text-black text-xs font-normal font-['Inter'] leading-tight">
+                              Can’t Find your Child?<br />Add them manually by pressing the button below.
+                            </div>
+                          </div>
+
+                          {/* Manual Add Button */}
+                          <button
+                            onClick={() => {
+                              handleCloseSearchOverlay();
+                              openManualEntry(searchQuery);
+                            }}
+                            className="w-full h-14 px-3 rounded-lg border border-[#2D2D2D] flex items-center justify-center active:scale-[0.98] transition-all"
+                          >
+                            <span className="text-[#2D2D2D] text-xs font-medium font-['Space_Grotesk']">+ Manually Add Student Record</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={handleCancelAdd}
-                    className="size-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors border border-gray-100"
-                  >
-                    <X size={20} />
-                  </button>
                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                <div className="space-y-6">
-                  {/* Student Name */}
-                  <div className="space-y-2.5">
-                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Student Full Name</label>
-                    <div className="relative group">
-                      <input
-                        type="text"
-                        value={newStudent.name}
-                        onFocus={() => { setFocusedField('name'); haptics.light(); }}
-                        onBlur={() => setFocusedField(null)}
-                        onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
-                        placeholder="Full name as it appears on records"
-                        className={inputClasses('name')}
-                      />
-                    </div>
-                    {/* Identical student collision warning */}
-                    {collisionDetected && !editingId && (
-                      <div className="mt-2 bg-red-50 border-[1.5px] border-red-200 rounded-[16px] p-4 shadow-md animate-in fade-in slide-in-from-top-2">
-                        <div className="flex items-start gap-3 text-red-700">
-                          <AlertTriangle size={20} className="shrink-0 mt-0.5" />
-                          <div className="flex flex-col gap-1">
-                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] leading-tight">
-                              Student already exists in this Class
-                            </p>
-                            <p className="font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] text-[12px] leading-relaxed opacity-90">
-                              A record for <strong>{newStudent.name}</strong> was found in <strong>Grade {newStudent.grade.toString().replace(/^(grade\s+)/i, '')} {newStudent.class}</strong>.
-                              Please use the "Did you mean..." list below or continue to add anyway.
-                            </p>
+        {/* Manual Entry Form Overlay */}
+        <AnimatePresence>
+          {showAddForm && (
+            <motion.div
+              key="manual-entry-overlay"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed inset-0 z-[110] flex flex-col bg-white"
+            >
+              <LogoHeader>
+                <OnboardingProgressBar currentStep={2} totalSteps={3} className="py-0" />
+              </LogoHeader>
+
+              {/* Overlay Header */}
+              <div className="w-full h-[72px] px-6 flex items-center justify-between border-b border-[#F6F7F9]">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-[12px] bg-[#f0fdf4] flex items-center justify-center">
+                    <UserRoundPlus size={20} className="text-[#003630]" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h2 className="text-black text-[15px] font-bold font-['Inter'] tracking-tight leading-tight">
+                      {editingId ? 'Update Detail' : 'Manual Entry'}
+                    </h2>
+                    <p className="text-[11px] text-gray-400 font-medium">Step 2: Pupil Information</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCancelAdd}
+                  className="size-10 rounded-full bg-white flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.12)] active:scale-90 transition-transform overflow-hidden"
+                >
+                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="scale-75">
+                    <path d="M15 19L18 16M18 16L21 13M18 16L15 13M18 16L21 19" stroke="#505050" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              <div
+                className="flex-1 overflow-y-auto px-4 pb-12 no-scrollbar bg-[#f9fafb]"
+                style={{ paddingTop: '20px' }}
+              >
+                <div className="max-w-lg mx-auto space-y-6">
+                  {/* Card for the form */}
+                  <div className="bg-white rounded-[24px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[#E6E6E6] p-6 space-y-8">
+                    {/* Student Name */}
+                    <div className="space-y-2.5">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[1.5px] pl-1">Student Full Name</label>
+                      <div className="relative group">
+                        <input
+                          type="text"
+                          value={newStudent.name}
+                          onFocus={() => { setFocusedField('name'); haptics.light(); }}
+                          onBlur={() => setFocusedField(null)}
+                          onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                          placeholder="Full name as it appears on records"
+                          className={inputClasses('name')}
+                        />
+                      </div>
+
+                      {/* Collision warning block */}
+                      {collisionDetected && !editingId && (
+                        <div className="mt-2 bg-red-50 border border-red-100 rounded-[16px] p-4 animate-in fade-in slide-in-from-top-2">
+                          <div className="flex items-start gap-3 text-red-700">
+                            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                            <div className="flex flex-col gap-1">
+                              <p className="font-bold text-[13px] leading-tight">Student already exists</p>
+                              <p className="text-[11px] leading-relaxed opacity-90">
+                                A record for <strong>{newStudent.name}</strong> is already in <strong>Grade {newStudent.grade} {newStudent.class}</strong>.
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                    {smartMatchResults.length > 0 && !editingId && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="mt-2 bg-[#fdfaf2] border-[1.5px] border-[#fdecd5] rounded-[20px] p-4 shadow-sm"
-                      >
-                        <button
-                          onClick={() => setShowSmartMatchResults(!showSmartMatchResults)}
-                          className="w-full flex items-center justify-between mb-4 px-1 cursor-pointer group/title"
-                        >
-                          <span className="text-gray-500 font-['IBM_Plex_Sans_Devanagari:SemiBold',sans-serif] text-[13px] group-hover/title:text-[#003630] transition-colors">
-                            Did you mean someone from this list?
-                          </span>
-                          <motion.div
-                            animate={{ rotate: showSmartMatchResults ? 0 : 180 }}
-                            className="text-[#003630] transition-transform duration-300"
-                          >
-                            <ChevronDown size={20} />
-                          </motion.div>
-                        </button>
+                      )}
+                    </div>
 
-                        <AnimatePresence initial={false}>
-                          {showSmartMatchResults && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.3, ease: "easeInOut" }}
-                              className="overflow-hidden"
-                            >
-                              <div className="space-y-3 pb-2">
-                                {smartMatchResults.slice(0, 3).map(match => (
-                                  <button
-                                    key={match.id}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      haptics.light();
-                                      addStudent(match);
-                                      handleCloseForm();
-                                    }}
-                                    className="w-full bg-white flex items-center justify-between p-5 rounded-[22px] border border-gray-100 hover:border-[#95e36c] hover:shadow-lg active:scale-[0.98] transition-all text-left group"
-                                  >
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630] truncate mb-0.5 group-hover:text-[#95e36c]/80 transition-colors">
-                                        {match.name}
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[9px] bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded-full uppercase tracking-widest font-black">
-                                            Grade {match.grade.toString().replace(/^(grade\s+)/i, '')}{match.class && match.class !== 'General' ? ` ${match.class}` : ''}
-                                          </span>
-                                          {match.studentId && match.studentId !== 'Pending' && (
-                                            <>
-                                              <div className="size-1 rounded-full bg-gray-200" />
-                                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-[1.5px]">
-                                                ID: {match.studentId}
-                                              </span>
-                                            </>
-                                          )}
-                                        </div>
-                                        {(match.parentName || match.otherParentName) && (
-                                          <div className="flex items-center gap-1.5 opacity-60">
-                                            <User size={10} className="text-[#003630]" />
-                                            <span className="text-[10px] text-[#003630] font-bold uppercase tracking-[1px]">
-                                              {match.parentName || match.otherParentName}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="px-5 py-2.5 rounded-full bg-[#003630] text-white text-[12px] font-black uppercase tracking-[1px] shadow-md group-hover:bg-[#95e36c] group-hover:text-[#003630] transition-all ml-4 shrink-0">
-                                      ADD
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        <div className="mt-4 pt-3 border-t border-[#fdecd5] text-center">
-                          <p className="text-[11px] text-gray-500 font-medium">
-                            Wrong spelling? Review the list carefully to avoid duplicates.
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
-
-                  </div>
-
-                  {/* Grade & Class Grid */}
-                    <div className="space-y-6">
-                      <div className="space-y-2.5">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[2px] pl-1">Current Grade & Class</label>
+                    {/* Grade & Class selection */}
+                    <div className="space-y-2.5">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[1.5px] pl-1">Current Grade & Class</label>
                       <div className="relative group">
                         <input
                           type="text"
@@ -1104,7 +1075,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                           }}
                           onBlur={() => {
                             setFocusedField(null);
-                            window.setTimeout(() => setShowGradeOptions(false), 160);
+                            window.setTimeout(() => setShowGradeOptions(false), 200);
                           }}
                           onChange={(e) => {
                             setGradeClassQuery(e.target.value);
@@ -1114,180 +1085,218 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                             }
                           }}
                           placeholder={isLoadingMetadata ? 'Loading grades...' : 'Search grade or class, e.g. Grade 7A'}
-                          className={`${inputClasses('grade')} pr-12`}
-                          disabled={isLoadingMetadata}
+                          className={inputClasses('grade')}
                         />
-                        <ChevronDown size={20} className={`absolute right-5 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${focusedField === 'grade' ? 'text-[#95e36c]' : 'text-gray-300'}`} />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <ChevronDown size={18} className={`text-gray-400 transition-transform ${showGradeOptions ? 'rotate-180' : ''}`} />
+                        </div>
+
+                        {/* Dropdown for grades */}
                         <AnimatePresence>
-                          {showGradeOptions && (
+                          {showGradeOptions && filteredGradeClassOptions.length > 0 && (
                             <motion.div
-                              initial={{ opacity: 0, y: -6 }}
+                              initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -6 }}
-                              className="absolute left-0 right-0 top-[68px] z-30 max-h-[260px] overflow-y-auto rounded-[16px] border border-gray-200 bg-white shadow-xl"
+                              exit={{ opacity: 0, y: -10 }}
+                              className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[120] max-h-[300px] overflow-y-auto no-scrollbar py-2"
                             >
-                              {isLoadingMetadata ? (
-                                <div className="p-4 text-center text-[12px] font-bold text-gray-400">Loading grades...</div>
-                              ) : filteredGradeClassOptions.length === 0 ? (
-                                <div className="p-4 text-center text-[12px] font-bold text-gray-400">No matching grade or class</div>
-                              ) : (
-                                filteredGradeClassOptions.map(option => (
-                                  <button
-                                    key={`${option.gradeId}-${option.className}`}
-                                    type="button"
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => selectGradeClassOption(option)}
-                                    className="w-full px-4 py-3 text-left border-b border-gray-50 hover:bg-[#f9fafb] active:bg-[#95e36c]/10 transition-colors"
-                                  >
-                                    <span className="block font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[14px] text-[#003630]">
-                                      {option.label}
-                                    </span>
-                                  </button>
-                                ))
-                              )}
+                              {filteredGradeClassOptions.map((option) => (
+                                <button
+                                  key={`${option.gradeId}-${option.className}`}
+                                  type="button"
+                                  onMouseDown={() => selectGradeClassOption(option)}
+                                  className="w-full px-5 py-4 text-left hover:bg-gray-50 flex items-center justify-between border-b border-gray-50 last:border-0"
+                                >
+                                  <div>
+                                    <div className="text-[14px] font-bold text-[#003630]">{option.label}</div>
+                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{option.gradeName} • {option.className}</div>
+                                  </div>
+                                  <div className="size-6 rounded-full border border-gray-200 flex items-center justify-center">
+                                    <ChevronRight size={12} className="text-gray-300" />
+                                  </div>
+                                </button>
+                              ))}
                             </motion.div>
                           )}
                         </AnimatePresence>
                       </div>
                       {formErrors.grade && (
-                        <p className="text-[11px] font-bold text-red-500 pl-1">Please select the grade and class.</p>
+                        <p className="text-[10px] font-bold text-red-500 pl-1">{formErrors.grade}</p>
                       )}
                     </div>
 
-                    {/* Class/Stream is now auto-filled in background */}
+                    <button
+                      onClick={handleSaveStudent}
+                      className="w-full h-12 rounded-[24px] bg-[#003630] text-white shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-4"
+                    >
+                      <span className="font-['Space_Grotesk'] text-[10px] font-bold">
+                        {editingId ? 'Update Student' : 'Add Student'}
+                      </span>
+                    </button>
                   </div>
 
-                  <button
-                    onClick={handleSaveStudent}
-                    className="w-full h-14 rounded-[16px] bg-[#003630] border border-[#003630] shadow-[0_8px_24px_rgba(0,54,48,0.25)] active:scale-[0.97] transition-all flex items-center justify-center gap-3 group/btn mt-4"
-                  >
-                    <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[16px] text-white font-bold">
-                      {editingId ? 'Update Student' : 'Add Student'}
-                    </span>
-                  </button>
+                  {/* Duplicate suggestions block - if any */}
+                  {smartMatchResults.length > 0 && !editingId && (
+                    <div className="bg-[#fdfaf2] border border-[#fdecd5] rounded-[24px] p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 font-bold text-[13px]">Similar Pupils Found</span>
+                        <Info size={16} className="text-amber-500" />
+                      </div>
+                      <div className="space-y-3">
+                        {smartMatchResults.slice(0, 2).map(match => (
+                          <button
+                            key={match.id}
+                            onClick={() => { haptics.light(); addStudent(match); handleCloseForm(); }}
+                            className="w-full bg-white flex items-center justify-between p-4 rounded-[20px] border border-gray-100 active:scale-[0.98] transition-all"
+                          >
+                            <div className="text-left">
+                              <div className="font-bold text-[14px] text-[#003630]">{match.name}</div>
+                              <div className="text-[10px] text-gray-400 uppercase font-black">Grade {match.grade} {match.class}</div>
+                            </div>
+                            <div className="px-4 py-2 rounded-full bg-[#003630] text-white text-[10px] font-black uppercase tracking-wider">USE THIS</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </div>
 
       <AnimatePresence>
         {showSimilarStudentModal && (
           <>
-          {(() => {
-            const highlightedMatch = clearDuplicateMatches[0];
-            const hasGuardianConflict = Boolean(highlightedMatch?.isGuardianLinkLocked);
-            const guardianNames = highlightedMatch?.guardianNames || [highlightedMatch?.parentName, highlightedMatch?.otherParentName].filter(Boolean);
-            return (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 py-6 sm:py-8"
-          >
-            <motion.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
-              className="w-full max-w-md max-h-[calc(100dvh-48px)] bg-white rounded-[24px] border border-gray-100 shadow-2xl overflow-hidden flex flex-col"
-            >
-              <div className="p-5 border-b border-amber-100 bg-amber-50 shrink-0">
-                <div className="size-11 rounded-[14px] bg-amber-100 flex items-center justify-center mb-3">
-                  <Info size={22} className="text-amber-700" />
-                </div>
-                <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.4px]">
-                  {hasGuardianConflict ? 'Guardian conflict found' : 'Duplicate student found'}
-                </h3>
-                <p className="text-[13px] text-amber-800/80 leading-relaxed mt-1">
-                  {hasGuardianConflict
-                    ? 'This name, grade, and class match an existing student who already has two guardians linked. You can request school review so the school can verify whether this request should replace or add a guardian.'
-                    : 'This name, grade, and class already match an existing record. Please use the existing pupil record or ask the school to review it.'}
-                </p>
-                {hasGuardianConflict && guardianNames.length > 0 && (
-                  <div className="mt-3 rounded-[14px] border border-amber-200 bg-white/70 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">Existing guardians</p>
-                    <p className="text-[12px] text-[#003630] font-bold mt-1 leading-relaxed">
-                      {guardianNames.join(' and ')}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-3 overflow-y-auto">
-                {clearDuplicateMatches.slice(0, 3).map(match => (
-                  <button
-                    key={match.id}
-                    type="button"
-                    onClick={() => handleUseExistingMatch(match)}
-                    className="w-full p-4 rounded-[16px] border border-gray-100 bg-gray-50 hover:bg-white hover:border-[#95e36c] transition-all text-left flex items-center justify-between gap-3"
+            {(() => {
+              const highlightedMatch = clearDuplicateMatches[0];
+              const hasGuardianConflict = Boolean(highlightedMatch?.isGuardianLinkLocked);
+              const guardianNames = highlightedMatch?.guardianNames || [highlightedMatch?.parentName, highlightedMatch?.otherParentName].filter(Boolean);
+              return (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 py-6 sm:py-8"
+                >
+                  <motion.div
+                    initial={{ y: 40, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 40, opacity: 0 }}
+                    className="w-full max-w-md max-h-[calc(100dvh-48px)] bg-white rounded-[24px] border border-gray-100 shadow-2xl overflow-hidden flex flex-col"
                   >
-                    <div className="min-w-0">
-                      <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] truncate">
-                        {match.name}
+                    <div className="p-5 border-b border-amber-100 bg-amber-50 shrink-0">
+                      <div className="size-11 rounded-[14px] bg-amber-100 flex items-center justify-center mb-3">
+                        <Info size={22} className="text-amber-700" />
+                      </div>
+                      <h3 className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[20px] text-[#003630] tracking-[-0.4px]">
+                        {hasGuardianConflict ? 'Guardian conflict found' : 'Duplicate student found'}
+                      </h3>
+                      <p className="text-[13px] text-amber-800/80 leading-relaxed mt-1">
+                        {hasGuardianConflict
+                          ? 'This name, grade, and class match an existing student who already has two guardians linked. You can request school review so the school can verify whether this request should replace or add a guardian.'
+                          : 'This name, grade, and class already match an existing record. Please use the existing pupil record or ask the school to review it.'}
                       </p>
-                      <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mt-1">
-                        {match.grade}{match.class && match.class !== 'General' ? ` ${match.class}` : ''} {match.studentId ? `- ${match.studentId}` : ''}
-                      </p>
-                      {match.guardianNames && match.guardianNames.length > 0 && (
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Guardians: {match.guardianNames.join(' and ')}
-                        </p>
+                      {hasGuardianConflict && guardianNames.length > 0 && (
+                        <div className="mt-3 rounded-[14px] border border-amber-200 bg-white/70 px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">Existing guardians</p>
+                          <p className="text-[12px] text-[#003630] font-bold mt-1 leading-relaxed">
+                            {guardianNames.join(' and ')}
+                          </p>
+                        </div>
                       )}
                     </div>
-                    <span className={`text-[11px] font-black rounded-full px-3 py-1 whitespace-nowrap ${
-                      match.isGuardianLinkLocked ? 'text-amber-800 bg-amber-100' : 'text-[#003630] bg-[#95e36c]/30'
-                    }`}>
-                      {match.isGuardianLinkLocked ? 'School review needed' : 'This is my child'}
-                    </span>
-                  </button>
-                ))}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSimilarStudentModal(false);
-                    setPendingManualStudent(null);
-                  }}
-                  className="w-full min-h-12 rounded-[14px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-4 active:scale-[0.98] transition-all"
-                >
-                  Go back and edit details
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRequestSchoolReview}
-                  className="w-full min-h-11 rounded-[14px] bg-white text-gray-500 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-4"
-                >
-                  {hasGuardianConflict ? 'Request guardian conflict review' : 'Request school verification'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-            );
-          })()}
+                    <div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-3 overflow-y-auto">
+                      {clearDuplicateMatches.slice(0, 3).map(match => (
+                        <button
+                          key={match.id}
+                          type="button"
+                          onClick={() => handleUseExistingMatch(match)}
+                          className="w-full p-4 rounded-[16px] border border-gray-100 bg-gray-50 hover:bg-white hover:border-[#95e36c] transition-all text-left flex items-center justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] text-[#003630] truncate">
+                              {match.name}
+                            </p>
+                            <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mt-1">
+                              {match.grade}{match.class && match.class !== 'General' ? ` ${match.class}` : ''} {match.studentId ? `- ${match.studentId}` : ''}
+                            </p>
+                            {match.guardianNames && match.guardianNames.length > 0 && (
+                              <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                                Guardians: {match.guardianNames.join(' and ')}
+                              </p>
+                            )}
+                          </div>
+                          <span className={`text-[11px] font-black rounded-full px-3 py-1 whitespace-nowrap ${match.isGuardianLinkLocked ? 'text-amber-800 bg-amber-100' : 'text-[#003630] bg-[#95e36c]/30'
+                            }`}>
+                            {match.isGuardianLinkLocked ? 'School review needed' : 'This is my child'}
+                          </span>
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSimilarStudentModal(false);
+                          setPendingManualStudent(null);
+                        }}
+                        className="w-full min-h-12 rounded-[14px] bg-[#003630] text-white font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-4 active:scale-[0.98] transition-all"
+                      >
+                        Go back and edit details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRequestSchoolReview}
+                        className="w-full min-h-11 rounded-[14px] bg-white text-gray-500 font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[13px] px-4"
+                      >
+                        {hasGuardianConflict ? 'Request guardian conflict review' : 'Request school verification'}
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              );
+            })()}
           </>
         )}
       </AnimatePresence>
 
+
       {/* Fixed Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-[1.5px] border-[#f0f1f3] px-[28px] py-8 shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">
-        <div className="max-w-lg mx-auto">
-          <button
-            onClick={handleComplete}
-            disabled={isButtonDisabled}
-            className={`
-              w-full h-14 rounded-[12px] bg-[#003630] border border-[#003630] 
-              transition-all flex items-center justify-center gap-3 group/btn 
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 px-6 pt-4 pb-8 shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">
+        <div className="max-w-lg mx-auto space-y-4">
+          <div className="px-1">
+            <div className="text-black text-base font-bold font-['Inter']">
+              {students.length} Students Added
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => onBack(students)}
+              className="flex-1 h-14 rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-300 flex justify-center items-center active:scale-[0.98] transition-all"
+            >
+              <span className="text-center text-black text-xs font-normal font-['Inter']">Back</span>
+            </button>
+
+            <button
+              onClick={handleComplete}
+              disabled={isButtonDisabled}
+              className={`
+              flex-1 h-14 rounded-xl flex justify-center items-center transition-all
               ${isButtonDisabled
-                ? 'opacity-30 shadow-none grayscale pointer-events-none'
-                : 'shadow-[0_8px_20px_rgba(0,54,48,0.2)] hover:shadow-[0px_12px_32px_rgba(0,54,48,0.3)] active:scale-[0.98]'
-              }
+                  ? 'bg-gray-50 outline outline-1 outline-offset-[-1px] outline-zinc-100 opacity-50 grayscale pointer-events-none'
+                  : 'bg-[#003630] text-white shadow-lg active:scale-[0.98] hover:bg-[#004d45]'
+                }
             `}
-          >
-            <span className="font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-[15px] font-bold text-white tracking-[0.5px] -translate-y-[1px]">
-              PROCEED TO REVIEW
-            </span>
-          </button>
+            >
+              <span className={`text-base font-bold font-['Space_Grotesk'] ${isButtonDisabled ? 'text-zinc-400' : 'text-white'}`}>
+                Next
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

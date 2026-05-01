@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { LogIn, Phone } from "lucide-react";
+import { LogIn, Phone, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
@@ -75,14 +75,18 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
       const parentData = await getParentDataByPhone(phoneNumber);
       if (!parentData) {
         setHasInputError(true);
-        toast.error("Account not found", { 
-          id: 'login-error', // Static ID so we can dismiss it easily
-          description: "We couldn't find an account for this number. If you're new, please click 'Register Now' below to get started.",
+        toast.error(<span style={{ color: 'black' }}>Account not found</span>, { 
+          id: 'login-error',
+          icon: <AlertTriangle color="#dc2626" size={18} />,
+          description: (
+            <span style={{ color: 'black', opacity: 0.8 }}>
+              This <b>phone number</b> isn't <b>linked</b> to any student profile at this school yet. Please <b>double-check</b> your number or click <b>'Register Now'</b> below to create a new account. If you've paid here before, please <b>contact the school office</b> to link your account.
+            </span>
+          ),
           duration: Infinity,
           style: {
-            background: '#dc2626', // High-visibility red
-            color: '#fff',
-            border: 'none'
+            background: '#FEF2F2',
+            border: '1px solid #FCA5A5'
           }
         });
         return;
@@ -165,7 +169,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
           </button>
 
           <div className="flex items-center justify-center py-3">
-            <span className="text-[13px] font-bold text-gray-200 tracking-[0.2em] uppercase">OR</span>
+            <span className="text-[13px] font-bold text-gray-300 tracking-[0.2em] uppercase">OR</span>
           </div>
 
           <button
@@ -173,7 +177,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, o
               toast.dismiss('login-error');
               onRegistration();
             }}
-            className="w-full h-[54px] rounded-[12px] border border-gray-100 hover:bg-gray-50 active:scale-[0.98] transition-all flex items-center justify-center text-gray-500 font-semibold text-[16px]"
+            className="w-full h-[54px] rounded-[12px] bg-[#95e36c]/10 border border-[#95e36c] hover:bg-[#95e36c]/20 active:scale-[0.98] transition-all flex items-center justify-center text-[#003630] font-bold text-[16px] shadow-sm"
           >
             Register Now
           </button>

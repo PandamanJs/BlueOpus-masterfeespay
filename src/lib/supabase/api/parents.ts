@@ -120,10 +120,19 @@ async function fetchStudentsForParentId(parentId: string): Promise<StudentWithSc
         return { data: data || [], missingColumns: false };
     };
 
-    // Query modern schema first. Only attempt legacy schema when modern rows are empty.
+    // Query modern schema first.
     const modern = await fetchByLink('parent_id', 'other_parent_id');
+    
+    // Only attempt legacy schema fallback if:
+    // 1. The modern query failed because columns were missing (missingColumns: true)
+    // 2. OR the modern query succeeded but returned zero rows AND we haven't confirmed columns exist.
+    // Actually, the most robust check is: if modern didn't fail with "missing columns",
+    // we assume the modern schema is active and we don't need to probe legacy.
+    
     let legacy: { data: any[]; missingColumns: boolean } = { data: [], missingColumns: true };
-    if ((modern.data || []).length === 0) {
+    
+    if (modern.missingColumns) {
+        // Modern columns don't exist, try legacy.
         legacy = await fetchByLink('student_parent_id', 'student_other_parent_id');
     }
 
@@ -269,10 +278,9 @@ export async function getParentReviewRequests(parentId: string): Promise<ParentR
             { data: guardianRows, error: guardianError },
         ] = await Promise.all([
             supabase
-                .from('refund_requests')
-                .select('id, student_id, parent_id, school_id, amount, reason, status, meta_data, created_at, updated_at')
+                .from('disputes')
+                .select('id, student_id, parent_id, school_id, notes, status, meta_data, created_at, updated_at')
                 .eq('parent_id', parentId)
-                .eq('meta_data->>type', 'student_account_dispute')
                 .order('created_at', { ascending: false }),
             supabase
                 .from('guardian_link_requests')
@@ -325,7 +333,7 @@ export async function getParentReviewRequests(parentId: string): Promise<ParentR
                 studentName: student?.name || 'Unknown student',
                 schoolId,
                 schoolName: schoolId ? (schoolsById.get(schoolId) || null) : null,
-                reason: row.reason,
+                reason: row.notes,
                 createdAt: row.created_at,
                 reviewedAt: row.updated_at,
             };
@@ -454,17 +462,15 @@ export async function logDispute(studentId: string, parentId: string, reason: st
         if (!currentStudent) throw new Error('Student not found');
 
         const { error } = await supabase
-            .from('refund_requests')
+            .from('disputes')
             .insert({
                 student_id: studentId,
                 parent_id: parentId,
                 school_id: (currentStudent as any).school_id,
-                amount: 0,
-                reason: reason.trim(),
+                notes: reason.trim(),
                 status: 'pending',
                 meta_data: {
                     source: 'account_profile',
-                    type: 'student_account_dispute',
                     ...metaData
                 }
             });
@@ -483,14 +489,13 @@ export async function logDispute(studentId: string, parentId: string, reason: st
 export async function getDisputesByParent(parentId: string): Promise<any[]> {
     try {
         const { data, error } = await supabase
-            .from('refund_requests')
+            .from('disputes')
             .select(`
                 id,
                 student_id,
                 parent_id,
                 school_id,
-                amount,
-                reason,
+                notes,
                 status,
                 meta_data,
                 created_at,
@@ -498,7 +503,6 @@ export async function getDisputesByParent(parentId: string): Promise<any[]> {
                 student:students(first_name, last_name, student_id)
             `)
             .eq('parent_id', parentId)
-            .eq('meta_data->>type', 'student_account_dispute')
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -533,9 +537,8 @@ export async function getSchoolReviewCenterData(schoolId?: string | null, parent
             .order('created_at', { ascending: false });
 
         let balanceQuery = supabase
-            .from('refund_requests')
-            .select('id, student_id, parent_id, school_id, amount, reason, status, meta_data, created_at, updated_at')
-            .eq('meta_data->>type', 'student_account_dispute')
+            .from('disputes')
+            .select('id, student_id, parent_id, school_id, notes, status, meta_data, created_at, updated_at')
             .order('created_at', { ascending: false });
 
         if (schoolId) {
@@ -656,8 +659,8 @@ export async function getSchoolReviewCenterData(schoolId?: string | null, parent
                 status: row.status,
                 parent: parentsById.get(row.parent_id) || { id: row.parent_id, name: 'Unknown parent' },
                 student: studentsById.get(row.student_id) || { id: row.student_id, name: 'Unknown student' },
-                reason: row.reason,
-                amount: Number(row.amount || 0),
+                reason: row.notes,
+                amount: 0,
                 claimedBalance: meta.parent_claimed_balance ?? null,
                 recordedBalance: meta.recorded_balance_at_submission ?? null,
                 recordedChargedAmount: meta.recorded_charged_amount ?? null,
@@ -723,7 +726,7 @@ export async function updateBalanceReviewStatus(params: {
     reviewerNote?: string;
 }) {
     const { data: existing, error: fetchError } = await supabase
-        .from('refund_requests')
+        .from('disputes')
         .select('meta_data')
         .eq('id', params.requestId)
         .maybeSingle();
@@ -736,7 +739,7 @@ export async function updateBalanceReviewStatus(params: {
     };
 
     const { error } = await supabase
-        .from('refund_requests')
+        .from('disputes')
         .update({
             status: params.status,
             meta_data: nextMeta,

@@ -44,7 +44,8 @@ export default function RegistrationFlow({ onComplete }: RegistrationFlowProps) 
     setCurrentStep('students');
   };
 
-  const handleStudentsBack = () => {
+  const handleStudentsBack = (currentStudents: StudentData[]) => {
+    setStudentsData(currentStudents);
     setDirection(-1);
     setCurrentStep('parent');
   };
@@ -91,7 +92,10 @@ export default function RegistrationFlow({ onComplete }: RegistrationFlowProps) 
             }}
             className="absolute inset-0"
           >
-            <ParentInformationPage onNext={handleParentNext} />
+            <ParentInformationPage 
+              onNext={handleParentNext} 
+              initialData={parentData || undefined}
+            />
           </motion.div>
         )}
 
@@ -113,6 +117,7 @@ export default function RegistrationFlow({ onComplete }: RegistrationFlowProps) 
               parentData={parentData}
               onComplete={handleStudentsNext}
               onBack={handleStudentsBack}
+              initialStudents={studentsData}
             />
           </motion.div>
         )}

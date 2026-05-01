@@ -296,7 +296,9 @@ export default function HistoryPage({
                 ) : (!financialSummary || !financialSummary.items || financialSummary.items.length === 0) ? (
                   <EmptySummaryState onBack={onBack} />
                 ) : (
-                  financialSummary.items.map((item, idx) => (
+                  [...financialSummary.items]
+                    .sort((a, b) => String(b.initiated_at || '').localeCompare(String(a.initiated_at || '')))
+                    .map((item, idx) => (
                     <ServiceCategoryCard
                       key={item.id || idx}
                       item={item}
@@ -385,15 +387,15 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
       generateReceiptPDF({
         schoolName: schoolName,
         totalAmount: amountPaid,
-        refNumber: item.invoice_id?.substring(0, 12).toUpperCase() || 'REF-HIST',
+        refNumber: item.invoice_id?.substring(0, 12).toUpperCase() || (relatedTxs[0]?.reference || 'REF-ADVANCE'),
         dateTime: new Date().toLocaleString(),
-        scheduleId: `#${(item.invoice_id || '0').substring(0, 5)}`,
+        scheduleId: item.invoice_id ? `#${item.invoice_id.substring(0, 5)}` : (relatedTxs[0]?.reference ? `#${relatedTxs[0].reference.substring(0, 5)}` : '#CREDIT'),
         grade: grade,
         services: [{
           id: item.id,
-          description: `${item.name} ${item.term ? `(Term ${item.term})` : ''}`,
-          amount: item.expected || 0,
-          invoiceNo: item.invoice_number || 'N/A',
+          description: item.type === 'surplus' ? 'Advance Payment / Account Credit' : `${item.name} ${item.term ? `(Term ${item.term})` : ''}`,
+          amount: amountPaid,
+          invoiceNo: item.invoice_number || 'ADVANCE',
           studentName: studentName,
           studentId: item.student_id || item.admission_number || '',
           grade: grade
@@ -406,7 +408,7 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
           date: extractDate(tx),
           method: tx.payment_method?.replace('_', ' ') || 'Office',
           amount: tx.amount,
-          description: tx.description
+          description: tx.description || (item.type === 'surplus' ? 'Advance Payment' : item.name)
         }))
       });
       toast.success("Receipt downloaded!");
@@ -470,7 +472,9 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
           </div>
 
           {/* Related Payments */}
-          {relatedTxs.map((tx, idx) => (
+          {[...relatedTxs]
+            .sort((a, b) => String(b.initiated_at || b.created_at || b.payment_date || '').localeCompare(String(a.initiated_at || a.created_at || a.payment_date || '')))
+            .map((tx, idx) => (
             <div key={idx} className="flex items-center justify-between gap-4 text-[12px]">
               <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal w-16 shrink-0">{extractDate(tx)}</p>
               <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">

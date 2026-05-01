@@ -139,9 +139,9 @@ export default function PoliciesPage({ onBack, students, userPhone, userName }: 
         const item: PolicyItem = {
           id: p.id,
           title: p.name,
-          description: `Policy for **${p.category}**. ${p.strict_enforcement ? 'This policy is **strictly enforced**.' : ''} ` +
+          description: p.description || (`Policy for **${p.category}**. ${p.strict_enforcement ? 'This policy is **strictly enforced**.' : ''} ` +
             (p.charge_late_fee ? `Late payments attract a fee of **K${p.late_fee_amount}** after a **${p.late_fee_grace_days} day** grace period.` : '') +
-            (p.allow_installments ? ` Installment payments are permitted with a minimum of **${p.min_payment_percent}%**.` : '')
+            (p.allow_installments ? ` Installment payments are permitted with a minimum of **${p.min_payment_percent}%**.` : ''))
         };
 
         if (p.charge_late_fee || p.allow_installments || p.strict_enforcement) {

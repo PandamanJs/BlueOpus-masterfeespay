@@ -11,7 +11,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronDown, ShieldCheck, CreditCard, Wallet } from "lucide-react";
 import { useLenco } from "../hooks/useLenco";
 import { useOfflineManager } from "../hooks/useOfflineManager";
-import { createTransaction, syncTransactionToQuickBooks } from "../lib/supabase/api/transactions";
+import { createTransaction, syncTransactionToQuickBooks, createInvoiceForServices } from "../lib/supabase/api/transactions";
 import { getSchools, getDiscountDefinitions } from "../lib/supabase/api/schools";
 import { getParentByPhone } from "../lib/supabase/api/parents";
 import { useAppStore, useUserInfo } from "../stores/useAppStore";
@@ -514,6 +514,30 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                 : response.reference;
 
               const firstSvc = group.services[0]!;
+              let targetInvoiceId = group.invoice_id;
+
+              // AUTO-INVOICE LOGIC:
+              // If we are paying for a service that doesn't have an invoice_id yet,
+              // we create a formal invoice on-the-fly.
+              // CRITICAL: We skip this for debt items (isDebt) because they already have invoices in the DB.
+              const isDebtGroup = group.services.some(s => s.isDebt);
+
+              if (!targetInvoiceId && !isDebtGroup) {
+                try {
+                  targetInvoiceId = await createInvoiceForServices({
+                    studentId: group.studentId,
+                    schoolId: schoolId,
+                    services: group.services,
+                    term: firstSvc.term || 1,
+                    year: firstSvc.academicYear || new Date().getFullYear(),
+                    totalAmount: invoiceBalance
+                  });
+                  console.log(`[Auto-Invoice] Created invoice ${targetInvoiceId} for ${group.invoiceNo}`);
+                } catch (invErr) {
+                  console.error("[Auto-Invoice] Failed to create invoice:", invErr);
+                  // Continue anyway, it will just be recorded as a surplus payment
+                }
+              }
 
               const result = await createTransaction({
                 parent_id: parent.id,
@@ -544,8 +568,9 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                   service_description: group.services.map(s => s.description).join(', '),
                   multi_invoice_payment: groups.length > 1,
                   original_reference: response.reference,
+                  auto_invoiced: !group.invoice_id && !!targetInvoiceId
                 },
-                ...(group.invoice_id ? { invoice_id: group.invoice_id } : {}),
+                ...(targetInvoiceId ? { invoice_id: targetInvoiceId } : {}),
                 initiated_at: new Date().toISOString(),
               });
 
@@ -964,32 +989,34 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
 
                   {/* Main Message */}
                   <div className="flex flex-col gap-4">
-                    <p className="text-[#4A5568] text-[15px] text-center leading-relaxed font-medium">
+                    <p className="text-[#4A5568] text-[12px] text-center leading-relaxed font-medium">
                       To ensure your records are updated correctly, please <span style={{ color: '#EF4444' }} className="font-semibold underline decoration-[#EF4444]/30 decoration-4 underline-offset-2">do not interrupt the process</span> once it starts.
                     </p>
 
-                    <div className="bg-[#F8FAFC] p-5 rounded-xl  relative group overflow-hidden">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-[#95E36C]/40" />
-                      <div className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center shrink-0 border border-[#EDF2F7]">
-                          <span className="text-[#003630] font-bold text-[13px]">!</span>
+                    <div className="bg-[#F8FAFC] p-4 rounded-xl ">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                            <span className="text-[#95E36C] font-bold text-[11px]">!</span>
+                          </div>
+                          <span className="text-[13px] text-[#003630] font-bold uppercase tracking-wide">Action Required</span>
                         </div>
-                        <div className="flex flex-col gap-3">
-                          <span className="text-[14px] text-[#2D3748] font-semibold">Follow these steps</span>
-                          <ul className="flex flex-col gap-2">
-                            <li className="flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[#95E36C] mt-1.5 shrink-0" />
-                              <p className="text-[13px] text-[#718096] leading-snug">
-                                After entering your pin Wait for the status to change from <span style={{ color: '#EF4444' }} className="font-bold">Awaiting</span> to <span style={{ color: '#EF4444' }} className="font-bold">Done then press done to continue</span>.
-                              </p>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[#95E36C] mt-1.5 shrink-0" />
-                              <p className="text-[13px] text-[#718096] leading-snug">
-                                do not close or exit the tab until the payment reflects on the next screen as done or your receipt auto-downloads.
-                              </p>
-                            </li>
-                          </ul>
+
+                        <div className="flex flex-col gap-2.5">
+                          <div className="flex gap-2">
+                            <span className="text-[#95E36C] font-bold text-[12px]">1.</span>
+                            <p className="text-[12px] text-[#4A5568]">Enter your <span className="font-bold text-[#2D3748]">PIN</span> on your phone when prompted.</p>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <span className="text-[#95E36C] font-bold text-[12px]">2.</span>
+                            <p className="text-[12px] text-[#4A5568]">Wait for status to change from <span className="text-[#E53E3E] font-bold">Awaiting</span> to <span className="text-[#38A169] font-bold">Done</span>.</p>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <span className="text-[#95E36C] font-bold text-[12px]">3.</span>
+                            <p className="text-[12px] text-[#4A5568]">Do not exit until your <span className="font-bold text-[#2D3748]">receipt downloads</span>.</p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1018,10 +1045,7 @@ export default function PaymentPage({ onBack, onPay, totalAmount }: PaymentPageP
                           <span className="tracking-tight">Opening Secure Portal...</span>
                         </>
                       ) : (
-                        <>
-                          <CreditCard size={20} className="text-[#95E36C]" />
-                          <span className="tracking-tight"> Pay Now</span>
-                        </>
+                        <span className="tracking-tight">Pay Now</span>
                       )}
                     </button>
 

@@ -186,17 +186,17 @@ function ServiceCard({
           return (
             <div className="flex items-center gap-2 text-[11px] font-['Inter'] leading-normal mt-3 animate-in fade-in" style={{ color: "#6B7280" }}>
               <AlertTriangle size={14} className="shrink-0" />
-              <span>This service must be paid in full (installments not allowed).</span>
+              <span>{policy?.description || "This service must be paid in full (installments not allowed)."}</span>
             </div>
           );
         }
-
+ 
         const minPercent = minPercentValue / 100;
         if (service.amount > 0 && inputAmount > 0 && inputAmount < service.amount * minPercent && isStrict) {
           return (
             <div className="flex items-center gap-2 text-[11px] font-['Inter'] leading-normal mt-3 animate-in fade-in slide-in-from-top-1" style={{ color: "#EF4444" }}>
               <AlertTriangle size={14} className="shrink-0" style={{ color: "#EF4444" }} />
-              <span>You cannot make a part payment less than {minPercentValue}% for this service.</span>
+              <span>{policy?.description || `You cannot make a part payment less than ${minPercentValue}% for this service.`}</span>
             </div>
           );
         }

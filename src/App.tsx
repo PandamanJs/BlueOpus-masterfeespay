@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import svgPaths from "./imports/svg-s534f8yrof";
 import servicesSvgPaths from "./imports/svg-o96q0cdj2h";
@@ -230,13 +230,72 @@ function TextInput({ onSchoolSelect }: { onSchoolSelect: (school: School | null)
     fetchSchools();
   }, []);
 
-  // Real-time filtering - case insensitive for better UX
-  // Only show results if user has actually typed something
-  const filteredSchools = inputValue.trim()
-    ? schools.filter((school) =>
-      school.name.toLowerCase().includes(inputValue.toLowerCase())
-    )
-    : [];
+  // Filter and rank schools based on fuzzy matching logic
+  const filteredSchools = useMemo(() => {
+    const query = inputValue.trim().toLowerCase();
+    if (!query) return [];
+
+    const normalize = (str: string) => 
+      str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+
+    const isFuzzyMatch = (s1: string, s2: string) => {
+      // For very short strings, we need exact prefix/includes
+      if (s1.length < 3) return s2.includes(s1);
+      
+      if (Math.abs(s1.length - s2.length) > 2) return false;
+      let edits = 0;
+      let i = 0, j = 0;
+      while (i < s1.length && j < s2.length) {
+        if (s1[i] !== s2[j]) {
+          edits++;
+          if (s1.length > s2.length) i++;
+          else if (s2.length > s1.length) j++;
+          else { i++; j++; }
+        } else { i++; j++; }
+        if (edits > 2) return false;
+      }
+      edits += (s1.length - i) + (s2.length - j);
+      return edits <= 2;
+    };
+
+    const qNormalized = normalize(query);
+    const qTokens = qNormalized.split(' ');
+
+    return schools
+      .map(school => {
+        const nNormalized = normalize(school.name);
+        const nTokens = nNormalized.split(' ');
+        let score = 0;
+
+        // Exact match (highest priority)
+        if (nNormalized === qNormalized) score += 1000;
+        
+        // Phrase match
+        else if (nNormalized.includes(qNormalized)) score += 500;
+        
+        // Starts with bonus
+        if (nNormalized.startsWith(qNormalized)) score += 150;
+
+        // Token matches
+        qTokens.forEach(qt => {
+          if (nTokens.some(nt => nt.startsWith(qt))) {
+            score += 200;
+          } else if (nTokens.some(nt => nt.includes(qt))) {
+            score += 100;
+          } else if (qt.length > 3) {
+            // Fuzzy token match for longer words
+            const hasFuzzy = nTokens.some(nt => isFuzzyMatch(qt, nt));
+            if (hasFuzzy) score += 50;
+          }
+        });
+
+        return { school, score };
+      })
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.school)
+      .slice(0, 10); // Limit results for performance
+  }, [inputValue, schools]);
 
   // Handle clicking anywhere outside the input to close suggestions
   // This is a common pattern for dropdown menus
