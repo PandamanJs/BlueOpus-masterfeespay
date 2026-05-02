@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ParentInformationPage, { type ParentData } from './registration/ParentInformationPage';
 import StudentsPage from './registration/StudentsPage';
@@ -187,16 +187,20 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
     window.history.back();
   };
 
-  const handleFinalConfirm = async (confirmedParentId?: string) => {
+  const handleFinalConfirm = async (confirmedParentId?: unknown) => {
+    const safeConfirmedParentId = typeof confirmedParentId === 'string'
+      ? confirmedParentId
+      : undefined;
+
     if (parentData && studentsData.length > 0) {
-      console.log('[Registration] handleFinalConfirm started:', { confirmedParentId, studentsCount: studentsData.length });
+      console.log('[Registration] handleFinalConfirm started:', { confirmedParentId: safeConfirmedParentId, studentsCount: studentsData.length });
       setIsSubmitting(true);
       try {
         let resolvedParentId: string;
 
-        if (confirmedParentId) {
-          console.log('[Registration] Using confirmed existing parentId:', confirmedParentId);
-          resolvedParentId = confirmedParentId;
+        if (safeConfirmedParentId) {
+          console.log('[Registration] Using confirmed existing parentId:', safeConfirmedParentId);
+          resolvedParentId = safeConfirmedParentId;
         } else {
           if (!parentData?.parentId) {
             console.log('[Registration] Parent not registered, registering now...');

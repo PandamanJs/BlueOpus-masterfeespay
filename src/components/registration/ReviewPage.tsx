@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Info, Loader2, Sparkles, CheckCircle2, X, ArrowRight } from 'lucide-react';
+import { Info, Loader2, CheckCircle2 } from 'lucide-react';
 import { type StudentData, saveLedgerVerification } from '../../lib/supabase/api/registration';
 import { getStudentFinancialSummary } from '../../lib/supabase/api/transactions';
 import { toast } from 'sonner';
@@ -490,7 +490,9 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
             onClick={() => {
               const currentIndex = students.findIndex(s => s.id === activeStudentId);
               if (currentIndex > 0) {
-                setActiveStudentId(students[currentIndex - 1].id);
+                const previousStudent = students[currentIndex - 1];
+                if (!previousStudent) return;
+                setActiveStudentId(previousStudent.id);
                 haptics.light();
               } else {
                 onBack();
@@ -502,10 +504,12 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
           </button>
 
           <button
-            onClick={allConfirmed ? onConfirm : () => {
+            onClick={allConfirmed ? () => onConfirm() : () => {
               const currentIndex = students.findIndex(s => s.id === activeStudentId);
               const nextIndex = (currentIndex + 1) % students.length;
-              setActiveStudentId(students[nextIndex].id);
+              const nextStudent = students[nextIndex];
+              if (!nextStudent) return;
+              setActiveStudentId(nextStudent.id);
               haptics.light();
             }}
             disabled={isSubmitting}
