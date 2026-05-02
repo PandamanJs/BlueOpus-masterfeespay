@@ -4,12 +4,12 @@ import { toast } from "sonner";
 import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
 import { getParentDataByPhone } from "../data/students";
-import { useAppStore } from "../stores/useAppStore";
 import LogoHeader from "./common/LogoHeader";
 
 interface SchoolDetailsPageProps {
   schoolName: string;
   schoolLogo?: string | null;
+  initialPhone?: string;
   onProceed: (userName: string, userPhone: string, userId: string) => void;
   onBack: () => void;
   onRegistration: () => void;
@@ -39,13 +39,20 @@ function SchoolBadge({ schoolName, schoolLogo }: { schoolName: string; schoolLog
   );
 }
 
-export default function SchoolDetailsPage({ schoolName, schoolLogo, onProceed, onRegistration }: SchoolDetailsPageProps) {
+export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone = "", onProceed, onRegistration }: SchoolDetailsPageProps) {
   const { isOnline } = useOfflineManager();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isValidating, setIsValidating] = useState(false);
   const [hasInputError, setHasInputError] = useState(false);
 
-  const storePhone = useAppStore((state) => state.userPhone);
+  useEffect(() => {
+    const normalizedPhone = initialPhone.replace(/\D/g, "").slice(0, 10);
+    if (normalizedPhone) {
+      setPhoneNumber(normalizedPhone);
+      setHasInputError(false);
+      toast.dismiss('login-error');
+    }
+  }, [initialPhone]);
 
   // Auto-fill phone number removed as per user request to disable "remembering numbers"
   /*

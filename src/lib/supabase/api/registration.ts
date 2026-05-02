@@ -1345,53 +1345,8 @@ async function createManualStudent(data: {
 }
 
 async function syncLegacyParentLinkIfAvailable(studentId: string, parentId: string): Promise<void> {
-    try {
-        const { data: legacyRow, error: readError } = await supabase
-            .from('students')
-            .select('student_parent_id, student_other_parent_id')
-            .eq('student_id', studentId)
-            .maybeSingle();
-
-        if (readError) {
-            const combined = `${readError.message} ${readError.details} ${readError.hint}`.toLowerCase();
-            if (
-                combined.includes('does not exist') || 
-                combined.includes('unknown column') ||
-                combined.includes('student_parent_id')
-            ) {
-                return;
-            }
-            throw readError;
-        }
-        if (!legacyRow) return;
-
-        const legacyParentId = (legacyRow as any).student_parent_id || null;
-        const legacyOtherParentId = (legacyRow as any).student_other_parent_id || null;
-
-        if (legacyParentId === parentId || legacyOtherParentId === parentId) return;
-
-        const payload: Record<string, string> = {};
-        if (!legacyParentId) {
-            payload.student_parent_id = parentId;
-        } else if (!legacyOtherParentId) {
-            payload.student_other_parent_id = parentId;
-        } else {
-            // Legacy link slots are full; keep this best-effort sync non-fatal.
-            console.warn(`[Registration] Legacy parent slots are full for student ${studentId}`);
-            return;
-        }
-
-        const { error } = await supabase
-            .from('students')
-            .update(payload as any)
-            .eq('student_id', studentId);
-
-        if (error && !/column .* does not exist/i.test(error.message || '')) {
-            throw error;
-        }
-    } catch (error) {
-        console.warn('[Registration] Could not sync legacy parent link:', error);
-    }
+    void studentId;
+    void parentId;
 }
 
 export async function getGradesBySchool(schoolId: string) {

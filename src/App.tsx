@@ -822,6 +822,7 @@ export default function App() {
   const [studentsError, setStudentsError] = useState<string | null>(null);
   const [registrationInitialParentData, setRegistrationInitialParentData] = useState<RegistrationParentData | null>(null);
   const [registrationInitialStep, setRegistrationInitialStep] = useState<"parent" | "students" | "review">("parent");
+  const [registrationLoginPhone, setRegistrationLoginPhone] = useState("");
 
   // Dynamic Island for payment status
   const dynamicIsland = useDynamicIsland();
@@ -1244,6 +1245,7 @@ export default function App() {
   const handleRegistration = () => {
     setRegistrationInitialParentData(null);
     setRegistrationInitialStep("parent");
+    setRegistrationLoginPhone("");
     navigateToPage("registration-form");
   };
 
@@ -1276,30 +1278,13 @@ export default function App() {
     navigateToPage(targetPage, "back");
   };
 
-  const handleRegistrationComplete = async (parentPhone: string, parentName: string, parentId: string) => {
-    // After successful registration, automatically log in the parent
-    // Set user info and remember the phone for next time
-    saveLastPhone(parentPhone);
-    setUserInfo(parentName, parentPhone, '', parentId);
-
-    // Fetch their students to populate the app
-    try {
-      const studentData = await getStudentsByPhone(parentPhone);
-      setStudents(studentData);
-
-      // Show success notification
-      dynamicIsland.success({
-        subtitle: 'Registration complete! Welcome to master-fees',
-        autoHide: 3000
-      });
-
-      // Navigate to school details page (login page)
-      navigateToPage("details");
-    } catch (error) {
-      console.error('Error fetching students after registration:', error);
-      toast.error('Registration successful, but failed to load students. Please try logging in again.');
-      navigateToPage("details");
-    }
+  const handleRegistrationComplete = (parentPhone: string) => {
+    setRegistrationLoginPhone(parentPhone);
+    dynamicIsland.success({
+      subtitle: 'Registration complete! Please sign in to continue.',
+      autoHide: 3000
+    });
+    navigateToPage("details");
   };
 
   const handleProceedToServices = async (name: string, phone: string, id: string) => {
@@ -1329,6 +1314,7 @@ export default function App() {
 
       // 4. Success! Now set identity and proceed
       setUserInfo(name, phone, '', id);
+      setRegistrationLoginPhone("");
       navigateToPage("services");
     } catch (e) {
       console.error('Login error:', e);
@@ -1729,6 +1715,7 @@ export default function App() {
             <LazySchoolDetailsPage
               schoolName={selectedSchool}
               schoolLogo={selectedSchoolLogo}
+              initialPhone={registrationLoginPhone}
               onProceed={handleProceedToServices}
               onBack={handleBackToSearch}
               onRegistration={handleRegistration}
@@ -1768,14 +1755,13 @@ export default function App() {
               initialParentData={registrationInitialParentData}
               initialStep={registrationInitialStep}
               onComplete={(data) => {
-                // Store the registration data temporarily so we can use it after success page
-                // We'll use it to auto-login the user
+                // Store the registration data temporarily so we can prefill the login page.
                 sessionStorage.setItem('pendingRegistration', JSON.stringify(data));
 
-                // Set user info and school
+                // Prepare login context without signing the parent in yet.
                 setRegistrationInitialParentData(null);
                 setRegistrationInitialStep("parent");
-                setUserInfo(data.name, data.phone, '', data.userId);
+                setRegistrationLoginPhone(data.phone);
                 if (data.schoolName) {
                   setSelectedSchool(data.schoolName);
                 }
@@ -1824,8 +1810,7 @@ export default function App() {
                   const data = JSON.parse(pendingData);
                   sessionStorage.removeItem('pendingRegistration');
 
-                  // Auto-login the newly registered parent
-                  handleRegistrationComplete(data.phone, data.name, data.userId);
+                  handleRegistrationComplete(data.phone);
                 } else {
                   // Fallback: just navigate to search if no data found
                   navigateToPage("search");
