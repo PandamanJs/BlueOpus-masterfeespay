@@ -500,7 +500,7 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
             }}
             className="flex-1 h-14 rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-300 flex justify-center items-center active:scale-[0.98] transition-all"
           >
-            <span className="text-center text-black text-xs font-normal font-['Inter']">Back</span>
+            <span className="text-center text-black text-xs font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">Back</span>
           </button>
 
           <button
@@ -515,7 +515,7 @@ export default function ReviewPage({ parentData, students, onBack, onConfirm, on
             disabled={isSubmitting}
             className="flex-1 h-14 rounded-xl bg-[#003630] text-white shadow-lg active:scale-[0.98] hover:bg-[#004d45] flex justify-center items-center transition-all"
           >
-            <span className="text-base font-bold font-['Space_Grotesk'] text-white">
+            <span className="text-base font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] text-white">
               {isSubmitting ? (
                 <Loader2 className="animate-spin" size={20} />
               ) : (

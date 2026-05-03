@@ -299,40 +299,40 @@ export default function HistoryPage({
                   [...financialSummary.items]
                     .sort((a, b) => String(b.initiated_at || '').localeCompare(String(a.initiated_at || '')))
                     .map((item, idx) => (
-                    <ServiceCategoryCard
-                      key={item.id || idx}
-                      item={item}
-                      schoolName={schoolName || currentStudent?.schoolName || "Institutional Fees"}
-                      schoolLogo={schoolLogo}
-                      studentName={currentStudent?.name || "Student"}
-                      userName={userName || "Parent"}
-                      grade={currentStudent?.grade || "N/A"}
-                      transactions={financialSummary.transactions || []}
-                      hasOutstandingBalance={hasOutstandingBalance}
-                      onPay={(txs) => {
-                        if (onIndividualPay) {
-                          onIndividualPay({
-                            id: item.invoice_id || item.id || crypto.randomUUID(),
-                            description: item.name,
-                            amount: item.balance || 0,
-                            invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
-                            invoice_id: item.invoice_id,
-                            studentName: currentStudent?.name || "Student",
-                            studentId: selectedStudentId,
-                            term: item.term,
-                            academicYear: item.academic_year,
-                            grade: currentStudent?.grade || "N/A",
-                            paymentHistory: txs.map(tx => ({
-                              date: extractDate(tx),
-                              method: tx.payment_method?.replace('_', ' ') || 'Office',
-                              amount: tx.amount,
-                              description: tx.description
-                            }))
-                          });
-                        }
-                      }}
-                    />
-                  ))
+                      <ServiceCategoryCard
+                        key={item.id || idx}
+                        item={item}
+                        schoolName={schoolName || currentStudent?.schoolName || "Institutional Fees"}
+                        schoolLogo={schoolLogo}
+                        studentName={currentStudent?.name || "Student"}
+                        userName={userName || "Parent"}
+                        grade={currentStudent?.grade || "N/A"}
+                        transactions={financialSummary.transactions || []}
+                        hasOutstandingBalance={hasOutstandingBalance}
+                        onPay={(txs) => {
+                          if (onIndividualPay) {
+                            onIndividualPay({
+                              id: item.invoice_id || item.id || crypto.randomUUID(),
+                              description: item.name,
+                              amount: item.balance || 0,
+                              invoiceNo: item.invoice_number || `INV-${(item.invoice_id || item.id || '').substring(0, 4)}`,
+                              invoice_id: item.invoice_id,
+                              studentName: currentStudent?.name || "Student",
+                              studentId: selectedStudentId,
+                              term: item.term,
+                              academicYear: item.academic_year,
+                              grade: currentStudent?.grade || "N/A",
+                              paymentHistory: txs.map(tx => ({
+                                date: extractDate(tx),
+                                method: tx.payment_method?.replace('_', ' ') || 'Office',
+                                amount: tx.amount,
+                                description: tx.description
+                              }))
+                            });
+                          }
+                        }}
+                      />
+                    ))
                 )}
               </div>
             </>
@@ -431,11 +431,17 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
       }}
     >
       <div className="flex justify-between items-start gap-4">
-        <div className="flex flex-col gap-1 flex-1">
-          <p className="font-['Space_Grotesk',sans-serif] font-semibold text-black m-0" style={{ fontSize: '13px' }}>{item.name}</p>
-          <p className="font-['Space_Grotesk',sans-serif] font-normal text-black m-0" style={{ fontSize: '8px' }}>
-            {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
-          </p>
+        <div className="flex flex-col gap-0.5 flex-1">
+          <p className="font-['Space_Grotesk',sans-serif] font-semibold text-black m-0" style={{ fontSize: '10px' }}>{item.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-['Space_Grotesk',sans-serif] font-normal text-zinc-500 m-0" style={{ fontSize: '10px' }}>
+              {grade.toLowerCase().includes('grade') ? grade : `Grade ${grade}`}
+            </p>
+            <div className="size-1 rounded-full bg-zinc-300 shrink-0" />
+            <p className="font-['Space_Grotesk',sans-serif] font-normal text-zinc-500 m-0" style={{ fontSize: '10px' }}>
+              {extractDate(item)}
+            </p>
+          </div>
         </div>
 
         {/* Status Badge — from design (Frame12 style) */}
@@ -475,14 +481,14 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
           {[...relatedTxs]
             .sort((a, b) => String(b.initiated_at || b.created_at || b.payment_date || '').localeCompare(String(a.initiated_at || a.created_at || a.payment_date || '')))
             .map((tx, idx) => (
-            <div key={idx} className="flex items-center justify-between gap-4 text-[12px]">
-              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal w-16 shrink-0">{extractDate(tx)}</p>
-              <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
-                {tx.description || `Paid via ${tx.payment_method?.replace('_', ' ') || 'Office'}`}
-              </p>
-              <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-ZMW {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
-            </div>
-          ))}
+              <div key={idx} className="flex items-center justify-between gap-4 text-[12px]">
+                <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal w-16 shrink-0">{extractDate(tx)}</p>
+                <p className="font-['Inter',sans-serif] text-[#8e8e93] font-normal flex-1 truncate">
+                  {tx.description || `Paid via ${tx.payment_method?.replace('_', ' ') || 'Office'}`}
+                </p>
+                <p className="font-['Space_Grotesk',sans-serif] text-[#8e8e93] font-normal text-right truncate">-ZMW {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+              </div>
+            ))}
 
           {creditApplied > 0 && (
             <div className="flex items-center justify-between gap-4 text-[12px]">
@@ -518,14 +524,14 @@ function ServiceCategoryCard({ item, grade, transactions, onPay, studentName, us
         <div className="flex items-center gap-[10px]">
           <button
             onClick={() => { haptics.light(); setShowDetails(!showDetails); }}
-            className="flex-1 bg-[#f5f7f9] h-[40px] rounded-[8px] border border-[#d6d6d6] font-['Space_Grotesk',sans-serif] font-bold text-black active:scale-[0.98] transition-all flex items-center justify-center shadow-[0px_4px_12px_rgba(0,0,0,0.08)]"
+            className="flex-1 h-[40px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-bold text-black active:scale-[0.98] transition-all flex items-center justify-center"
             style={{ fontSize: '9px' }}
           >
             {showDetails ? 'Hide Details' : 'Show Details'}
           </button>
           <button
             onClick={handleDownload}
-            className="flex-1 h-[40px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-bold text-[#003630] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0px_4px_12px_rgba(0,0,0,0.03)]"
+            className="flex-1 h-[40px] rounded-[8px] font-['Space_Grotesk',sans-serif] font-bold text-[#003630] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
             style={{ fontSize: '9px' }}
           >
             <Download size={14} className="opacity-70" />

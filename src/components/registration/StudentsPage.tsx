@@ -47,20 +47,20 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData; onEd
   return (
     <div className="w-full h-[54px] pl-5 pr-4 bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] rounded-lg flex items-center justify-between mb-2.5">
       <div className="flex flex-col justify-center min-w-0">
-        <div className="text-black text-[12px] font-semibold font-['Inter',sans-serif] leading-none truncate">
+        <div className="text-black text-[12px] font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] leading-none truncate">
           {student.name}
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <div className="text-[#808080] text-[8px] font-medium font-['Inter',sans-serif]">
+          <div className="text-[#808080] text-[8px] font-medium font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
             {gradeLabel}{student.class && student.class !== 'General' ? ` ${student.class}` : ''}
           </div>
           {student.studentId && student.studentId !== 'New Registration' && (
-            <div className="text-[#808080] text-[8px] font-light font-['Inter',sans-serif]">
+            <div className="text-[#808080] text-[8px] font-normal font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif]">
               {student.studentId}
             </div>
           )}
         </div>
-        <div className="text-[#808080] text-[8px] font-light font-['Inter',sans-serif] uppercase mt-1">
+        <div className="text-[#808080] text-[8px] font-normal font-['IBM_Plex_Sans_Devanagari:Regular',sans-serif] uppercase mt-1">
           {student.schoolName || 'STUDENT RECORD'}
         </div>
       </div>
@@ -82,8 +82,8 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData; onEd
             justifyContent: 'center',
             color: 'black',
             fontSize: '10px',
-            fontFamily: 'Inter',
-            fontWeight: '400',
+            fontFamily: "'IBM Plex Sans Devanagari:Bold', sans-serif",
+            fontWeight: '700',
             border: 'none',
             outline: 'none',
             cursor: 'pointer'
@@ -782,10 +782,9 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
         {!showAddForm && (
           <div className="space-y-6">
             <div
-              style={{ height: '450px' }}
-              className="w-full shrink-0 relative bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-100 overflow-hidden flex flex-col"
+              className="w-full shrink-0 relative bg-white rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-100 overflow-hidden flex flex-col min-h-[300px]"
             >
-              <div className="flex-1 w-full overflow-y-auto px-6 pt-6 pb-32 no-scrollbar">
+              <div className="flex-1 w-full overflow-y-auto px-6 pt-6 pb-6 no-scrollbar">
                 {students.length > 0 ? (
                   <div className="space-y-1">
                     {students.map((student) => (
@@ -798,41 +797,13 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                     ))}
                   </div>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center px-3 gap-8">
-                    <p className="text-neutral-600 text-[13px] font-normal font-['Space_Grotesk'] leading-relaxed max-w-[240px]">
+                  <div className="flex flex-col items-center justify-center h-full text-center px-3 py-20">
+                    <p className="text-neutral-600 text-[12px] font-normal font-['Space_Grotesk'] leading-relaxed max-w-[220px]">
                       Press the button below to start adding your children.
                     </p>
-                    <button
-                      onClick={handleOpenSearchOverlay}
-                      className="px-10 h-[52px] rounded-[26px] border border-zinc-200 bg-white flex items-center justify-center gap-4 active:scale-[0.98] transition-all shadow-sm hover:border-zinc-300 group"
-                    >
-                      <div className="size-4 rounded-full border border-zinc-900 flex items-center justify-center transition-transform group-hover:scale-110">
-                        <Plus size={10} className="text-zinc-900" strokeWidth={2.5} />
-                      </div>
-                      <span className="text-black text-[13px] font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
-                        Add Student
-                      </span>
-                    </button>
                   </div>
                 )}
               </div>
-
-              {/* Add Students Button - Visible only when there are students */}
-              {students.length > 0 && (
-                <div className="px-6 py-8 flex justify-center">
-                  <button
-                    onClick={handleOpenSearchOverlay}
-                    className="w-full h-[50px] rounded-[24px] border border-zinc-200 bg-white flex items-center justify-center gap-4 active:scale-[0.98] transition-all shadow-sm hover:border-zinc-300 group"
-                  >
-                    <div className="size-4 rounded-full border border-zinc-900 flex items-center justify-center transition-transform group-hover:scale-110">
-                      <Plus size={10} className="text-zinc-900" strokeWidth={2.5} />
-                    </div>
-                    <span className="text-black text-[12px] font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
-                      Add another Student
-                    </span>
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -1268,17 +1239,29 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 px-6 pt-4 pb-8 shadow-[0px_-10px_30px_rgba(0,0,0,0.04)] z-50">
         <div className="max-w-lg mx-auto space-y-4">
           <div className="px-1">
-            <div className="text-black text-base font-bold font-['Inter']">
+            <div className="text-black text-base font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
               {students.length} Students Added
             </div>
           </div>
+
+          <button
+            onClick={handleOpenSearchOverlay}
+            className="w-full h-14 rounded-xl bg-[#003630] flex items-center justify-center gap-4 active:scale-[0.98] transition-all shadow-md hover:bg-[#004d45] group"
+          >
+            <div className="size-5 rounded-full border border-white/20 flex items-center justify-center transition-transform group-hover:scale-110">
+              <Plus size={12} className="text-white" strokeWidth={3} />
+            </div>
+            <span className="text-white text-sm font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">
+              {students.length > 0 ? 'Add another Pupil' : 'Add Pupil'}
+            </span>
+          </button>
 
           <div className="flex items-center gap-4">
             <button
               onClick={() => onBack(students)}
               className="flex-1 h-14 rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-300 flex justify-center items-center active:scale-[0.98] transition-all"
             >
-              <span className="text-center text-black text-xs font-normal font-['Inter']">Back</span>
+              <span className="text-center text-black text-xs font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif]">Back</span>
             </button>
 
             <button
@@ -1292,7 +1275,7 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
                 }
             `}
             >
-              <span className={`text-base font-bold font-['Space_Grotesk'] ${isButtonDisabled ? 'text-zinc-400' : 'text-white'}`}>
+              <span className={`text-base font-bold font-['IBM_Plex_Sans_Devanagari:Bold',sans-serif] ${isButtonDisabled ? 'text-zinc-400' : 'text-white'}`}>
                 Next
               </span>
             </button>
