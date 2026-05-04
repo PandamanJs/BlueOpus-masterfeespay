@@ -14,6 +14,7 @@ interface StudentsPageProps {
   onComplete: (students: StudentData[]) => void;
   onBack: (students: StudentData[]) => void;
   initialStudents?: StudentData[];
+  onStudentsChange?: (students: StudentData[]) => void;
 }
 
 type GradeClassOption = {
@@ -121,7 +122,7 @@ function StudentCard({ student, onEdit, onRemove }: { student: StudentData; onEd
   );
 }
 
-export default function StudentsPage({ parentData, onComplete, onBack, initialStudents }: StudentsPageProps) {
+export default function StudentsPage({ parentData, onComplete, onBack, initialStudents, onStudentsChange }: StudentsPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [students, setStudents] = useState<StudentData[]>(initialStudents || []);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -201,6 +202,11 @@ export default function StudentsPage({ parentData, onComplete, onBack, initialSt
   useEffect(() => { showAddFormRef.current = showAddForm; }, [showAddForm]);
 
   const setNavigationDirection = useAppStore((state) => state.setNavigationDirection);
+
+  // Sync students back to parent state whenever they change
+  useEffect(() => {
+    onStudentsChange?.(students);
+  }, [students, onStudentsChange]);
 
   useEffect(() => {
     const handleAddFormBack = (e: PopStateEvent) => {

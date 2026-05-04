@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { AlertTriangle } from "lucide-react";
 import svgPaths from "./imports/svg-s534f8yrof";
 import servicesSvgPaths from "./imports/svg-o96q0cdj2h";
 import lazyLoadWithTracking from "./utils/lazyLoad";
@@ -823,6 +824,7 @@ export default function App() {
   const [registrationInitialParentData, setRegistrationInitialParentData] = useState<RegistrationParentData | null>(null);
   const [registrationInitialStep, setRegistrationInitialStep] = useState<"parent" | "students" | "review">("parent");
   const [registrationLoginPhone, setRegistrationLoginPhone] = useState("");
+  const [showRegistrationHighlight, setShowRegistrationHighlight] = useState(false);
 
   // Dynamic Island for payment status
   const dynamicIsland = useDynamicIsland();
@@ -1298,14 +1300,20 @@ export default function App() {
 
       // 3. SECURE GATE: If no students found AND not staff, block access
       if ((!studentsData || studentsData.length === 0) && !staffStatus) {
-        toast.error(`No records found at ${selectedSchool || 'this school'}`, {
+        setShowRegistrationHighlight(true);
+        toast.error(<span style={{ color: 'black' }}>No students found here</span>, {
           id: 'login-error',
-          description: "This number isn't linked to any students at this school yet. Please register your account to continue.",
+          icon: <AlertTriangle color="#dc2626" size={18} />,
+          description: (
+            <span style={{ color: 'black', opacity: 0.8 }}>
+              We found your account, but it isn't linked to any students at <b>{selectedSchool || 'this school'}</b> yet. 
+              Please <b>double-check</b> that you selected the right school, or click <b>'Register Now'</b> to add your children.
+            </span>
+          ),
           duration: Infinity,
           style: {
-            background: '#dc2626',
-            color: '#fff',
-            border: 'none'
+            background: '#FEF2F2',
+            border: '1px solid #FCA5A5'
           }
         });
         // Note: we don't navigate or set user info here
@@ -1719,6 +1727,7 @@ export default function App() {
               onProceed={handleProceedToServices}
               onBack={handleBackToSearch}
               onRegistration={handleRegistration}
+              forceHighlight={showRegistrationHighlight}
             />
           </motion.div>
         )}

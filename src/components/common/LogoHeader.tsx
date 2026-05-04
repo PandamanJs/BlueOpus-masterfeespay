@@ -61,8 +61,8 @@ export default function LogoHeader({ className, showLogo = true, children }: Log
               </svg>
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-black text-[22px] font-bold font-['Inter'] tracking-tight leading-none">masterfees</h1>
+          <div className="flex items-center gap-1.5 logo-crisp">
+            <h1 className="text-black text-[22px] font-bold font-['Inter'] tracking-tight leading-none logo-crisp">masterfees</h1>
             <div className="size-5 bg-[#003129] rounded-full flex items-center justify-center">
               <Check size={12} className="text-white" strokeWidth={3} />
             </div>

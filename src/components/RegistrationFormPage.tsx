@@ -70,7 +70,7 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
   useEffect(() => {
     localStorage.setItem(`${PERSISTENCE_KEY}_step`, currentStep);
     if (parentData) localStorage.setItem(`${PERSISTENCE_KEY}_parent`, JSON.stringify(parentData));
-    if (studentsData.length > 0) localStorage.setItem(`${PERSISTENCE_KEY}_students`, JSON.stringify(studentsData));
+    localStorage.setItem(`${PERSISTENCE_KEY}_students`, JSON.stringify(studentsData));
   }, [currentStep, parentData, studentsData]);
 
   const clearPersistence = () => {
@@ -113,6 +113,7 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
       const activeStep = currentStepRef.current;
 
       if (targetStep && targetStep !== activeStep) {
+        console.log(`[Registration] [Nav] Transition: ${activeStep} -> ${targetStep} (via History)`);
         e.stopImmediatePropagation();
         setNavigationDirection('back');
         setCurrentStep(targetStep);
@@ -120,6 +121,7 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
       }
 
       if (!targetStep && (activeStep === 'students' || activeStep === 'review')) {
+        console.log(`[Registration] [Nav] Fallback Transition: ${activeStep} -> parent (No target step found)`);
         e.stopImmediatePropagation();
         setNavigationDirection('back');
         setCurrentStep(activeStep === 'review' ? 'students' : 'parent');
@@ -167,8 +169,9 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
     }
   };
 
-  const handleStudentsBack = () => {
-    console.log('[Registration] Step 2 -> 1 (Back to parent info)');
+  const handleStudentsBack = (currentStudents: StudentData[]) => {
+    console.log('[Registration] Step 2 -> 1 (Back to parent info)', currentStudents);
+    setStudentsData(currentStudents);
     if (isAddStudentEntry) {
       onBack();
       return;
@@ -513,6 +516,7 @@ export default function RegistrationFormPage({ onBack, onComplete, initialParent
             onComplete={handleStudentsNext}
             onBack={handleStudentsBack}
             initialStudents={studentsData}
+            onStudentsChange={setStudentsData}
           />
         </motion.div>
       )}

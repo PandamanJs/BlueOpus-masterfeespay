@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { LogIn, Phone, AlertTriangle } from "lucide-react";
+import { LogIn, Phone, AlertTriangle, ArrowDown } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { hapticFeedback } from "../utils/haptics";
 import { useOfflineManager } from "../hooks/useOfflineManager";
@@ -13,6 +14,7 @@ interface SchoolDetailsPageProps {
   onProceed: (userName: string, userPhone: string, userId: string) => void;
   onBack: () => void;
   onRegistration: () => void;
+  forceHighlight?: boolean;
 }
 
 const getSchoolInitials = (name: string): string => {
@@ -39,11 +41,12 @@ function SchoolBadge({ schoolName, schoolLogo }: { schoolName: string; schoolLog
   );
 }
 
-export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone = "", onProceed, onRegistration }: SchoolDetailsPageProps) {
+export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone = "", onProceed, onRegistration, forceHighlight }: SchoolDetailsPageProps) {
   const { isOnline } = useOfflineManager();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isValidating, setIsValidating] = useState(false);
   const [hasInputError, setHasInputError] = useState(false);
+  const [highlightRegister, setHighlightRegister] = useState(false);
 
   useEffect(() => {
     const normalizedPhone = initialPhone.replace(/\D/g, "").slice(0, 10);
@@ -53,6 +56,13 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone
       toast.dismiss('login-error');
     }
   }, [initialPhone]);
+
+  useEffect(() => {
+    if (forceHighlight) {
+      setHighlightRegister(true);
+      setHasInputError(true);
+    }
+  }, [forceHighlight]);
 
   // Auto-fill phone number removed as per user request to disable "remembering numbers"
   /*
@@ -67,6 +77,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone
     const val = e.target.value.replace(/\D/g, "").slice(0, 10);
     setPhoneNumber(val);
     setHasInputError(false);
+    setHighlightRegister(false);
     toast.dismiss('login-error');
   };
 
@@ -82,6 +93,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone
       const parentData = await getParentDataByPhone(phoneNumber);
       if (!parentData) {
         setHasInputError(true);
+        setHighlightRegister(true);
         toast.error(<span style={{ color: 'black' }}>Account not found</span>, { 
           id: 'login-error',
           icon: <AlertTriangle color="#dc2626" size={18} />,
@@ -143,7 +155,11 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone
         </p>
 
         <div className="w-full space-y-4">
-          <div className="relative group">
+          <motion.div 
+            className="relative group"
+            animate={hasInputError ? { x: [-4, 4, -4, 4, 0] } : {}}
+            transition={{ duration: 0.4 }}
+          >
             <div
               className="absolute top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-black transition-colors pointer-events-none"
               style={{ left: '10px' }}
@@ -158,7 +174,7 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone
               className={`w-full h-[54px] px-5 text-center rounded-[12px] border transition-all outline-none text-[16px] font-medium tracking-wide placeholder:text-gray-200 ${hasInputError ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-100 focus:border-black'
                 }`}
             />
-          </div>
+          </motion.div>
 
           <button
             onClick={validateAndProceed}
@@ -179,15 +195,32 @@ export default function SchoolDetailsPage({ schoolName, schoolLogo, initialPhone
             <span className="text-[13px] font-bold text-gray-300 tracking-[0.2em] uppercase">OR</span>
           </div>
 
-          <button
-            onClick={() => {
-              toast.dismiss('login-error');
-              onRegistration();
-            }}
-            className="w-full h-[54px] rounded-[12px] bg-[#95e36c]/10 border border-[#95e36c] hover:bg-[#95e36c]/20 active:scale-[0.98] transition-all flex items-center justify-center text-[#003630] font-bold text-[16px] shadow-sm"
-          >
-            Register Now
-          </button>
+          <div className="relative pt-2">
+            <motion.button
+              onClick={() => {
+                toast.dismiss('login-error');
+                onRegistration();
+              }}
+              animate={highlightRegister ? {
+                scale: [1, 1.02, 1],
+                backgroundColor: ['rgba(149, 227, 108, 0.1)', 'rgba(149, 227, 108, 0.25)', 'rgba(149, 227, 108, 0.1)'],
+                boxShadow: ['0 0 0px rgba(149, 227, 108, 0)', '0 0 20px rgba(149, 227, 108, 0.4)', '0 0 0px rgba(149, 227, 108, 0)']
+              } : {}}
+              transition={highlightRegister ? { repeat: Infinity, duration: 2 } : {}}
+              whileTap={{ scale: 0.98 }}
+              className="w-full h-[54px] rounded-[12px] bg-[#95e36c]/10 border border-[#95e36c] hover:bg-[#95e36c]/20 transition-all flex items-center justify-center text-[#003630] font-bold text-[16px] shadow-sm relative overflow-hidden"
+            >
+              {highlightRegister && (
+                <motion.div 
+                  className="absolute inset-0 bg-[#95e36c]/10"
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '100%' }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                />
+              )}
+              <span className="relative z-10">Register Now</span>
+            </motion.button>
+          </div>
         </div>
       </main>
 
