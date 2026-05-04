@@ -26,6 +26,7 @@ import { useOfflineManager } from "./hooks/useOfflineManager";
 import { useRealtimeInvalidation } from "./hooks/useRealtimeInvalidation";
 import type { ParentData as RegistrationParentData } from "./components/registration/ParentInformationPage";
 
+import PWAInstallPrompt from "./components/common/PWAInstallPrompt";
 // School logos imports removed as we now fetch from database
 
 
@@ -1896,6 +1897,7 @@ export default function App() {
       <DynamicIsland data={dynamicIsland.islandData} onDismiss={dynamicIsland.hide} />
       <Toaster />
       <UpdateNotification />
+      <PWAInstallPrompt />
 
       {showIOSDemo && <LazyIOSFeaturesDemo onClose={() => setShowIOSDemo(false)} />}
     </>

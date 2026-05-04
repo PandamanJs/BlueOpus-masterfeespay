@@ -12,6 +12,10 @@ export default defineConfig({
       filename: 'service-worker.ts',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
+      devOptions: {
+        enabled: true,
+        type: 'module'
+      },
       manifest: {
         name: 'Master-Fees',
         short_name: 'Master-Fees',
@@ -19,6 +23,28 @@ export default defineConfig({
         theme_color: '#003630',
         background_color: '#ffffff',
         display: 'standalone',
+        shortcuts: [
+          {
+            name: 'Search Schools',
+            short_name: 'Search',
+            description: 'Find schools and check fees',
+            url: '/',
+            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }]
+          },
+          {
+            name: 'Register Student',
+            short_name: 'Register',
+            description: 'Start a new student registration',
+            url: '/register',
+            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }]
+          }
+        ],
+        protocol_handlers: [
+          {
+            protocol: 'web+masterfees',
+            url: '/?url=%s'
+          }
+        ],
         icons: [
           {
             src: 'pwa-192x192.png',
